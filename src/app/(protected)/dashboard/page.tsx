@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { useSupabaseClient, useSession } from '@supabase/auth-helpers-react'
-import { Package, DollarSign, Boxes, Truck, Info } from 'lucide-react'
+import { Package, DollarSign, Boxes, Truck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import OrderDetailsSc from '@/components/modals/OrderDetailsSc'
 import { SyncOrdersButton } from '@/components/buttons/SyncOrdersButton'
-import AIChatWidget from "@/components/ai/AIChatWidget";
+import AIChatWidget from '@/components/ai/AIChatWidget'
 
 export default function DashboardSellercloud() {
   const supabase = useSupabaseClient()
@@ -28,34 +28,33 @@ export default function DashboardSellercloud() {
   const [accountId, setAccountId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!session) return
+    async function fetchAccountIdAndOrders() {
+      if (!session?.user?.id) return
 
-    async function fetchAccountId() {
-      const { data, error } = await supabase
+      const { data: accountData, error: accountError } = await supabase
         .from('accounts')
         .select('id')
         .eq('created_by_user_id', session.user.id)
-        .maybeSingle();
+        .maybeSingle()
 
-      if (error || !data) {
-        console.error('Error fetching account_id:', error);
-        return;
-      }
-
-      setAccountId(data.id);
-    }
-
-    fetchAccountId();
-
-    async function fetchOrders() {
-      const { data, error } = await supabase.from('get_sellercloud_orders').select('*')
-      if (error) {
-        console.error('Error fetching sellercloud orders:', error)
+      if (accountError || !accountData) {
+        console.error('Erro ao buscar account:', accountError)
         return
       }
 
-      let filtered = data.filter((o: any) =>
-        o.order_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      setAccountId(accountData.id)
+
+      const { data: orderData, error: orderError } = await supabase
+        .from('get_sellercloud_orders')
+        .select('*')
+
+      if (orderError) {
+        console.error('Erro ao buscar pedidos:', orderError)
+        return
+      }
+
+      let filtered = orderData.filter((o: any) =>
+        o.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         o.marketplace?.toLowerCase().includes(searchTerm.toLowerCase())
       )
 
@@ -83,8 +82,17 @@ export default function DashboardSellercloud() {
       setOrders(sorted)
     }
 
-    fetchOrders()
-  }, [session, searchTerm, sortColumn, sortDirection, statusFilter, startDate, endDate, marketplaceFilter])
+    fetchAccountIdAndOrders()
+  }, [
+    session,
+    searchTerm,
+    sortColumn,
+    sortDirection,
+    statusFilter,
+    startDate,
+    endDate,
+    marketplaceFilter
+  ])
 
   const paginatedOrders = orders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
   const totalPages = Math.ceil(orders.length / itemsPerPage)
@@ -127,9 +135,9 @@ export default function DashboardSellercloud() {
     [-1]: 'Cancelled',
     2: 'Processing',
     3: 'Completed'
-  };
-  
-  const marketplaceIcons: Record<number, string> = {
+  }
+
+  const marketplaceIcons: Record<number | string, string> = {
     4: '/logos/amazon.png',
     27: '/logos/wayfair.png',
     28: '/logos/walmart.png',
@@ -142,11 +150,12 @@ export default function DashboardSellercloud() {
     73: '/logos/target.png',
     75: '/logos/houzz.png',
     default: '/logos/marketplace.png'
-  };
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-6 space-y-10">
       <h1 className="text-3xl font-bold text-primary mb-6">Orders</h1>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((card, index) => (
           <motion.div
@@ -233,15 +242,15 @@ export default function DashboardSellercloud() {
           </thead>
           <tbody className="divide-y divide-gray-200">
             {paginatedOrders.map((order, index) => {
-              const statusText = statusMap[order.status_code] || 'Unknown';
+              const statusText = statusMap[order.status_code] || 'Unknown'
               const statusColor = {
                 'Completed': 'bg-green-100 text-green-700',
                 'Processing': 'bg-[#3f2d90]/20 text-[#3f2d90]',
                 'Cancelled': 'bg-red-100 text-red-700',
                 'New': 'bg-primary/20 text-primary',
                 'Unknown': 'bg-gray-100 text-gray-500'
-              }[statusText];
-              const iconSrc = marketplaceIcons[order.marketplace] || marketplaceIcons.default;
+              }[statusText]
+              const iconSrc = marketplaceIcons[order.marketplace] || marketplaceIcons.default
 
               return (
                 <tr key={index} className="hover:bg-gray-50">
@@ -251,31 +260,28 @@ export default function DashboardSellercloud() {
                   </td>
                   <td className="py-3 px-4 text-gray-500">{order.order_date?.split('T')[0]}</td>
                   <td className="py-3 px-4 flex items-center gap-2 text-gray-600">
-                  <img
-                    src={marketplaceIcons[order.marketplace] || marketplaceIcons.default}
-                    className="w-7 h-7"
-                    />
+                    <img src={iconSrc} className="w-7 h-7" />
                   </td>
                   <td className="py-3 px-4">
-  <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${statusColor}`}>
-    {statusText}
-  </span>
-</td>
+                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${statusColor}`}>
+                      {statusText}
+                    </span>
+                  </td>
                   <td className="py-3 px-4 text-gray-800">$ {order.total_amount?.toFixed(2)}</td>
                   <td className="py-3 px-4 text-gray-500">{order.ship_date?.split('T')[0]}</td>
                   <td className="py-3 px-4 text-sm">
                     <button
                       onClick={() => {
-                        setSelectedOrder(order);
-                        setModalOpen(true);
+                        setSelectedOrder(order)
+                        setModalOpen(true)
                       }}
-                      className= "text-white px-1 py-1 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition min-w-[80px]"
+                      className="text-white px-1 py-1 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition min-w-[80px]"
                     >
                       Details
                     </button>
                   </td>
                 </tr>
-              );
+              )
             })}
           </tbody>
         </table>
@@ -309,7 +315,8 @@ export default function DashboardSellercloud() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
       />
+
+      <AIChatWidget />
     </div>
   )
 }
-<AIChatWidget />
