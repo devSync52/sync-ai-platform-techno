@@ -80,12 +80,14 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
 
   useEffect(() => {
     const fetchAccountId = async () => {
-      if (!session || !session.user?.id) return;
+      if (!session?.user?.id) return;
+  
+      const userId = session.user.id;
   
       const { data } = await supabase
         .from('accounts')
         .select('id')
-        .eq('created_by_user_id', session.user.id)
+        .eq('created_by_user_id', userId)
         .maybeSingle();
   
       if (data?.id) setAccountId(data.id);
