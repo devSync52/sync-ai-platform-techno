@@ -11,6 +11,38 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+type Address = {
+  address_line_1: string
+  city: string
+  state: string
+  country: string
+}
+
+type AccountType = {
+  id: string
+  label: string
+}
+
+type CompanyFormProps = {
+  name: string
+  setName: (val: string) => void
+  email: string
+  setEmail: (val: string) => void
+  taxId: string
+  setTaxId: (val: string) => void
+  phone: string
+  setPhone: (val: string) => void
+  zip: string
+  handleZipChange: (val: string) => void
+  address: Address
+  setAddress: (val: Address) => void
+  accountType: string | null
+  setAccountType: (val: string) => void
+  accountTypes: AccountType[]
+  saving: boolean
+  handleSave: () => void
+}
+
 export function CompanyForm({
   name, setName,
   email, setEmail,
@@ -21,7 +53,7 @@ export function CompanyForm({
   accountType, setAccountType,
   accountTypes,
   saving, handleSave,
-}) {
+}: CompanyFormProps) {
   const formatPhone = (val: string) =>
     val.replace(/\D/g, '')
       .replace(/^(\d{1})(\d{3})(\d{3})(\d{4}).*/, '+$1 ($2) $3-$4')
