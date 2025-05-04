@@ -79,11 +79,11 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
   }, [searchTerm, channels])
 
   useEffect(() => {
-    const userId = session?.user?.id;
+    if (!session?.user?.id) return;
   
-    if (!userId) return;
+    const userId = session.user.id;
   
-    async function fetchAccountId() {
+    const fetchAccountId = async () => {
       const { data } = await supabase
         .from('accounts')
         .select('id')
@@ -91,7 +91,7 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
         .maybeSingle();
   
       if (data?.id) setAccountId(data.id);
-    }
+    };
   
     fetchAccountId();
   }, [session]);
