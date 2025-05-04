@@ -80,21 +80,16 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
 
   useEffect(() => {
     const fetchAccountId = async () => {
-      if (!session || !session.user?.id) return;
-  
-      const userId = session.user.id;
+      if (!session?.user?.id) return;
   
       const { data, error } = await supabase
-  .from('accounts')
-  .select('id')
-  .eq('created_by_user_id', userId)
-  .maybeSingle();
-
-      const account = data as { id: string } | null;
-      if (account?.id) setAccountId(account.id);
+        .from('accounts')
+        .select('id')
+        .eq('created_by_user_id', session.user.id)
+        .maybeSingle();
   
       if (error) {
-        console.error('Error fetching account ID:', error.message);
+        console.error('Erro ao buscar account_id:', error);
         return;
       }
   
@@ -102,7 +97,7 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
     };
   
     fetchAccountId();
-  }, [session, supabase]);
+  }, [session]);
 
   const resolveMarketplaceLogo = (name: string) => {
     const normalized = name.toLowerCase()
