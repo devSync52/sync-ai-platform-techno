@@ -80,9 +80,10 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
 
   useEffect(() => {
     const userId = session?.user?.id;
+  
     if (!userId) return;
   
-    async function fetchAccountId(userId: string) {
+    async function fetchAccountId() {
       const { data } = await supabase
         .from('accounts')
         .select('id')
@@ -92,7 +93,7 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
       if (data?.id) setAccountId(data.id);
     }
   
-    fetchAccountId(userId);
+    fetchAccountId();
   }, [session]);
 
   const resolveMarketplaceLogo = (name: string) => {
