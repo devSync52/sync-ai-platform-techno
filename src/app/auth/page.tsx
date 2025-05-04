@@ -1,6 +1,3 @@
-// 🚨 This page is used for Supabase redirection (login/reset/email confirmation)
-// ✅ When deploying, make sure to update Supabase Site URL to: https://yourdomain.com/auth/callback
-
 'use client'
 
 import { useEffect } from 'react'
@@ -8,10 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
 
-const supabase = useSupabaseClient()
-
-export default function AuthCallbackPage() {
+export default function AuthRedirectPage() {
   const router = useRouter()
+  const supabase = useSupabaseClient()
 
   useEffect(() => {
     const handleRedirect = async () => {
@@ -36,7 +32,7 @@ export default function AuthCallbackPage() {
     }
 
     handleRedirect()
-  }, [router])
+  }, [router, supabase])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white to-gray-100 px-4">

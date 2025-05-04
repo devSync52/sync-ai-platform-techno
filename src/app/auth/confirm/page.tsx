@@ -5,11 +5,10 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
 
-const supabase = useSupabaseClient()
-
 export default function AuthConfirmPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const supabase = useSupabaseClient()
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -43,7 +42,7 @@ export default function AuthConfirmPage() {
     }
 
     confirmEmail()
-  }, [searchParams, router])
+  }, [searchParams, router, supabase])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white to-gray-100 px-4">
