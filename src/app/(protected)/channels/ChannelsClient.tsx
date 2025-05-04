@@ -80,7 +80,10 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
 
   useEffect(() => {
     const fetchAccountId = async () => {
-      if (!session?.user?.id) return;
+      if (!session || !session.user || !session.user.id) {
+        console.warn('Session or user ID is missing');
+        return;
+      }
   
       const userId = session.user.id;
   
@@ -91,11 +94,13 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
         .maybeSingle();
   
       if (error) {
-        console.error('Erro ao buscar account_id:', error);
+        console.error('Erro ao buscar conta:', error);
         return;
       }
   
-      if (data?.id) setAccountId(data.id);
+      if (data?.id) {
+        setAccountId(data.id);
+      }
     };
   
     fetchAccountId();
