@@ -81,7 +81,7 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
   useEffect(() => {
     if (!session?.user?.id) return;
   
-    const userId = session.user.id;
+    const userId: string = session.user.id;
   
     const fetchAccountId = async () => {
       const { data } = await supabase
