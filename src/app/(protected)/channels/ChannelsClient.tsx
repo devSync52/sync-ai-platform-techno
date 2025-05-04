@@ -79,19 +79,20 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
   }, [searchTerm, channels])
 
   useEffect(() => {
-    if (!session) return;
+    const userId = session?.user?.id;
+    if (!userId) return;
   
-    async function fetchAccountId() {
-      const { data, error } = await supabase
+    async function fetchAccountId(userId: string) {
+      const { data } = await supabase
         .from('accounts')
         .select('id')
-        .eq('created_by_user_id', session?.user?.id || '')
+        .eq('created_by_user_id', userId)
         .maybeSingle();
   
       if (data?.id) setAccountId(data.id);
     }
   
-    fetchAccountId();
+    fetchAccountId(userId);
   }, [session]);
 
   const resolveMarketplaceLogo = (name: string) => {
