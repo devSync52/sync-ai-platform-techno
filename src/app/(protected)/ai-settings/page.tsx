@@ -35,9 +35,9 @@ export default function Page() {
   const percentUsed = Math.min((usedTokens / tokenLimit) * 100, 100).toFixed(1);
   const estimatedCost = ((usedTokens / 1000) * (model === "gpt-3.5" ? 0.002 : 0.03)).toFixed(2);
   const usageColor =
-  percentUsed < 35
+  Number(percentUsed) < 35
     ? "bg-green-500"
-    : percentUsed < 70
+    : Number(percentUsed) < 70
     ? "bg-yellow-500"
     : "bg-red-500";
 
