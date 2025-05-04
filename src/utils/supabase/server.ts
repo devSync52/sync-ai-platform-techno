@@ -5,3 +5,6 @@ import { Database } from '@/types/supabase'
 export const createClient = () => {
   return createServerComponentClient<Database>({ cookies })
 }
+
+export { createClient as createServerClient }
+export { createClient as createServerSupabaseClient }
