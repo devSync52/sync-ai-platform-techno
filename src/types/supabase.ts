@@ -1,4 +1,3 @@
-
 export interface Channel {
   id: string
   account_id: string | null
@@ -27,6 +26,20 @@ export interface ChannelMarketplace {
   created_at: string
 }
 
+export interface Invitation {
+  id: string
+  channel_id: string
+  email: string
+  token: string
+  status: string
+  created_at: string
+}
+
+export interface Account {
+  id: string
+  created_by_user_id: string
+}
+
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
 export interface Database {
@@ -39,14 +52,10 @@ export interface Database {
         Row: ChannelMarketplace
       }
       invitations: {
-        Row: {
-          id: string
-          channel_id: string
-          email: string
-          token: string
-          status: string
-          created_at: string
-        }
+        Row: Invitation
+      }
+      accounts: {
+        Row: Account
       }
     }
     Views: Record<string, never>
