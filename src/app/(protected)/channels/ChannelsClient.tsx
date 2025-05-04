@@ -87,7 +87,7 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
       const { data } = await supabase
         .from('accounts')
         .select('id')
-        .eq('created_by_user_id', userId)
+        .eq('created_by_user_id', session?.user?.id ?? '')
         .maybeSingle();
   
       if (data?.id) setAccountId(data.id);
