@@ -34,6 +34,7 @@ export default function ChannelsClient({
 }: ChannelsClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
+
   const [searchTerm, setSearchTerm] = useState('')
   const [filteredChannels, setFilteredChannels] = useState<Channel[]>(channels)
   const [loading, setLoading] = useState(false)
