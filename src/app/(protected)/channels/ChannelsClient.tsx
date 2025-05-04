@@ -85,10 +85,13 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
       const userId = session.user.id;
   
       const { data, error } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('created_by_user_id', userId)
-        .maybeSingle<{ id: string }>();
+  .from('accounts')
+  .select('id')
+  .eq('created_by_user_id', userId)
+  .maybeSingle();
+
+      const account = data as { id: string } | null;
+      if (account?.id) setAccountId(account.id);
   
       if (error) {
         console.error('Error fetching account ID:', error.message);
