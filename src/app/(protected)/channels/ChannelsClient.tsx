@@ -80,7 +80,7 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
 
   useEffect(() => {
     const fetchAccountId = async () => {
-      if (!session?.user?.id) return;
+      if (!session || !session.user?.id) return;
   
       const { data, error } = await supabase
         .from('accounts')
