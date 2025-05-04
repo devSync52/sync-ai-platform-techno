@@ -80,7 +80,7 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
 
   useEffect(() => {
     const fetchAccountId = async () => {
-      if (!session?.user?.id) return;
+      if (!session || !session.user?.id) return;
   
       const userId = session.user.id;
   
@@ -95,9 +95,7 @@ export default function ChannelsClient({ channels, marketplaces, invitations: in
         return;
       }
   
-      if (data?.id) {
-        setAccountId(data.id);
-      }
+      if (data?.id) setAccountId(data.id);
     };
   
     fetchAccountId();
