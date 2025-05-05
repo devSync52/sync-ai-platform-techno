@@ -144,7 +144,7 @@ export default function ChannelsClient({
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold text-primary mb-6">Channels</h1>
+      <h1 className="text-3xl font-bold text-primary mb-6">Customers</h1>
 
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <input

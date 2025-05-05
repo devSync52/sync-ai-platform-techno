@@ -316,7 +316,6 @@ export default function DashboardSellercloud() {
         onClose={() => setModalOpen(false)}
       />
 
-      <AIChatWidget />
     </div>
   )
 }

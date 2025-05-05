@@ -49,7 +49,7 @@ export default function OrderDetailsSc({ order, open, onClose }: Props) {
           <p><strong>Marketplace:</strong> {order?.marketplace}</p>
           <p><strong>Status:</strong> {order?.status}</p>
           <p><strong>Order Date:</strong> {order?.order_date?.split('T')[0]}</p>
-          <p><strong>Grand Total:</strong> R$ {order?.total_amount?.toFixed(2)}</p>
+          <p><strong>Grand Total:</strong> $ {order?.total_amount?.toFixed(2)}</p>
         </div>
 
         <hr className="my-4" />
@@ -74,8 +74,8 @@ export default function OrderDetailsSc({ order, open, onClose }: Props) {
                 <tr key={index} className="border-t">
                   <td className="px-3 py-2 border">{item.sku}</td>
                   <td className="px-3 py-2 border">{item.quantity}</td>
-                  <td className="px-3 py-2 border">R$ {item.unit_price?.toFixed(2)}</td>
-                  <td className="px-3 py-2 border">R$ {item.total_price?.toFixed(2)}</td>
+                  <td className="px-3 py-2 border">$ {item.unit_price?.toFixed(2)}</td>
+                  <td className="px-3 py-2 border">$ {item.total_price?.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>

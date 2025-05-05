@@ -4,53 +4,61 @@ import { useState } from 'react'
 import { PropsWithChildren } from 'react'
 import Sidebar from '@/components/sidebar'
 import { Menu } from 'lucide-react'
-import { SessionContextProvider } from '@supabase/auth-helpers-react'
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 import AIChatWidget from '@/components/ai/AIChatWidget'
 import { Toaster } from '@/components/ui/toaster'
+import Image from 'next/image'
 
 export default function ProtectedLayout({ children }: PropsWithChildren) {
-  const [supabaseClient] = useState(() => createPagesBrowserClient())
   const [showSidebar, setShowSidebar] = useState(false)
 
   return (
-    <SessionContextProvider supabaseClient={supabaseClient}>
-      <div className="flex h-screen overflow-hidden">
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:block w-64 bg-white shadow-md border-r border-gray-200">
-          <Sidebar />
-        </aside>
+    // 🔧 Aqui está o ajuste crucial ↓
+    <div className="flex h-screen overflow-visible">
+      {/* Sidebar Desktop */}
+      <aside className="hidden lg:block w-64">
+        <Sidebar />
+      </aside>
 
-        {/* Mobile Sidebar */}
-        {showSidebar && (
-          <div className="fixed inset-0 z-40 flex lg:hidden">
-            <div className="w-64 bg-white shadow-md border-r border-gray-200">
-              <Sidebar />
-            </div>
-            <div
-              className="flex-1 bg-black bg-opacity-30"
-              onClick={() => setShowSidebar(false)}
-            />
+      {/* Sidebar Mobile */}
+      {showSidebar && (
+        <div className="fixed inset-0 z-40 flex lg:hidden">
+          <div className="w-64 bg-[#3f2d90] shadow-md">
+            <Sidebar onLinkClick={() => setShowSidebar(false)} />
           </div>
-        )}
-
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
-          {/* Top bar (mobile only) */}
-          <div className="lg:hidden px-4 py-3 flex items-center justify-between shadow-sm bg-white">
-            <button onClick={() => setShowSidebar(true)}>
-              <Menu size={24} />
-            </button>
-            <span className="text-sm font-semibold text-gray-700">SynC AI</span>
-          </div>
-
-          <main className="flex-1 p-4 sm:p-6">{children}</main>
+          <div
+            className="flex-1 bg-black/30"
+            onClick={() => setShowSidebar(false)}
+          />
         </div>
+      )}
+
+      {/* Conteúdo */}
+      <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
+        {/* Topo Mobile */}
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-[#3f2d90] flex items-center justify-center px-4 shadow">
+          <button
+            onClick={() => setShowSidebar(true)}
+            className="absolute left-4 p-2 rounded-md hover:bg-white/20 transition"
+          >
+            <Menu size={24} className="text-white" />
+          </button>
+          <Image
+            src="/sync-ai-plataform-logo.svg"
+            alt="Logo"
+            width={160}
+            height={50}
+            priority
+          />
+        </div>
+
+        <main className="flex-1 pt-[64px] lg:pt-0 p-4 sm:p-6 relative z-10 overflow-visible">
+          {children}
+        </main>
       </div>
 
-      {/* Toasts + Chat */}
+      {/* Toasts e Widget */}
       <Toaster />
       <AIChatWidget />
-    </SessionContextProvider>
+    </div>
   )
 }
