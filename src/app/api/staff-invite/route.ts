@@ -1,4 +1,4 @@
-import { createServerClient } from '@/utils/supabase/server'
+import { createServerSupabaseClient } from '@/utils/supabase/server'
 import { cookies } from 'next/headers'
 import { sendStaffInviteAction } from '@/actions/sendStaffInviteAction'
 import { NextResponse } from 'next/server'
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'Missing email or role' }, { status: 400 })
     }
 
-    const supabase = createServerClient({ cookies })
+    const supabase = createServerSupabaseClient()
     const {
       data: { session },
     } = await supabase.auth.getSession()
