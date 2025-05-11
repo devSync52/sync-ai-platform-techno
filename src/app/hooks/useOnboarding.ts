@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/utils/supabase/client'
+import { supabaseBrowser } from '@/utils/supabase/browser'
 
 export function useOnboarding(userId: string | null) {
   const router = useRouter()
@@ -23,35 +23,35 @@ export function useOnboarding(userId: string | null) {
     setError(null)
 
     if (!userId) {
-      setError('Usuário não autenticado')
+      setError('User not authenticated')
       setLoading(false)
       return
     }
 
     const slug = createSlug(name)
+    console.log('[ONBOARDING] 🏢 Generated slug:', slug)
 
     try {
-      // Verificar se já existe uma conta com o mesmo slug
-      const { data: existing, error: checkError } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('slug', slug)
-        .single()
+      const { data: existing, error: checkError } = await supabaseBrowser
+  .from('accounts')
+  .select('id')
+  .eq('slug', slug)
+  .maybeSingle() as any
 
       if (existing) {
-        setError('Esse nome já está em uso. Escolha outro.')
+        setError('This name is already taken. Please choose another.')
         setLoading(false)
         return
       }
 
       if (checkError && checkError.code !== 'PGRST116') {
-        console.error('[ONBOARDING] Erro ao verificar slug:', checkError.message)
-        setError('Erro ao verificar disponibilidade do nome.')
+        console.error('[ONBOARDING] Error checking slug:', checkError.message)
+        setError('Error checking slug availability.')
         setLoading(false)
         return
       }
 
-      const { error: insertError } = await supabase.from('accounts').insert({
+      const { error: insertError } = await supabaseBrowser.from('accounts').insert({
         name,
         slug,
         tax_id: taxId,
@@ -59,16 +59,16 @@ export function useOnboarding(userId: string | null) {
       })
 
       if (insertError) {
-        console.error('[ONBOARDING] ❌ Erro ao criar account:', insertError.message)
-        setError('Erro ao criar conta.')
+        console.error('[ONBOARDING] ❌ Error creating account:', insertError.message)
+        setError('Error creating account.')
         setLoading(false)
         return
       }
 
       router.push('/dashboard')
     } catch (err: any) {
-      console.error('[ONBOARDING] ❌ Erro inesperado:', err)
-      setError('Erro inesperado')
+      console.error('[ONBOARDING] ❌ Unexpected error:', err)
+      setError('Unexpected error')
     } finally {
       setLoading(false)
     }

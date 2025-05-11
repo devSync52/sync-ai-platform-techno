@@ -6,7 +6,6 @@ import { Package, DollarSign, Boxes, Truck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import OrderDetailsSc from '@/components/modals/OrderDetailsSc'
 import { SyncOrdersButton } from '@/components/buttons/SyncOrdersButton'
-import AIChatWidget from '@/components/ai/AIChatWidget'
 
 export default function DashboardSellercloud() {
   const supabase = useSupabaseClient()

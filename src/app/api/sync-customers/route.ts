@@ -1,16 +1,11 @@
-export async function POST(request: Request) {
+import { NextRequest } from 'next/server'
+
+export async function POST(request: NextRequest) {
   try {
     const { account_id } = await request.json()
 
-    if (!account_id) {
-      return new Response(JSON.stringify({ success: false, error: 'Missing account_id' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
     const response = await fetch(
-      'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/get_sellercloud_channels',
+      'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync_sellercloud_channels',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -25,10 +20,10 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    console.error('[sync-channels] ❌ Error:', error)
+    console.error('[sync-customers] ❌ Error:', error)
     return new Response(
       JSON.stringify({ success: false, error: 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500 }
     )
   }
 }

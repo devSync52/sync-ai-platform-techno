@@ -38,7 +38,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/bot-training', label: 'Bot training', icon: BotIcon },
     { href: '/ai-settings', label: 'AI Settings', icon: Cog },
     { href: '/inventory', label: 'Inventory', icon: BoxIcon },
-    { href: '/users', label: 'Staff', icon: User2Icon },
+    { href: '/staff', label: 'Staff', icon: User2Icon },
   ]
 
   const settingsItems = [

@@ -23,10 +23,18 @@ export default function ResetPasswordPage() {
   const access_token = searchParams.get('access_token')
 
   useEffect(() => {
-    if (!access_token) {
-      setMessage('❌ Missing access token.')
+    const fragment = window.location.hash.substring(1)
+    const params = new URLSearchParams(fragment)
+    const token = params.get('access_token')
+    const refresh_token = params.get('refresh_token')
+  
+    if (token && refresh_token) {
+      supabase.auth.setSession({
+        access_token: token,
+        refresh_token: refresh_token,
+      })
     }
-  }, [access_token])
+  }, [])
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
