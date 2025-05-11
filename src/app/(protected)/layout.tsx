@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { PropsWithChildren } from 'react'
 import Sidebar from '@/components/sidebar'
-import { Menu } from 'lucide-react'
+import { Menu, Bot } from 'lucide-react'
 import AIChatWidget from '@/components/ai/AIChatWidget'
 import { Toaster } from '@/components/ui/toaster'
 import Image from 'next/image'
@@ -40,13 +40,14 @@ export default function ProtectedLayout({ children }: PropsWithChildren) {
       <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
         {/* Topo Mobile */}
         {!hideSidebar && (
-          <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-[#3f2d90] flex items-center justify-center px-4 shadow">
+          <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-[#3f2d90] flex items-center justify-between px-4 shadow">
             <button
               onClick={() => setShowSidebar(true)}
-              className="absolute left-4 p-2 rounded-md hover:bg-white/20 transition"
+              className="p-2 rounded-md hover:bg-white/20 transition"
             >
               <Menu size={24} className="text-white" />
             </button>
+
             <Image
               src="/sync-ai-plataform-logo.svg"
               alt="Logo"
@@ -54,6 +55,17 @@ export default function ProtectedLayout({ children }: PropsWithChildren) {
               height={50}
               priority
             />
+
+            {/* Ícone do Chat - Mobile */}
+            <button
+              onClick={() => {
+                window.dispatchEvent(new Event('open-ai-widget'))
+              }}
+              className="p-2 rounded-md hover:bg-white/20 transition"
+              aria-label="Abrir Chat"
+            >
+              <Bot size={22} className="text-white" />
+            </button>
           </div>
         )}
 
