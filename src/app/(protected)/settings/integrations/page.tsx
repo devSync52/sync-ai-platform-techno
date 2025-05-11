@@ -57,7 +57,7 @@ export default function IntegrationsPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-      <h1 className="text-3xl font-bold text-primary mb-6">Integrations</h1>
+      <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Integrations</h1>
       </div>
 
       {loading ? (

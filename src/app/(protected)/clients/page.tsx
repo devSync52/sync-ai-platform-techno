@@ -65,7 +65,7 @@ export default function ClientsPage() {
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-6 space-y-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-bold">Clients</h2>
+      <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Clients</h1>
         <div className="flex gap-2 items-center">
           <input
             type="text"

@@ -153,7 +153,7 @@ export default function DashboardSellercloud() {
 
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-6 space-y-10">
-      <h1 className="text-3xl font-bold text-primary mb-6">Orders</h1>
+      <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Orders</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((card, index) => (

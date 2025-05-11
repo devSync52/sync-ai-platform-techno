@@ -117,8 +117,8 @@ export default function CompanySettingsPage() {
   }
 
   return (
-    <div className="max-w-8xl mx-auto px-6 py-12">
-      <h1 className="text-3xl font-bold text-primary mb-6">Company Settings</h1>
+    <div className="max-w-8xl mx-auto p-6">
+      <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Company Settings</h1>
   
       <Card className="border shadow-md rounded-2xl">
         <CardContent className="pt-6">

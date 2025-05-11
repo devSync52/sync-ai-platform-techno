@@ -70,15 +70,15 @@ export default function AIAssistantPanel() {
   };
 
   return (
-    <div className="flex min-h-screen bg-muted">
-      <aside className="w-56 bg-white border-r shadow-sm py-6 px-4">
-        <h2 className="text-lg font-semibold mb-4 px-2">AI Assistant</h2>
+    <div className="flex flex-col md:flex-row min-h-screen">
+      <aside className="w-full md:w-56 bg-white border-r shadow-sm py-6 px-4">
+        <h2 className="text-2xl font-bold mb-2 p-4">AI Assistant</h2>
         <nav className="space-y-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               className={cn(
-                "flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm font-medium",
+                "flex items-center gap-2 w-full px-3 py-2 rounded-md text-base font-medium",
                 activeTab === tab.id
                   ? "bg-accent text-accent-foreground"
                   : "hover:bg-accent/50 text-muted-foreground"
@@ -92,7 +92,7 @@ export default function AIAssistantPanel() {
         </nav>
       </aside>
 
-      <section className="flex-1 p-8">
+      <section className="flex-1 p-4 md:p-10">
         {activeTab === "training" && (
           <div>
             <h1 className="text-2xl font-bold mb-4">Training</h1>

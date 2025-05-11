@@ -162,39 +162,40 @@ export default function InviteStaffSection({ accountId }: { accountId: string })
           <ul className="space-y-2">
             {team.map((member) => (
               <li
-                key={member.id}
-                className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded"
-              >
-                <div>
-                  <p className="font-medium text-sm">{member.email}</p>
-                  <p className="text-xs text-gray-500">
-                    {renderRole(member.role)} • Invited on {formatDate(member.invite_sent_at)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {renderStatus(member.invite_status)}
-
-                  {['sent', 'accepted'].includes(member.invite_status?.toLowerCase() || '') && (
-  <>
-    <button
-      onClick={() => handleResend(member.email)}
-      disabled={resending === member.email}
-      className="text-xs text-blue-700 border border-blue-300 px-3 py-1 rounded-full hover:bg-blue-50 transition"
-    >
-      {resending === member.email ? 'Resending...' : 'Resend'}
-    </button>
-
-    <button
-      onClick={() => handleRevoke(member.email)}
-      disabled={revoking === member.email}
-      className="text-xs text-red-700 border border-red-300 px-3 py-1 rounded-full hover:bg-red-50 transition"
-    >
-      {revoking === member.email ? 'Revoking...' : 'Revoke'}
-    </button>
-  </>
-)}
-                </div>
-              </li>
+              key={member.id}
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gray-50 px-4 py-3 rounded space-y-2 sm:space-y-0"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-sm break-words">{member.email}</p>
+                <p className="text-xs text-gray-500 break-words">
+                  {renderRole(member.role)} • Invited on {formatDate(member.invite_sent_at)}
+                </p>
+              </div>
+            
+              <div className="flex flex-wrap items-center gap-2">
+                {renderStatus(member.invite_status)}
+            
+                {['sent', 'accepted'].includes(member.invite_status?.toLowerCase() || '') && (
+                  <>
+                    <button
+                      onClick={() => handleResend(member.email)}
+                      disabled={resending === member.email}
+                      className="text-xs text-blue-700 border border-blue-300 px-3 py-1 rounded-full hover:bg-blue-50 transition whitespace-nowrap"
+                    >
+                      {resending === member.email ? 'Resending...' : 'Resend'}
+                    </button>
+            
+                    <button
+                      onClick={() => handleRevoke(member.email)}
+                      disabled={revoking === member.email}
+                      className="text-xs text-red-700 border border-red-300 px-3 py-1 rounded-full hover:bg-red-50 transition whitespace-nowrap"
+                    >
+                      {revoking === member.email ? 'Revoking...' : 'Revoke'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </li>
             ))}
           </ul>
         )}

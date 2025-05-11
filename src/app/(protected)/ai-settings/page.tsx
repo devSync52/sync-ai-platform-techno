@@ -95,7 +95,8 @@ export default function Page() {
 
   return (
     <div>
-      <div className="max-w-8xl mx-auto px-6 space-y-8">
+      <div className="max-w-8xl mx-auto p-6 space-y-8">
+      <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">AI Settings</h1>
         <Card className="rounded-xl border bg-white shadow-sm max-w-8xl">
           <CardHeader>
             <CardTitle className="text-lg">Current AI Usage</CardTitle>

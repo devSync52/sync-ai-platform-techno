@@ -62,14 +62,14 @@ export default function ProtectedLayout({ children }: PropsWithChildren) {
                 window.dispatchEvent(new Event('open-ai-widget'))
               }}
               className="p-2 rounded-md hover:bg-white/20 transition"
-              aria-label="Abrir Chat"
+              aria-label="Open Chat"
             >
-              <Bot size={22} className="text-white" />
+              <Bot size={26} className="text-white" />
             </button>
           </div>
         )}
 
-        <main className={`flex-1 ${!hideSidebar ? 'pt-[64px] lg:pt-0' : ''} p-4 sm:p-6 relative z-10 overflow-visible`}>
+        <main className={`flex-1 ${!hideSidebar ? 'pt-[64px] lg:pt-0' : ''} p-0 sm:p-0 relative z-10 overflow-visible`}>
           {children}
         </main>
       </div>
