@@ -84,7 +84,7 @@ export function SyncOrdersButton({ accountId }: { accountId: string }) {
       <button
         onClick={handleSync}
         disabled={loading || cooldown > 0}
-        className="flex items-center gap-1 border border-[#3f2d90] text-sm text-white rounded px-3 py-1 bg-[#3f2d90] hover:bg-[#3f2d90]/80 disabled:opacity-50 transition"
+        className="flex items-center gap-1 border border-[#3f2d90] text-base text-white rounded px-4 py-2 bg-[#3f2d90] hover:bg-[#3f2d90]/80 disabled:opacity-50 transition"
       >
         {loading ? (
           <svg

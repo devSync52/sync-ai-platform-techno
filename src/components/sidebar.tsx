@@ -37,7 +37,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/channels', label: 'Customers', icon: Building2 },
     { href: '/bot-training', label: 'Bot training', icon: BotIcon },
     { href: '/ai-settings', label: 'AI Settings', icon: Cog },
-    { href: '/inventory', label: 'Inventory', icon: BoxIcon },
+    { href: '/products', label: 'Products', icon: BoxIcon },
     { href: '/staff', label: 'Staff', icon: User2Icon },
   ]
 

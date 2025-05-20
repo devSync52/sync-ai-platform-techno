@@ -8,22 +8,35 @@ import AIChatWidget from '@/components/ai/AIChatWidget'
 import { Toaster } from '@/components/ui/toaster'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
+import HeaderTopBar from '@/components/HeaderTopBar'
+import { useUser } from '@supabase/auth-helpers-react'
+import { useCurrentUserData } from '@/hooks/useCurrentUserData'
+
+
+
 
 export default function ProtectedLayout({ children }: PropsWithChildren) {
   const [showSidebar, setShowSidebar] = useState(false)
   const pathname = usePathname()
+  const user = useCurrentUserData()
   const hideSidebar = pathname === '/onboarding'
+
+  const pageTitle =
+    pathname
+      .split('/')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' '))
+      .join(' › ') || 'Dashboard'
+
 
   return (
     <div className="flex h-screen overflow-visible">
-      {/* Sidebar Desktop */}
       {!hideSidebar && (
         <aside className="hidden lg:block w-64">
           <Sidebar />
         </aside>
       )}
 
-      {/* Sidebar Mobile */}
       {!hideSidebar && showSidebar && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
           <div className="w-64 bg-[#3f2d90] shadow-md">
@@ -36,9 +49,8 @@ export default function ProtectedLayout({ children }: PropsWithChildren) {
         </div>
       )}
 
-      {/* Conteúdo */}
       <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
-        {/* Topo Mobile */}
+
         {!hideSidebar && (
           <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-[#3f2d90] flex items-center justify-between px-4 shadow">
             <button
@@ -56,11 +68,8 @@ export default function ProtectedLayout({ children }: PropsWithChildren) {
               priority
             />
 
-            {/* Ícone do Chat - Mobile */}
             <button
-              onClick={() => {
-                window.dispatchEvent(new Event('open-ai-widget'))
-              }}
+              onClick={() => window.dispatchEvent(new Event('open-ai-widget'))}
               className="p-2 rounded-md hover:bg-white/20 transition"
               aria-label="Open Chat"
             >
@@ -69,12 +78,28 @@ export default function ProtectedLayout({ children }: PropsWithChildren) {
           </div>
         )}
 
-        <main className={`flex-1 ${!hideSidebar ? 'pt-[64px] lg:pt-0' : ''} p-0 sm:p-0 relative z-10 overflow-visible`}>
+        {!hideSidebar && (
+          <div className="hidden lg:block">
+            <HeaderTopBar
+  title={pageTitle}
+  user={{
+    name: user?.name ?? '—',
+    email: user?.email ?? '',
+    role: user?.role ?? 'client',
+  }}
+/>
+          </div>
+        )}
+
+        <main
+          className={`flex-1 ${
+            !hideSidebar ? 'pt-[64px] lg:pt-0' : ''
+          } relative z-10 overflow-visible`}
+        >
           {children}
         </main>
       </div>
 
-      {/* Toasts e Widget */}
       <Toaster />
       <AIChatWidget />
     </div>

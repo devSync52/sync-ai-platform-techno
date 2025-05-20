@@ -15,6 +15,8 @@ export interface Channel {
   zip_code: string | null
   country: string | null
   notes: string | null
+  marketplace_name?: string | null
+  imported_product_count?: number
 }
 
 export interface ChannelMarketplace {
@@ -61,4 +63,24 @@ export interface Database {
     Views: Record<string, never>
     Functions: Record<string, never>
   }
+}
+
+export type ProductList = {
+  id: string
+  account_id: string
+  channel_id: string | null
+  source: string
+  sku: string
+  product_name: string | null
+  image_url: string | null
+  quantity_available: number | null
+  quantity_physical: number | null
+  warehouse_name: string | null
+  company: string | null
+  site_price: number | null
+  enabled_on_channels: number[] | null
+  dimensions: string | null
+  is_active: boolean
+  product_type: string | null
+  created_at: string
 }

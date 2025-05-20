@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react'
 import { Channel, ChannelMarketplace } from '@/types/supabase'
 import { sendInviteAction } from '@/actions/sendInvite'
 import { resendInviteAction } from '@/actions/resendInvite'
+import { importProductsByChannelAction } from '@/actions/importProductsByChannel'
 import ChannelDetailsModal from '@/components/modals/ChannelDetailsModal'
 import { Tooltip } from 'react-tooltip'
 import { toast } from 'sonner'
 import Table from '@/components/ui/table'
 import { SyncChannelsButton } from '@/components/buttons/SyncChannelsButton'
 
-type InvitationSimple = {
+interface InvitationSimple {
   id: string
   channel_id: string
   email: string
@@ -45,6 +46,7 @@ export default function ChannelsClient({
 
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [importingId, setImportingId] = useState<string | null>(null)
 
   const [invitations, setInvitations] = useState<InvitationSimple[]>(initialInvitations || [])
 
@@ -136,6 +138,18 @@ export default function ChannelsClient({
     setResendingId(null)
   }
 
+  const handleImportProducts = async (channel: Channel) => {
+    setImportingId(channel.id)
+    const result = await importProductsByChannelAction(channel.id)
+    setImportingId(null)
+
+    if (result.success) {
+      toast.success(`Imported ${result.upserted || 0} products.`)
+    } else {
+      toast.error(result.error || 'Import failed')
+    }
+  }
+
   const paginatedChannels = filteredChannels.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -145,137 +159,136 @@ export default function ChannelsClient({
   return (
     <div className="p-6">
       <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Customers</h1>
-
+  
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <input
           type="text"
           placeholder="Search by name or email..."
-          className="w-full max-w-md px-4 py-2 border rounded-lg focus:outline-none focus:ring focus:border-blue-400 text-sm"
+          className="w-full max-w-md px-4 py-2 border rounded-lg focus:outline-none focus:ring focus:border-primary/30 text-sm"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
         {accountId && <SyncChannelsButton accountId={accountId} />}
       </div>
-
+  
       {loading ? (
         <div className="text-center py-10 text-gray-500">Filtering channels...</div>
       ) : (
         <>
-          <Table>
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-3 text-left text-sm font-semibold">Name</th>
-                <th className="p-3 text-left text-sm font-semibold">Email</th>
-                <th className="p-3 text-left text-sm font-semibold">City</th>
-                <th className="p-3 text-left text-sm font-semibold">Marketplaces</th>
-                <th className="p-3 text-left text-sm font-semibold">Invite Status</th>
-                <th className="p-3 text-center text-sm font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedChannels.length > 0 ? (
-                paginatedChannels.map((channel) => {
-                  const channelMarketplaces = marketplaces.filter(
-                    (mkt) => mkt.channel_id === channel.id
-                  )
-                  const status = findInvitationStatus(channel.id)
-                  return (
-                    <tr key={channel.id} className="border-t border-gray-200 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-gray-500">{channel.name}</td>
-                      <td className="py-3 px-4 text-gray-500">{channel.email ?? '-'}</td>
-                      <td className="py-3 px-4 text-gray-500">{channel.city ?? '-'}</td>
-                      <td className="py-3 px-4 text-gray-500">
-                        <div className="flex items-center gap-2">
-                          {channelMarketplaces.length > 0 ? (
-                            channelMarketplaces.map((mkt) => (
-                              <div key={mkt.id}>
-                                <img
-                                  src={`/logos/${resolveMarketplaceLogo(mkt.marketplace_name)}.png`}
-                                  alt={mkt.marketplace_name}
-                                  data-tooltip-id={`tooltip-${mkt.id}`}
-                                  data-tooltip-content={mkt.marketplace_name}
-                                  className="h-6 w-6 object-contain rounded cursor-pointer"
-                                />
-                                <Tooltip id={`tooltip-${mkt.id}`} place="top" />
-                              </div>
-                            ))
-                          ) : (
-                            <span className="text-xs text-gray-400">No marketplace</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-sm">{renderInvitationStatus(status)}</td>
-                      <td className="p-3 text-center space-x-2">
-                        {status === 'pending' ? (
-                          <button
-                            onClick={() => handleResendInvite(channel.id)}
-                            className="min-w-[110px] px-3 py-1 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
-                            disabled={resendingId === channel.id}
-                          >
-                            {resendingId === channel.id ? 'Resending...' : 'Resend Invite'}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => openInviteModal(channel)}
-                            className="min-w-[110px] px-3 py-1 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white text-xs rounded"
-                          >
-                            Send Invite
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              ) : (
-                <tr>
-                  <td colSpan={6} className="text-center py-10 text-gray-500">
-                    No channels found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
+  <Table>
+    <thead className="bg-gray-100">
+      <tr>
+        <th className="p-3 text-left text-sm font-semibold">Name</th>
+        <th className="p-3 text-left text-sm font-semibold">Email</th>
+        <th className="p-3 text-left text-sm font-semibold">City</th>
+        <th className="p-3 text-left text-sm font-semibold">Marketplaces</th>
+        <th className="p-3 text-left text-sm font-semibold">Invite Status</th>
+        <th className="p-3 text-center text-sm font-semibold">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {paginatedChannels.length > 0 ? (
+        paginatedChannels.map((channel) => {
+          const channelMarketplaces = marketplaces.filter((mkt) => mkt.channel_id === channel.id)
+          const status = findInvitationStatus(channel.id)
 
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-4 mt-6">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
-              >
-                Previous
-              </button>
-
-              <span className="text-gray-700 text-sm">
-                Page {currentPage} of {totalPages}
-              </span>
-
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
-              >
-                Next
-              </button>
-            </div>
-          )}
-        </>
+          return (
+            <tr key={channel.id} className="border-t border-gray-200 hover:bg-gray-50">
+              <td className="py-3 px-4 text-gray-500">{channel.name}</td>
+              <td className="py-3 px-4 text-gray-500">{channel.email ?? '-'}</td>
+              <td className="py-3 px-4 text-gray-500">{channel.city ?? '-'}</td>
+              <td className="py-3 px-4 text-gray-500">
+                <div className="flex items-center gap-2">
+                  {channelMarketplaces.length > 0 ? (
+                    channelMarketplaces.map((mkt) => (
+                      <div key={mkt.id}>
+                        <img
+                          src={`/logos/${resolveMarketplaceLogo(mkt.marketplace_name)}.png`}
+                          alt={mkt.marketplace_name}
+                          data-tooltip-id={`tooltip-${mkt.id}`}
+                          data-tooltip-content={mkt.marketplace_name}
+                          className="h-6 w-6 object-contain rounded cursor-pointer"
+                        />
+                        <Tooltip id={`tooltip-${mkt.id}`} place="top" />
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-xs text-gray-400">No marketplace</span>
+                  )}
+                </div>
+              </td>
+              <td className="p-3 text-sm">{renderInvitationStatus(status)}</td>
+              <td className="p-3 text-center space-y-2">
+                {status === 'pending' ? (
+                  <button
+                    onClick={() => handleResendInvite(channel.id)}
+                    className="w-full px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
+                    disabled={resendingId === channel.id}
+                  >
+                    {resendingId === channel.id ? 'Resending...' : 'Resend Invite'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => openInviteModal(channel)}
+                    className="w-full px-3 py-2 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white text-xs rounded"
+                  >
+                    Send Invite
+                  </button>
+                )}
+              </td>
+            </tr>
+          )
+        })
+      ) : (
+        <tr>
+          <td colSpan={6} className="text-center py-10 text-gray-500">
+            No channels found.
+          </td>
+        </tr>
       )}
+    </tbody>
+  </Table>
 
+  {totalPages > 1 && (
+    <div className="flex justify-center items-center gap-4 mt-6">
+      <button
+        disabled={currentPage === 1}
+        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+        className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
+      >
+        Previous
+      </button>
+
+      <span className="text-gray-700 text-sm">
+        Page {currentPage} of {totalPages}
+      </span>
+
+      <button
+        disabled={currentPage === totalPages}
+        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+        className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
+      >
+        Next
+      </button>
+    </div>
+  )}
+</>
+      )}
+  
       <ChannelDetailsModal
         channel={selectedChannel}
         open={isModalOpen}
         onClose={handleCloseModal}
         marketplaces={marketplaces}
       />
-
+  
       {inviteModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
             <h2 className="text-xl font-semibold mb-4">Send Invite</h2>
             <input
               type="email"
-              className="w-full border px-4 py-2 rounded mb-4 text-sm"
+              className="w-full border px-4 py-3 rounded mb-4 text-sm"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="Email address"
@@ -283,13 +296,13 @@ export default function ChannelsClient({
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setInviteModalOpen(false)}
-                className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 text-sm"
+                className="px-4 py-3 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={sendInvite}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                className="px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
                 disabled={sendingId !== null}
               >
                 {sendingId ? 'Sending...' : 'Send'}
@@ -298,6 +311,7 @@ export default function ChannelsClient({
           </div>
         </div>
       )}
+
     </div>
   )
 }

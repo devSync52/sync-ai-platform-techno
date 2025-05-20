@@ -37,14 +37,7 @@ export default function AIChatWidget() {
 
   return (
     <>
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          className="hidden lg:flex fixed top-6 right-6 z-50 items-center justify-center rounded-lg gap-2 bg-primary text-primary-foreground p-3 shadow-lg hover:bg-primary/90 transition"
-        >
-          <Bot className="w-5 h-5" /> Sync AI Assistant
-        </button>
-      )}
+      
   
   {open && (
   <div

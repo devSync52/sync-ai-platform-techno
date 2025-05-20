@@ -11,7 +11,7 @@ export function useCurrentUser() {
 
     const fetchUser = async () => {
       const { data, error } = await supabase
-        .from('users') // ou 'public.users' se estiver com schema explícito
+        .from('users')
         .select('*')
         .eq('id', authUser.id)
         .single()
