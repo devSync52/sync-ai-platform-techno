@@ -15,7 +15,6 @@ export async function GET(req: Request) {
     .from('view_products_dashboard')
     .select('*')
     .eq('account_id', account_id)
-    .limit(100)
 
   if (error) {
     console.error('[products] Error:', error.message)

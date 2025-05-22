@@ -12,7 +12,6 @@ export async function POST(req: NextRequest) {
 
     console.log('[sync-products] Request:', { channel_id, source })
 
-    // Map source to edge function name
     const edgeFunctionMap: Record<string, string> = {
       sellercloud: 'import_products_sellercloud',
       extensiv: 'import_products_extensiv',

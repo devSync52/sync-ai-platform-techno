@@ -73,7 +73,7 @@ export default function HeaderTopBar({ title = 'Dashboard', user }: HeaderProps)
           className="flex items-center gap-2 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white px-4 py-2 rounded-lg text-base shadow transition"
         >
           <Bot className="w-6 h-6" />
-          Sync AI Assistant
+          SynC AI Assistant
         </button>
 
         {/* Engrenagem */}

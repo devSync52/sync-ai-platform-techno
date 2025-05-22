@@ -273,7 +273,7 @@ export default function DashboardSellercloud() {
                   Cancelled: 'bg-red-100 text-red-700',
                   Unknown: 'bg-gray-100 text-gray-500'
                 }[statusText]
-                const iconSrc = marketplaceIcons[order.marketplace] || marketplaceIcons.default
+                const iconSrc = marketplaceIcons[order.marketplace_code] || marketplaceIcons.default
 
                 return (
                   <tr key={index} className="hover:bg-gray-50">

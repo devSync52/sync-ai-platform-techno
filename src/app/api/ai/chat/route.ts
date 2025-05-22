@@ -1,5 +1,3 @@
-// src/app/api/ai/chat/route.ts
-
 import { createClient } from '@supabase/supabase-js'
 import OpenAI from 'openai'
 import { OpenAIStream, StreamingTextResponse } from 'ai'

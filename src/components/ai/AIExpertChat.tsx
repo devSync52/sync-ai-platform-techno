@@ -129,13 +129,13 @@ export default function AIExpertChat({ user_id, account_id, model = 'gpt-3.5-tur
                   <tbody>
                     {msg.metadata.rows.map((row, ri) => (
                       <tr key={ri}>
-                        {Object.values(row).map((val, ci) => (
-                          <td key={ci} className="border px-2 py-1">
-                            {typeof val === 'number'
-  ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  : String(val)}
-                          </td>
-                        ))}
+                        {Object.entries(row).map(([key, val], ci) => (
+  <td key={ci} className="border px-2 py-1">
+  {typeof val === 'number' && ['total_amount', 'total_revenue', 'price', 'value', 'site_price'].some(k => key.toLowerCase().includes(k))
+    ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : val?.toLocaleString?.() || String(val)}
+</td>
+))}
                       </tr>
                     ))}
                   </tbody>
