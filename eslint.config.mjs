@@ -7,8 +7,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const baseConfig = {
-  experimental: {
-    turbo: false,
+  turbopack: {
+    enabled: false,
   },
   webpack(config) {
     config.resolve.alias['@'] = path.resolve(__dirname, 'src')
