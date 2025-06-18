@@ -158,6 +158,7 @@ export default function DashboardOrdersUnified() {
   return (
     <div className="p-6">
       <div className="bg-gray-50 min-h-screen p-4 sm:p-0 space-y-6">
+        {/* Cards e gráficos */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="col-span-1 lg:col-span-2">
             <OrderCharts />
@@ -180,12 +181,14 @@ export default function DashboardOrdersUnified() {
             ))}
           </div>
         </div>
-
+  
+        {/* Header + botão sync */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-primary">Orders</h1>
           {accountId && <SyncOrdersButton accountId={accountId} />}
         </div>
-
+  
+        {/* Filtros */}
         <FilterBar
           title="Unified Orders"
           placeholder="Search by Order ID, Client, or Marketplace"
@@ -228,16 +231,10 @@ export default function DashboardOrdersUnified() {
               options: ['All status', ...statusOptions],
               onChange: (v) => setStatusFilter(v !== 'All' ? v : null)
             },
-            {
-              label: 'Marketplace',
-              value: marketplaceFilter ?? '',
-              options: ['All Marketplaces', ...sellercloudMarketplaces],
-              onChange: (v) => setMarketplaceFilter(v !== 'All' ? v : null),
-              disabled: sourceFilter !== 'sellercloud'
-            }
           ]}
         />
-
+  
+        {/* Paginação */}
         <div className="flex items-center justify-end gap-4 mb-0 text-sm">
           <span>Show:</span>
           {[10, 25, 50].map((count) => (
@@ -256,7 +253,8 @@ export default function DashboardOrdersUnified() {
             Export CSV
           </Button>
         </div>
-
+  
+        {/* Tabela */}
         <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100 text-gray-600">
@@ -272,9 +270,9 @@ export default function DashboardOrdersUnified() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {paginatedOrders.map((order, index) => {
-                // status color mapping
-                const statusText = order.order_status || 'Unknown'
-                const statusColor = {
+                type OrderStatus = 'Shipped' | 'Processing' | 'Cancelled' | 'Allocated' | 'Closed' | 'Open' | 'Other' | 'Unknown'
+
+                const statusColorMap: Record<OrderStatus, string> = {
                   Shipped: 'bg-green-100 text-green-700',
                   Processing: 'bg-[#3f2d90]/20 text-[#3f2d90]',
                   Cancelled: 'bg-red-100 text-red-700',
@@ -282,13 +280,16 @@ export default function DashboardOrdersUnified() {
                   Closed: 'bg-gray-100 text-gray-500',
                   Open: 'bg-yellow-100 text-yellow-700',
                   Other: 'bg-gray-100 text-gray-500',
-                  Unknown: 'bg-gray-100 text-gray-500'
-                }[statusText] || 'bg-gray-100 text-gray-500'
-
+                  Unknown: 'bg-gray-100 text-gray-500',
+                }
+                
+                const statusText = (order.order_status as OrderStatus) || 'Unknown'
+                const statusColor = statusColorMap[statusText] || 'bg-gray-100 text-gray-500'
+  
                 const iconSrc = order.source === 'sellercloud'
                   ? (marketplaceIcons[order.marketplace_code] || marketplaceIcons.default)
                   : '/logos/warehouse.png'
-
+  
                 return (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="py-3 px-4 font-medium text-gray-800">
@@ -302,21 +303,14 @@ export default function DashboardOrdersUnified() {
                     </td>
                     <td className="py-3 px-4 text-gray-500">{order.order_date?.split('T')[0]}</td>
                     <td className="py-3 px-4 flex items-center gap-2 text-gray-600">
-  {order.source === 'sellercloud' && (
-    <>
-      <img src={iconSrc} className="h-8" alt="marketplace" />
-      
-    </>
-  )}
-  {order.source === 'extensiv' && (
-    <>
-      <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-500">
-        Warehouse
-      </span>
-      
-    </>
-  )}
-</td>
+                      {order.source === 'sellercloud' ? (
+                        <img src={iconSrc} className="h-8" alt="marketplace" />
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-500">
+                          Warehouse
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${statusColor}`}>
                         {statusText}
@@ -343,7 +337,8 @@ export default function DashboardOrdersUnified() {
               })}
             </tbody>
           </table>
-
+  
+          {/* Paginação */}
           <div className="flex justify-between items-center p-4 text-sm">
             <span className="text-gray-600">
               Showing {itemsPerPage * (currentPage - 1) + 1} -{' '}
@@ -367,7 +362,8 @@ export default function DashboardOrdersUnified() {
             </div>
           </div>
         </div>
-
+  
+        {/* Modal */}
         <OrderDetailsSc
           order={selectedOrder}
           open={modalOpen}

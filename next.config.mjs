@@ -7,10 +7,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const baseConfig = {
-  experimental: {
-    turbo: {
-      loaders: {}
-    }
+  turbopack: {
+    enabled: false,
   },
   webpack(config) {
     config.resolve.alias['@'] = path.resolve(__dirname, 'src')
@@ -22,6 +20,4 @@ export default withPWA({
   dest: 'public',
   register: true,
   skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
 })(baseConfig)
-

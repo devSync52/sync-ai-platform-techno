@@ -18,6 +18,7 @@ interface InvitationSimple {
   token: string
   status: string
   created_at?: string
+  source: string
 }
 
 interface ChannelsClientProps {

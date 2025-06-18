@@ -1,23 +1,11 @@
-import path from 'path'
-import { fileURLToPath } from 'url'
-import { dirname } from 'path'
-import withPWA from 'next-pwa'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-const baseConfig = {
-  turbopack: {
-    enabled: false,
+export default [
+  {
+    ignores: ['**/node_modules/**', '**/.next/**', '**/dist/**'],
   },
-  webpack(config) {
-    config.resolve.alias['@'] = path.resolve(__dirname, 'src')
-    return config
+  {
+    rules: {
+      semi: ['error', 'never'],
+      'no-unused-vars': 'warn',
+    },
   },
-}
-
-export default withPWA({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-})(baseConfig)
+]

@@ -10,7 +10,13 @@ interface Props {
   companyName: string
 }
 
-export function SyncOrdersButton({ accountId, companyName }: Props) {
+export function SyncOrdersButton({
+  accountId,
+  companyName = ''
+}: {
+  accountId: string
+  companyName?: string
+}) {
   const [showModal, setShowModal] = useState(false)
 
   return (

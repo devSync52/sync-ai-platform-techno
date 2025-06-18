@@ -17,6 +17,7 @@ export interface Channel {
   notes: string | null
   marketplace_name?: string | null
   imported_product_count?: number
+  source: string
 }
 
 export interface ChannelMarketplace {
@@ -26,6 +27,7 @@ export interface ChannelMarketplace {
   marketplace_name: string
   logo_url: string | null
   created_at: string
+  source: string
 }
 
 export interface Invitation {

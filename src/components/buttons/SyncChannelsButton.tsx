@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import ImportCustomersModal from '@/components/modals/ImportCustomersModal'
 
-export function SyncChannelsButton({ accountId, companyName }: { accountId: string, companyName: string }) {
+export function SyncChannelsButton({
+  accountId,
+  companyName = ''
+}: {
+  accountId: string
+  companyName?: string
+}) {
   const [showModal, setShowModal] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 

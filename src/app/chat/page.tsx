@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import AIExpertChat from '@/components/ai/AIExpertChat'
+import { v4 as uuidv4 } from 'uuid'
 
 export default function ChatPage() {
   const user = useUser()
@@ -11,6 +12,9 @@ export default function ChatPage() {
   const [userType, setUserType] = useState<'owner' | 'client' | 'end_client' | null>(null)
   const [accountId, setAccountId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // 🔥 Cria um session_id único para cada acesso ao chat
+  const [sessionId] = useState(() => uuidv4())
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -62,6 +66,8 @@ export default function ChatPage() {
         user_id={user.id}
         account_id={accountId}
         user_type={userType}
+        session_id={sessionId}
+        apiUrl="/api/ai-agent" // 🚀 Endpoint da sua API de chat
       />
     </div>
   )
