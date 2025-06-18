@@ -22,7 +22,7 @@ const fetcher = async ([url, payload]: [string, any]) => {
 
   if (!res.ok) {
     const errorData = await res.json()
-    throw new Error(errorData.error || 'Erro na IA')
+    throw new Error(errorData.error || 'AI Error')
   }
 
   const data: SyncAgentResponse = await res.json()
