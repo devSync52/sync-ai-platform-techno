@@ -27,6 +27,12 @@ interface ChannelsClientProps {
   invitations: InvitationSimple[]
 }
 
+const sourceOptions = [
+  { value: '', label: 'All sources' },
+  { value: 'sellercloud', label: 'Sellercloud' },
+  { value: 'extensiv', label: 'Extensiv' }
+]
+
 export default function ChannelsClient({
   accountId,
   channels,
@@ -39,6 +45,8 @@ export default function ChannelsClient({
   const [searchTerm, setSearchTerm] = useState('')
   const [filteredChannels, setFilteredChannels] = useState<Channel[]>(channels)
   const [loading, setLoading] = useState(false)
+
+  const [sourceFilter, setSourceFilter] = useState<string>('')
 
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -67,17 +75,21 @@ export default function ChannelsClient({
     setLoading(true)
     const timeout = setTimeout(() => {
       const term = searchTerm.toLowerCase()
-      const filtered = channels.filter((channel) =>
-        channel.name.toLowerCase().includes(term) ||
-        (channel.email?.toLowerCase().includes(term) ?? false)
-      )
+      const filtered = channels.filter((channel) => {
+        const matchesTerm =
+          channel.name.toLowerCase().includes(term) ||
+          (channel.email?.toLowerCase().includes(term) ?? false)
+        const matchesSource =
+          !sourceFilter || channel.source === sourceFilter
+        return matchesTerm && matchesSource
+      })
       setFilteredChannels(filtered)
       setCurrentPage(1)
       setLoading(false)
     }, 300)
 
     return () => clearTimeout(timeout)
-  }, [searchTerm, channels])
+  }, [searchTerm, channels, sourceFilter])
 
   const resolveMarketplaceLogo = (name: string) => {
     const normalized = name.toLowerCase()
@@ -102,6 +114,18 @@ export default function ChannelsClient({
     return (
       <span className={`inline-block px-3 py-1 text-xs font-semibold bg-white border rounded-full ${color}`}>
         {status}
+      </span>
+    )
+  }
+
+  const renderSourceTag = (source?: string | null) => {
+    if (!source) return null
+    let color = 'bg-gray-200 text-gray-700 border-gray-300'
+    if (source === 'sellercloud') color = 'bg-blue-500 text-white py-1'
+    else if (source === 'extensiv') color = 'bg-purple-600 text-white py-1'
+    return (
+      <span className={`ml-2 px-2 py-0.5 text-xs font-semibold rounded ${color}`}>
+        {source.charAt(0).toUpperCase() + source.slice(1)}
       </span>
     )
   }
@@ -159,7 +183,7 @@ export default function ChannelsClient({
   return (
     <div className="p-6">
       <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Customers</h1>
-  
+
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <input
           type="text"
@@ -168,120 +192,118 @@ export default function ChannelsClient({
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
+        <select
+          value={sourceFilter}
+          onChange={e => setSourceFilter(e.target.value)}
+          className="px-3 py-2 border rounded-lg text-sm w-full max-w-xs"
+        >
+          {sourceOptions.map(opt => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
         {accountId && <SyncChannelsButton accountId={accountId} />}
       </div>
-  
+
       {loading ? (
         <div className="text-center py-10 text-gray-500">Filtering channels...</div>
       ) : (
         <>
-  <Table>
-    <thead className="bg-gray-100">
-      <tr>
-        <th className="p-3 text-left text-sm font-semibold">Name</th>
-        <th className="p-3 text-left text-sm font-semibold">Email</th>
-        <th className="p-3 text-left text-sm font-semibold">City</th>
-        <th className="p-3 text-left text-sm font-semibold">Marketplaces</th>
-        <th className="p-3 text-left text-sm font-semibold">Invite Status</th>
-        <th className="p-3 text-center text-sm font-semibold">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {paginatedChannels.length > 0 ? (
-        paginatedChannels.map((channel) => {
-          const channelMarketplaces = marketplaces.filter((mkt) => mkt.channel_id === channel.id)
-          const status = findInvitationStatus(channel.id)
+          <Table>
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-3 text-left text-sm font-semibold">Name</th>
+                <th className="p-3 text-left text-sm font-semibold">Source</th>
+                <th className="p-3 text-left text-sm font-semibold">Email</th>
+                <th className="p-3 text-left text-sm font-semibold">Country</th>
+                <th className="p-3 text-left text-sm font-semibold">City</th>
+                <th className="p-3 text-left text-sm font-semibold">Invite Status</th>
+                <th className="p-3 text-center text-sm font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedChannels.length > 0 ? (
+                paginatedChannels.map((channel) => {
+                  const channelMarketplaces = marketplaces.filter((mkt) => mkt.channel_id === channel.id)
+                  const status = findInvitationStatus(channel.id)
 
-          return (
-            <tr key={channel.id} className="border-t border-gray-200 hover:bg-gray-50">
-              <td className="py-3 px-4 text-gray-500">{channel.name}</td>
-              <td className="py-3 px-4 text-gray-500">{channel.email ?? '-'}</td>
-              <td className="py-3 px-4 text-gray-500">{channel.city ?? '-'}</td>
-              <td className="py-3 px-4 text-gray-500">
-                <div className="flex items-center gap-2">
-                  {channelMarketplaces.length > 0 ? (
-                    channelMarketplaces.map((mkt) => (
-                      <div key={mkt.id}>
-                        <img
-                          src={`/logos/${resolveMarketplaceLogo(mkt.marketplace_name)}.png`}
-                          alt={mkt.marketplace_name}
-                          data-tooltip-id={`tooltip-${mkt.id}`}
-                          data-tooltip-content={mkt.marketplace_name}
-                          className="h-6 w-6 object-contain rounded cursor-pointer"
-                        />
-                        <Tooltip id={`tooltip-${mkt.id}`} place="top" />
-                      </div>
-                    ))
-                  ) : (
-                    <span className="text-xs text-gray-400">No marketplace</span>
-                  )}
-                </div>
-              </td>
-              <td className="p-3 text-sm">{renderInvitationStatus(status)}</td>
-              <td className="p-3 text-center space-y-2">
-                {status === 'pending' ? (
-                  <button
-                    onClick={() => handleResendInvite(channel.id)}
-                    className="w-full px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
-                    disabled={resendingId === channel.id}
-                  >
-                    {resendingId === channel.id ? 'Resending...' : 'Resend Invite'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => openInviteModal(channel)}
-                    className="w-full px-3 py-2 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white text-xs rounded"
-                  >
-                    Send Invite
-                  </button>
-                )}
-              </td>
-            </tr>
-          )
-        })
-      ) : (
-        <tr>
-          <td colSpan={6} className="text-center py-10 text-gray-500">
-            No channels found.
-          </td>
-        </tr>
+                  return (
+                    <tr key={channel.id} className="border-t border-gray-200 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-gray-500 text-sm uppercase">
+                        {channel.name}
+                        
+                      </td>
+                      <td className="py-3 px-4">{renderSourceTag(channel.source)}</td>
+                      <td className="py-3 px-4 text-gray-500">{channel.email ?? '-'}</td>
+                      <td className="py-3 px-4 text-gray-500">{channel.country ?? '-'}</td>
+                      <td className="py-3 px-4 text-gray-500">{channel.city ?? '-'}</td>
+                      
+                      <td className="p-3 text-sm">{renderInvitationStatus(status)}</td>
+                      <td className="p-3 text-center space-y-2">
+                        {status === 'pending' ? (
+                          <button
+                            onClick={() => handleResendInvite(channel.id)}
+                            className="w-full px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
+                            disabled={resendingId === channel.id}
+                          >
+                            {resendingId === channel.id ? 'Resending...' : 'Resend Invite'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openInviteModal(channel)}
+                            className="w-full px-3 py-2 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white text-xs rounded"
+                          >
+                            Send Invite
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })
+              ) : (
+                <tr>
+                  <td colSpan={6} className="text-center py-10 text-gray-500">
+                    No channels found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
+
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-4 mt-6">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
+              >
+                Previous
+              </button>
+
+              <span className="text-gray-700 text-sm">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
       )}
-    </tbody>
-  </Table>
 
-  {totalPages > 1 && (
-    <div className="flex justify-center items-center gap-4 mt-6">
-      <button
-        disabled={currentPage === 1}
-        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-        className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
-      >
-        Previous
-      </button>
-
-      <span className="text-gray-700 text-sm">
-        Page {currentPage} of {totalPages}
-      </span>
-
-      <button
-        disabled={currentPage === totalPages}
-        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-        className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
-      >
-        Next
-      </button>
-    </div>
-  )}
-</>
-      )}
-  
       <ChannelDetailsModal
         channel={selectedChannel}
         open={isModalOpen}
         onClose={handleCloseModal}
         marketplaces={marketplaces}
       />
-  
+
       {inviteModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
@@ -311,7 +333,6 @@ export default function ChannelsClient({
           </div>
         </div>
       )}
-
     </div>
   )
 }

@@ -5,7 +5,7 @@ type Props = {
   size?: number
 }
 
-export default function IntegrationTypeLogo({ type, size = 32 }: Props) {
+export default function IntegrationTypeLogo({ type, size = 80 }: Props) {
   const logos: Record<string, string> = {
     sellercloud: '/logos/sellercloud.png',
     extensiv: '/logos/extensiv.png',

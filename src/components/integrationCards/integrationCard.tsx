@@ -30,55 +30,69 @@ export default function IntegrationCard({
   const handleTestConnection = async () => {
     if (!accountId) return
     setTesting(true)
-
+  
     const toastId = toast.loading(`Testing ${title} connection...`)
-
-    const response = await fetch(`${process.env.NEXT_PUBLIC_FUNCTIONS_URL}/test_integration`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account_id: accountId, type })
-    })
-
-    if (!response.ok) {
-      const text = await response.text()
-      console.error('⚠️ Raw response:', text)
-      console.error('⚠️ Status code:', response.status)
-      throw new Error('Erro na função')
+  
+    const functionMap: Record<string, string> = {
+      sellercloud: 'test_integration',
+      extensiv: 'test_integration_extensiv',
+      project44: 'test_integration_project44' 
     }
-    
-    const result = await response.json()
-    setTesting(false)
-
-    if (result.success) {
-      toast.success(`✅ ${title} is connected!`, { id: toastId })
-    } else {
-      toast.error(`❌ ${title} failed to connect`, { id: toastId })
+  
+    const functionName = functionMap[type]
+    if (!functionName) {
+      toast.error(`Unknown integration type: ${type}`, { id: toastId })
+      setTesting(false)
+      return
     }
-
+  
+    try {
+      console.log('Sending test body:', JSON.stringify({ accountId }))
+      const response = await fetch(`${process.env.NEXT_PUBLIC_FUNCTIONS_URL}/${functionName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: accountId })
+      })
+      
+  
+      const result = await response.json()
+      setTesting(false)
+  
+      if (response.ok && result.success) {
+        toast.success(`✅ ${title} is connected!`, { id: toastId })
+      } else {
+        toast.error(`❌ ${title} failed to connect`, { id: toastId })
+      }
+    } catch (err) {
+      console.error(`❌ Error testing ${type} connection:`, err)
+      toast.error(`Error testing ${title}`, { id: toastId })
+      setTesting(false)
+    }
+  
     onTested?.()
   }
 
   return (
-    <div className="border rounded-xl p-4 shadow-sm bg-white w-full">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="border rounded-xl p-4 shadow-sm bg-white w-[320px]">
+      <div className="flex items-center justify-between gap-4 flex-col">
         {/* Logo */}
-        <div className="w-[48px] flex-shrink-0 flex justify-center">
-          <IntegrationTypeLogo type={type} size={48} />
+        <div className="w-[150px] flex-shrink-0 flex justify-center ">
+          <IntegrationTypeLogo type={type} size={150} />
         </div>
 
-        <div className="flex-1 min-w-[120px]">
-          <h2 className="text-base font-medium">{title}</h2>
+        <div className="flex-1 min-w-[120px] text-center ">
+          <h2 className="text-2xl font-medium">{title}</h2>
         </div>
 
-        <div className="min-w-[100px]">
+        <div className="text-center">
           <IntegrationStatusBadge status={status || 'inactive'} />
         </div>
 
-        <div className="text-sm text-gray-500 min-w-[180px]">
+        <div className="text-sm text-gray-500 min-w-[180px] text-center">
           {lastSynced ? new Date(lastSynced).toLocaleString() : '—'}
         </div>
 
-        <div className="min-w-[180px] flex gap-2">
+        <div className="flex gap-4 text-center">
           <button
             onClick={onClick}
             className=" text-white px-4 py-2 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition"
@@ -93,6 +107,10 @@ export default function IntegrationCard({
           >
             {testing ? 'Testing...' : 'Test'}
           </button>
+          
+        </div>
+        <div className="text-center">
+          Select:
         </div>
       </div>
     </div>

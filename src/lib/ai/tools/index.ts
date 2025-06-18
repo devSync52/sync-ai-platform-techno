@@ -1,5 +1,3 @@
-import { estimateStockoutTool } from './estimateStockout'
+import { sqlQueryTool } from './sqlQueryTool'
 
-export const aiTools = [
-    estimateStockoutTool,
-]
+export const tools = [sqlQueryTool]

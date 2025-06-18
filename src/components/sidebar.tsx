@@ -17,7 +17,8 @@ import {
   FormInputIcon,
   BotIcon,
   User2Icon,
-  Cog
+  Cog,
+  UserCircle2
 } from 'lucide-react'
 
 type SidebarProps = {
@@ -37,13 +38,14 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/channels', label: 'Customers', icon: Building2 },
     { href: '/bot-training', label: 'Bot training', icon: BotIcon },
     { href: '/ai-settings', label: 'AI Settings', icon: Cog },
-    { href: '/products', label: 'Products', icon: BoxIcon },
+    { href: '/products', label: 'Invetory', icon: BoxIcon },
     { href: '/staff', label: 'Staff', icon: User2Icon },
   ]
 
   const settingsItems = [
     { href: '/settings/company', label: 'Company', icon: FormInputIcon },
-    { href: '/settings/integrations', label: 'Integrations', icon: Plug }
+    { href: '/settings/integrations', label: 'Integrations', icon: Plug },
+    { href: '/settings/profile', label: 'My profile', icon: UserCircle2 }
   ]
 
   useEffect(() => {

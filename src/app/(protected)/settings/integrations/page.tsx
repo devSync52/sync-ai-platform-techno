@@ -63,7 +63,7 @@ export default function IntegrationsPage() {
       {loading ? (
         <div className="text-center text-gray-500">Loading integrations...</div>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-wrap gap-4">
           {availableIntegrations.map(({ name, type }) => {
             const data = integrations[type]
             return (

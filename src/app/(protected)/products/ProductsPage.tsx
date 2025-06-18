@@ -16,8 +16,8 @@ export default function ProductsPage({ accountId, companyName }: Props) {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-primary">Products List</h1>
-        <Button onClick={() => setShowModal(true)}>Import Products</Button>
+        <h1 className="text-2xl font-bold text-primary">Inventory list</h1>
+        <Button onClick={() => setShowModal(true)}>Import Product</Button>
       </div>
 
       <ImportProductsClient accountId={accountId} />

@@ -1,22 +1,33 @@
 export async function POST(request: Request) {
   try {
-    const { account_id } = await request.json()
+    const { account_id, source } = await request.json()
 
-    if (!account_id) {
-      return new Response(JSON.stringify({ success: false, error: 'Missing account_id' }), {
+    if (!account_id || !source) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing account_id or source' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       })
     }
 
-    const response = await fetch(
-      'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/get_sellercloud_channels',
-      {
-        method: 'POST',
+    // Escolhe a função serverless correta
+    let functionUrl: string | null = null
+
+    if (source === 'sellercloud') {
+      functionUrl = 'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync_sellercloud_channels'
+    } else if (source === 'extensiv') {
+      functionUrl = 'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync-customers-extensiv'
+    } else {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid source' }), {
+        status: 400,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id }),
-      }
-    )
+      })
+    }
+
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id }),
+    })
 
     const data = await response.json()
 

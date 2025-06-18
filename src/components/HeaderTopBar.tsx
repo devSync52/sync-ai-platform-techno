@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Bot, ChevronDown, Settings, LogOut, User, SlidersHorizontal } from 'lucide-react'
 import Image from 'next/image'
 
@@ -45,6 +46,7 @@ function getRoleColors(role: string): { bg: string; text: string } {
 export default function HeaderTopBar({ title = 'Dashboard', user }: HeaderProps) {
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -57,6 +59,11 @@ export default function HeaderTopBar({ title = 'Dashboard', user }: HeaderProps)
   }, [])
 
   const roleColors = getRoleColors(user.role || '')
+
+  const handleLogout = async () => {
+    await fetch('/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
 
   return (
     <div className="hidden lg:flex items-center justify-between h-20 px-6 bg-white border-b shadow-sm relative">
@@ -102,13 +109,22 @@ export default function HeaderTopBar({ title = 'Dashboard', user }: HeaderProps)
               )}
             </div>
             <ul className="text-sm py-2">
-              <li className="px-4 py-2 flex items-center gap-2 hover:bg-gray-100 cursor-pointer">
-                <User className="w-4 h-4" /> My account
+              <li
+                onClick={() => router.push('/settings/profile')}
+                className="px-4 py-2 flex items-center gap-2 hover:bg-gray-100 cursor-pointer"
+              >
+                <User className="w-4 h-4" /> My profile
               </li>
-              <li className="px-4 py-2 flex items-center gap-2 hover:bg-gray-100 cursor-pointer">
-                <SlidersHorizontal className="w-4 h-4" /> Config
+              <li
+                onClick={() => router.push('/settings/company')}
+                className="px-4 py-2 flex items-center gap-2 hover:bg-gray-100 cursor-pointer"
+              >
+                <SlidersHorizontal className="w-4 h-4" /> Settings
               </li>
-              <li className="px-4 py-2 flex items-center gap-2 hover:bg-gray-100 cursor-pointer text-red-600">
+              <li
+                onClick={handleLogout}
+                className="px-4 py-2 flex items-center gap-2 hover:bg-gray-100 cursor-pointer text-red-600"
+              >
                 <LogOut className="w-4 h-4" /> Log out
               </li>
             </ul>

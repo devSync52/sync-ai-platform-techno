@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { ScrollText, Sparkles, Repeat2, ListChecks } from "lucide-react";
+import { useBotLogs } from "@/hooks/useBotLogs";
+
 
 const tabs = [
   { id: "training", name: "Training", icon: ScrollText },
@@ -15,6 +17,7 @@ const tabs = [
   { id: "followup", name: "Follow-up", icon: Repeat2 },
   { id: "logs", name: "Bot Logs", icon: ListChecks },
 ];
+
 
 const initialExamples = [
   {
@@ -68,6 +71,9 @@ export default function AIAssistantPanel() {
     setNewReply("");
     setNewCategory("Order Status");
   };
+
+  const accountId = "a4116a4a-8057-48eb-80c6-ee34d9a7c3e9";
+  const { logs, loading } = useBotLogs(accountId);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen">
@@ -177,33 +183,44 @@ export default function AIAssistantPanel() {
           </div>
         )}
 
-        {activeTab === "logs" && (
-          <div>
-            <h1 className="text-2xl font-bold mb-4">Bot Logs</h1>
-            <div className="space-y-6">
-              {[1, 2, 3].map((id) => (
-                <div
-                  key={id}
-                  className="bg-white rounded-lg border p-4 space-y-2 shadow-sm"
-                >
-                  <p className="text-sm">
-                    <strong>User:</strong> How can I track my order?
-                  </p>
-                  <p className="text-sm">
-                    <strong>Bot:</strong> You can track your order by clicking the link in your confirmation email.
-                  </p>
-                  <Textarea
-                    placeholder="Suggest a better reply..."
-                    className="mt-2"
-                  />
-                  <Button size="sm" className="mt-2">
-                    Submit Correction
-                  </Button>
-                </div>
-              ))}
+
+
+{activeTab === "logs" && (
+  <div>
+    <h1 className="text-2xl font-bold mb-4">Bot Logs</h1>
+    <div className="space-y-6">
+      {loading ? (
+        <div>Loading...</div>
+      ) : logs.length === 0 ? (
+        <div className="text-muted-foreground">No logs found.</div>
+      ) : (
+        logs.map((log) => (
+          <div
+            key={log.id}
+            className="bg-white rounded-lg border p-4 space-y-2 shadow-sm"
+          >
+            <p className="text-sm">
+              <strong>User:</strong> {log.question}
+            </p>
+            <p className="text-sm">
+              <strong>Bot:</strong> {log.answer}
+            </p>
+            <Textarea
+              placeholder="Suggest a better reply..."
+              className="mt-2"
+            />
+            <Button size="sm" className="mt-2">
+              Submit Correction
+            </Button>
+            <div className="text-xs text-gray-400">
+              {log.created_at && new Date(log.created_at).toLocaleString()}
             </div>
           </div>
-        )}
+        ))
+      )}
+    </div>
+  </div>
+)}
       </section>
     </div>
   );

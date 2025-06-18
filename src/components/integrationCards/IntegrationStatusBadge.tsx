@@ -1,7 +1,7 @@
 type Props = { status: string }
 
 export default function IntegrationStatusBadge({ status }: Props) {
-  const baseStyle = 'px-2 py-1 rounded-full text-xs font-large inline-block'
+  const baseStyle = 'px-2 py-1 rounded-full text-sm font-large inline-block'
 
   const variants: Record<string, string> = {
     active: 'bg-green-100 text-green-700',
