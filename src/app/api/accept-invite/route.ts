@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
+  const supabase = await createServerSupabaseClient()
   const { token } = await req.json()
 
   if (!token) {
