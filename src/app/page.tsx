@@ -1,16 +1,23 @@
-import { redirect } from 'next/navigation'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-console.log('🔥 Index page loaded')
-export default async function Home() {
-  const supabase = createServerComponentClient({ cookies })
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-  if (session) {
-    redirect('/dashboard')
-  } else {
-    redirect('/login')
-  }
+export default function Home() {
+  const router = useRouter()
+  const supabase = createClientComponentClient()
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getUser()
+      if (data.user) {
+        router.replace('/dashboard')
+      } else {
+        router.replace('/login')
+      }
+    }
+    checkAuth()
+  }, [router, supabase])
+
+  return null
 }
