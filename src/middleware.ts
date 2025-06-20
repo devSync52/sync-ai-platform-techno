@@ -11,29 +11,19 @@ export async function middleware(req: NextRequest) {
 
   console.log('🛡️ Middleware | User:', user?.email || 'NOT AUTHENTICATED')
 
-  // Redirect '/' based on auth state
-  if (req.nextUrl.pathname === '/') {
-    const redirectUrl = req.nextUrl.clone()
-    redirectUrl.pathname = user ? '/dashboard' : '/login'
-    return NextResponse.redirect(redirectUrl)
-  }
+  // 🔒 Block access to protected routes if not authenticated
+  const isProtectedRoute =
+    req.nextUrl.pathname.startsWith('/dashboard') ||
+    req.nextUrl.pathname.startsWith('/settings')
 
-  // Block access to protected routes if not authenticated
-  if (
-    !user &&
-    (req.nextUrl.pathname.startsWith('/dashboard') || req.nextUrl.pathname.startsWith('/settings'))
-  ) {
+  if (isProtectedRoute && !user) {
     const redirectUrl = req.nextUrl.clone()
     redirectUrl.pathname = '/login'
     return NextResponse.redirect(redirectUrl)
   }
 
-  // Check if user has completed onboarding (has account_id)
-  if (
-    user &&
-    !req.nextUrl.pathname.startsWith('/onboarding') &&
-    (req.nextUrl.pathname.startsWith('/dashboard') || req.nextUrl.pathname.startsWith('/settings'))
-  ) {
+  // 🚧 Check if user has completed onboarding (has account_id)
+  if (isProtectedRoute && user) {
     const { data: userRecord, error } = await supabase
       .from('users')
       .select('account_id')
@@ -55,5 +45,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/dashboard/:path*', '/settings/:path*'],
+  matcher: ['/dashboard/:path*', '/settings/:path*'], // 🚫 '/' removed
 }

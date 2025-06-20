@@ -67,7 +67,7 @@ export default function ChatPage() {
         account_id={accountId}
         user_type={userType}
         session_id={sessionId}
-        apiUrl="/api/ai-agent" // 🚀 Endpoint da sua API de chat
+        apiUrl="/api/ai-agent"
       />
     </div>
   )
