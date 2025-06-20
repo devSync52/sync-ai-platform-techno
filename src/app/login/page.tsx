@@ -2,14 +2,24 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { createClient } from '@supabase/supabase-js'
 import { Loader2, Mail, Lock } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import InputIcon from '@/components/ui/inputIcon'
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  }
+)
+
 export default function LoginPage() {
-  const supabase = useSupabaseClient()
   const router = useRouter()
   const searchParams = useSearchParams()
   const showCheckEmail = searchParams.get('checkEmail') === 'true'
@@ -23,39 +33,38 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-  
+
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-  
+
     if (error) {
       setError(error.message)
       setLoading(false)
       return
     }
-  
+
     const {
       data: { user },
     } = await supabase.auth.getUser()
-  
+
     if (!user) {
       setError('Login failed. Please try again.')
       setLoading(false)
       return
     }
-  
+
     const { data: userRecord, error: userError } = await supabase
       .from('users')
       .select('account_id')
       .eq('id', user.id)
       .maybeSingle()
-  
+
     if (userError) {
       setError('Error fetching user info.')
       setLoading(false)
       return
     }
-  
+
     if (userRecord?.account_id) {
-      console.log('[DEBUG] Redirecionando...')
       router.push('/dashboard')
     } else {
       router.push('/onboarding')
@@ -64,7 +73,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary to-primary text-gray-900">
-      {/* Logo */}
       <div className="mb-6">
         <Image
           src="/sync-ai-plataform-logo.svg"

@@ -3,14 +3,24 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2, Lock } from 'lucide-react'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { createClient } from '@supabase/supabase-js'
 import Image from 'next/image'
 import InputIcon from '@/components/ui/inputIcon'
 import Link from 'next/link'
 import Head from 'next/head'
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  }
+)
+
 export default function ResetPasswordPage() {
-  const supabase = useSupabaseClient()
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -27,7 +37,7 @@ export default function ResetPasswordPage() {
     const params = new URLSearchParams(fragment)
     const token = params.get('access_token')
     const refresh_token = params.get('refresh_token')
-  
+
     if (token && refresh_token) {
       supabase.auth.setSession({
         access_token: token,
@@ -81,7 +91,13 @@ export default function ResetPasswordPage() {
 
       <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary to-primary text-gray-900">
         <div className="mb-6">
-          <Image src="/sync-ai-plataform-logo.svg" alt="SynC AI Logo" width={250} height={80} priority />
+          <Image
+            src="/sync-ai-plataform-logo.svg"
+            alt="SynC AI Logo"
+            width={250}
+            height={80}
+            priority
+          />
         </div>
 
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">

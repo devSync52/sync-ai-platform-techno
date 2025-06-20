@@ -3,14 +3,24 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Mail, Lock } from 'lucide-react'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { createClient } from '@supabase/supabase-js'
 import Image from 'next/image'
 import InputIcon from '@/components/ui/inputIcon'
 import Head from 'next/head'
 import Link from 'next/link'
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  }
+)
+
 export default function RegisterPage() {
-  const supabase = useSupabaseClient()
   const router = useRouter()
 
   const [email, setEmail] = useState('')
@@ -44,8 +54,8 @@ export default function RegisterPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${location.origin}/onboarding`
-      }
+        emailRedirectTo: `${location.origin}/onboarding`,
+      },
     })
 
     if (signUpError) {
@@ -65,12 +75,20 @@ export default function RegisterPage() {
 
       <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary to-primary text-gray-900">
         <div className="mb-6">
-          <Image src="/sync-ai-plataform-logo.svg" alt="SynC AI Logo" width={250} height={80} priority />
+          <Image
+            src="/sync-ai-plataform-logo.svg"
+            alt="SynC AI Logo"
+            width={250}
+            height={80}
+            priority
+          />
         </div>
 
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
           <h1 className="text-2xl font-bold text-center text-primary">Sign Up</h1>
-          <p className="text-sm text-center text-gray-600">Create your account to get started</p>
+          <p className="text-sm text-center text-gray-600">
+            Create your account to get started
+          </p>
 
           <form onSubmit={handleRegister} className="space-y-4">
             <InputIcon
@@ -93,9 +111,15 @@ export default function RegisterPage() {
 
             {password && (
               <ul className="text-xs text-gray-600 list-disc list-inside space-y-1">
-                <li className={hasMinLength ? 'text-green-600' : ''}>At least 8 characters</li>
-                <li className={hasUppercase ? 'text-green-600' : ''}>One uppercase letter</li>
-                <li className={hasSpecialChar ? 'text-green-600' : ''}>One special character</li>
+                <li className={hasMinLength ? 'text-green-600' : ''}>
+                  At least 8 characters
+                </li>
+                <li className={hasUppercase ? 'text-green-600' : ''}>
+                  One uppercase letter
+                </li>
+                <li className={hasSpecialChar ? 'text-green-600' : ''}>
+                  One special character
+                </li>
               </ul>
             )}
 
