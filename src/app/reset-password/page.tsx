@@ -3,24 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2, Lock } from 'lucide-react'
-import { createClient } from '@supabase/supabase-js'
+import { useSupabase } from '@/components/supabase-provider'
 import Image from 'next/image'
 import InputIcon from '@/components/ui/inputIcon'
 import Link from 'next/link'
 import Head from 'next/head'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  }
-)
-
 export default function ResetPasswordPage() {
+  const supabase = useSupabase()
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -44,7 +34,7 @@ export default function ResetPasswordPage() {
         refresh_token: refresh_token,
       })
     }
-  }, [])
+  }, [supabase])
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -101,7 +91,9 @@ export default function ResetPasswordPage() {
         </div>
 
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
-          <h1 className="text-2xl font-bold text-center text-primary">Reset your password</h1>
+          <h1 className="text-2xl font-bold text-center text-primary">
+            Reset your password
+          </h1>
 
           {message && (
             <div
@@ -117,7 +109,10 @@ export default function ResetPasswordPage() {
 
           {!access_token ? (
             <div className="text-center text-sm">
-              <Link href="/login" className="text-primary font-semibold hover:underline">
+              <Link
+                href="/login"
+                className="text-primary font-semibold hover:underline"
+              >
                 ← Return to login
               </Link>
             </div>
@@ -144,7 +139,11 @@ export default function ResetPasswordPage() {
                 className="w-full bg-primary text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 flex items-center justify-center"
                 disabled={loading || !access_token}
               >
-                {loading ? <Loader2 className="animate-spin" size={18} /> : 'Reset Password'}
+                {loading ? (
+                  <Loader2 className="animate-spin" size={18} />
+                ) : (
+                  'Reset Password'
+                )}
               </button>
             </form>
           )}

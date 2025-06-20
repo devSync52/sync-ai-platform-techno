@@ -185,7 +185,14 @@ export default function AIExpertChat({
         >
           {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
         </button>
-
+        <button
+          onClick={() => setShowAudioConfig(true)}
+          className="border px-2 py-2 rounded"
+          title="Audio settings"
+        >
+          <Settings2 className="h-4 w-4"/>
+          
+        </button>
         <input
           className="flex-1 border px-3 py-2 rounded text-sm"
           placeholder="Ask your question..."
@@ -203,20 +210,6 @@ export default function AIExpertChat({
           disabled={loading}
         >
           {loading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Ask'}
-        </button>
-      </div>
-
-
-      <div className="p-2 flex-row items-center gap-1">
-        
-
-        <button
-          onClick={() => setShowAudioConfig(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs h-5 text-grey-500 w-0"
-          title="Audio settings"
-        >
-          <Settings2 className="h-4 w-4"/>
-          <span className="hidden sm:inline">Audio settings</span>
         </button>
       </div>
 

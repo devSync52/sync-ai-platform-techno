@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
+import { useSupabase } from '@/components/supabase-provider'
+import { useSession } from '@/components/supabase-provider'
 import { v4 as uuidv4 } from 'uuid'
 import { History as HistoryIcon, Plus } from 'lucide-react'
 import AIExpertChat from '@/components/ai/AIExpertChat'
@@ -14,8 +15,9 @@ export default function AIChatWidget() {
   const [userType, setUserType] = useState<'owner' | 'client' | 'end_client' | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [hasMessages, setHasMessages] = useState(false)
-  const supabase = useSupabaseClient()
-  const user = useUser()
+  const supabase = useSupabase()
+  const session = useSession()
+  const user = session?.user  
 
   // Carrega os dados do usuário (conta e role)
   useEffect(() => {

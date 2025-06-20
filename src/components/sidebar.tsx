@@ -1,10 +1,11 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useSupabase } from '@/components/supabase-provider'
+import { useSession } from '@/components/supabase-provider'
+
 import {
   LayoutDashboard,
   Users,
@@ -21,6 +22,8 @@ import {
   UserCircle2
 } from 'lucide-react'
 
+import { useEffect, useState } from 'react'
+
 type SidebarProps = {
   onLinkClick?: () => void
 }
@@ -28,8 +31,8 @@ type SidebarProps = {
 export default function Sidebar({ onLinkClick }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = useSupabaseClient()
-  const user = useUser()
+  const supabase = useSupabase()
+  const session = useSession()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -38,7 +41,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/channels', label: 'Customers', icon: Building2 },
     { href: '/bot-training', label: 'Bot training', icon: BotIcon },
     { href: '/ai-settings', label: 'AI Settings', icon: Cog },
-    { href: '/products', label: 'Invetory', icon: BoxIcon },
+    { href: '/products', label: 'Inventory', icon: BoxIcon },
     { href: '/staff', label: 'Staff', icon: User2Icon },
   ]
 
@@ -141,10 +144,10 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       <div className="border-t border-[#352682] p-4 flex items-center justify-between text-sm">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 uppercase">
-            {user?.email?.[0]}
+            {session?.user.email?.[0]}
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-white font-medium">{user?.email}</span>
+            <span className="text-white font-medium">{session?.user.email}</span>
             <span className="text-white text-xs">Admin</span>
           </div>
         </div>

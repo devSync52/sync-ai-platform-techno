@@ -1,49 +1,38 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { Database } from '@/types/supabase'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get: (name: string) => req.cookies.get(name)?.value,
+        set: (name: string, value: string, options) => {
+          res.cookies.set({ name, value, ...options })
+        },
+        remove: (name: string, options) => {
+          res.cookies.set({ name, value: '', ...options })
+        },
+      },
+    }
+  )
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  console.log('🛡️ Middleware | User:', user?.email || 'NOT AUTHENTICATED')
-
-  // 🔒 Block access to protected routes if not authenticated
-  const isProtectedRoute =
-    req.nextUrl.pathname.startsWith('/dashboard') ||
-    req.nextUrl.pathname.startsWith('/settings')
-
-  if (isProtectedRoute && !user) {
-    const redirectUrl = req.nextUrl.clone()
-    redirectUrl.pathname = '/login'
-    return NextResponse.redirect(redirectUrl)
-  }
-
-  // 🚧 Check if user has completed onboarding (has account_id)
-  if (isProtectedRoute && user) {
-    const { data: userRecord, error } = await supabase
-      .from('users')
-      .select('account_id')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (error) {
-      console.error('❌ Error fetching user record:', error.message)
-    }
-
-    if (!userRecord?.account_id) {
-      const redirectUrl = req.nextUrl.clone()
-      redirectUrl.pathname = '/onboarding'
-      return NextResponse.redirect(redirectUrl)
-    }
+  if (!session) {
+    return NextResponse.redirect(new URL('/login', req.url))
   }
 
   return res
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/settings/:path*'], // 🚫 '/' removed
+  matcher: ['/dashboard/:path*', '/orders/:path*', '/clients/:path*'],
 }

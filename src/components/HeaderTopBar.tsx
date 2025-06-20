@@ -43,7 +43,7 @@ function getRoleColors(role: string): { bg: string; text: string } {
   }
 }
 
-export default function HeaderTopBar({ title = 'Dashboard', user }: HeaderProps) {
+export default function HeaderTopBar({ title = '', user }: HeaderProps) {
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -69,7 +69,7 @@ export default function HeaderTopBar({ title = 'Dashboard', user }: HeaderProps)
     <div className="hidden lg:flex items-center justify-between h-20 px-6 bg-white border-b shadow-sm relative">
       {/* Logo + título */}
       <div className="flex items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+        <h1 className="text-2xl font-bold text-gray-900"></h1>
       </div>
 
       {/* Ações */}

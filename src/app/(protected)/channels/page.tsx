@@ -1,12 +1,13 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/supabase'
 import ChannelsClient from './ChannelsClient'
+import { supabase } from '@/lib/supabase-browser'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ChannelsPage() {
-  const supabase = createServerComponentClient<Database>({ cookies })
+  const supabase = await createServerSupabaseClient()
   const {
     data: { session },
   } = await supabase.auth.getSession()

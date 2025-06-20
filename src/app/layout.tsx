@@ -1,31 +1,30 @@
 import './globals.css'
-import { SupabaseProvider } from '@/components/supabase-provider'
 import { Toaster } from 'sonner'
 
 export const metadata = {
+  metadataBase: new URL('https://app.syncaiplatform.com'),
   title: 'SynC AI Platform',
-  description:
-    'AI-powered logistics and commerce intelligence. SynC Platform delivers smart insights and automation for modern fulfillment.',
-  keywords: ['AI', 'SynC', 'Sellercloud', 'logistics', 'ecommerce', 'dashboard'],
-  authors: [{ name: 'SynC AI Team' }],
+  description: 'AI-powered logistics and commerce intelligence.',
   openGraph: {
     title: 'SynC AI Platform',
-    description: 'Intelligence and automation for your logistics operation with true AI.',
-    metadataBase: new URL('https://app.synccomusa.com'),
+    description: 'AI + Logistics + Intelligence = SynC AI Platform',
+    url: 'https://app.syncaiplatform.com',
     siteName: 'SynC AI Platform',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
+        alt: 'SynC AI',
       },
     ],
+    locale: 'en_US',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'SynC AI Platform',
-    description: 'AI + Logistics + Intelligence = SynC IA Platform',
+    description: 'AI + Logistics + Intelligence = SynC AI Platform',
     images: ['/og-image.png'],
   },
   icons: {
@@ -45,9 +44,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body>
-        <SupabaseProvider>
+
           {children}
-        </SupabaseProvider>
+
         <Toaster position="top-right" richColors />
       </body>
     </html>

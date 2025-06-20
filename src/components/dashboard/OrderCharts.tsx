@@ -1,38 +1,50 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BarChart, LineChart, Line, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend, Cell } from 'recharts'
+import {
+  BarChart,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  ResponsiveContainer,
+  Tooltip
+} from 'recharts'
 import { ShoppingBag, PackageCheck } from 'lucide-react'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { supabase } from '@/lib/supabase-browser'
 
 export default function OrderCharts() {
-  const supabase = useSupabaseClient()
   const [newOrders, setNewOrders] = useState<{ hour: string; value: number; amount: number }[]>([])
   const [shippedOrders, setShippedOrders] = useState<{ hour: string; shipped: number }[]>([])
   const [showOrderCount, setShowOrderCount] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
-      const { data, error } = await supabase.rpc('view_all_orders')
-      if (!data) return console.error('Erro ao carregar dados da view_all_orders:', error)
-  
+      const { data, error } = await supabase
+        .from('view_all_orders')
+        .select('order_date, total_amount, status')
+
+      if (error) {
+        console.error('❌ Error fetching data:', error)
+        return
+      }
+
       const now = new Date()
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  
-      const filtered = data.filter((order: any) => {
+
+      const filtered = (data || []).filter((order) => {
         const date = new Date(order.order_date)
         return date >= oneDayAgo && date <= now
       })
-  
-      const byHour = filtered.reduce((acc: any, order: any) => {
+
+      const byHour = filtered.reduce((acc: any[], order: any) => {
         const hour = new Date(order.order_date).getHours().toString().padStart(2, '0')
         const key = `${hour}:00`
-  
-        const rawAmount = order.grand_total ?? order.metadata?.GrandTotal
-        const amount = rawAmount ? parseFloat(rawAmount) : 0
-  
-        const found = acc.find((item: any) => item.hour === key)
-  
+
+        const amount = order.total_amount ? parseFloat(order.total_amount) : 0
+
+        const found = acc.find((item) => item.hour === key)
+
         if (found) {
           found.value += 1
           found.amount += amount
@@ -45,25 +57,25 @@ export default function OrderCharts() {
             shipped: order.status === 3 ? 1 : 0
           })
         }
-  
+
         return acc
       }, [])
-  
-      byHour.sort((a: { hour: string }, b: { hour: string }) => a.hour.localeCompare(b.hour))
-  
+
+      byHour.sort((a, b) => a.hour.localeCompare(b.hour))
+
       setNewOrders(byHour)
-      setShippedOrders(byHour.map((o: any) => ({ hour: o.hour, shipped: o.shipped })))
+      setShippedOrders(byHour.map((o) => ({ hour: o.hour, shipped: o.shipped })))
     }
-  
+
     fetchData()
-  }, [supabase])
+  }, [])
 
   const totalOrders = newOrders.reduce((sum, o) => sum + o.value, 0)
   const totalAmount = newOrders.reduce((sum, o) => sum + o.amount, 0)
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* New Orders Card */}
+      {/* New Orders */}
       <div className="bg-white rounded-2xl p-5 pb-8 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-semibold text-gray-700">New Orders</h3>
@@ -88,25 +100,24 @@ export default function OrderCharts() {
           </div>
         </div>
 
-
         <ResponsiveContainer width="100%" height={150} className="mt-10">
-                  <LineChart data={newOrders}>
-                    <XAxis dataKey="hour" hide />
-                    <YAxis hide />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#3f2d908c"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+          <LineChart data={newOrders}>
+            <XAxis dataKey="hour" hide />
+            <YAxis hide />
+            <Tooltip />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke="#3f2d90"
+              strokeWidth={3}
+              dot={{ r: 4 }}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
-      {/* Shipped Orders Card */}
+      {/* Shipped Orders */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-semibold text-gray-700">Shipped Orders</h3>
@@ -123,22 +134,21 @@ export default function OrderCharts() {
           </div>
         </div>
 
-    
         <ResponsiveContainer width="100%" height={100} className="mt-10">
-                  <LineChart data={shippedOrders}>
-                    <XAxis dataKey="hour" hide />
-                    <YAxis hide />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="shipped"
-                      stroke="#17a34abf"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+          <LineChart data={shippedOrders}>
+            <XAxis dataKey="hour" hide />
+            <YAxis hide />
+            <Tooltip />
+            <Line
+              type="monotone"
+              dataKey="shipped"
+              stroke="#17a34a"
+              strokeWidth={3}
+              dot={{ r: 4 }}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )

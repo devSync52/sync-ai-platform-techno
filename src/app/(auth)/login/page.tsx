@@ -2,24 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@supabase/supabase-js'
-import { Loader2, Mail, Lock } from 'lucide-react'
+import { Mail, Lock, Loader2 } from 'lucide-react'
+import { useSupabase } from '@/components/supabase-provider'
+import InputIcon from '@/components/ui/inputIcon'
 import Link from 'next/link'
 import Image from 'next/image'
-import InputIcon from '@/components/ui/inputIcon'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  }
-)
 
 export default function LoginPage() {
+  const supabase = useSupabase()
   const router = useRouter()
   const searchParams = useSearchParams()
   const showCheckEmail = searchParams.get('checkEmail') === 'true'
@@ -29,36 +19,39 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleLogin(e: React.FormEvent) {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
+    setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    // 🔥 Faz login
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
 
-    if (error) {
-      setError(error.message)
+    if (signInError) {
+      setError(signInError.message)
       setLoading(false)
       return
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const userId = data?.user?.id
 
-    if (!user) {
+    if (!userId) {
       setError('Login failed. Please try again.')
       setLoading(false)
       return
     }
 
-    const { data: userRecord, error: userError } = await supabase
+    // 🔍 Verifica se o user tem account_id
+    const { data: userRecord, error: fetchError } = await supabase
       .from('users')
       .select('account_id')
-      .eq('id', user.id)
+      .eq('id', userId)
       .maybeSingle()
 
-    if (userError) {
+    if (fetchError) {
       setError('Error fetching user info.')
       setLoading(false)
       return
@@ -84,8 +77,12 @@ export default function LoginPage() {
       </div>
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
-        <h1 className="text-2xl font-bold text-center text-primary">Welcome back</h1>
-        <p className="text-sm text-center text-gray-600">Sign in to your SynC AI Platform account</p>
+        <h1 className="text-2xl font-bold text-center text-primary">
+          Welcome back
+        </h1>
+        <p className="text-sm text-center text-gray-600">
+          Sign in to your SynC AI Platform account
+        </p>
 
         {showCheckEmail && (
           <div className="text-sm text-green-700 bg-green-100 border border-green-300 rounded-lg px-4 py-2 text-center font-medium">
@@ -102,7 +99,6 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-
           <InputIcon
             icon={<Lock size={18} />}
             toggleVisibility
@@ -111,7 +107,6 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-
           {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
           <button
@@ -119,17 +114,27 @@ export default function LoginPage() {
             className="w-full bg-primary text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 flex items-center justify-center"
             disabled={loading}
           >
-            {loading ? <Loader2 className="animate-spin" size={18} /> : 'Sign In'}
+            {loading ? (
+              <Loader2 className="animate-spin" size={18} />
+            ) : (
+              'Sign In'
+            )}
           </button>
         </form>
 
         <div className="text-sm flex flex-col items-center gap-2">
-          <Link href="/forgot-password" className="text-primary font-bold hover:underline">
+          <Link
+            href="/forgot-password"
+            className="text-primary font-bold hover:underline"
+          >
             Forgot password?
           </Link>
           <p>
             Don’t have an account?{' '}
-            <Link href="/register" className="text-primary hover:underline font-bold">
+            <Link
+              href="/register"
+              className="text-primary hover:underline font-bold"
+            >
               Sign up
             </Link>
           </p>

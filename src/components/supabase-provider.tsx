@@ -1,56 +1,67 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { SessionContextProvider } from '@supabase/auth-helpers-react'
-import type { Session } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
+import { Session } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { useEffect, useState, createContext, useContext } from 'react'
+import { Database } from '@/types/supabase'
 
-export function SupabaseProvider({ children }: { children: React.ReactNode }) {
-  const [supabaseClient] = useState(() => getSupabaseBrowserClient())
-  const [session, setSession] = useState<Session | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
+type SupabaseContextType = {
+  supabase: ReturnType<typeof createBrowserClient<Database>>
+  session: Session | null
+}
+
+const Context = createContext<SupabaseContextType | undefined>(undefined)
+
+export function SupabaseProvider({
+  children,
+  serverSession,
+}: {
+  children: React.ReactNode
+  serverSession: Session | null
+}) {
+  const [supabase] = useState(() =>
+    createBrowserClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  )
+  const [session, setSession] = useState<Session | null>(serverSession)
   const router = useRouter()
 
   useEffect(() => {
-    const init = async () => {
-      const {
-        data: { session },
-      } = await supabaseClient.auth.getSession()
-      console.log('🔄 Initial session:', session)
-      if (session) setSession(session)
-      setIsLoaded(true)
-    }
-
-    init()
-
     const {
       data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange((event: string, session: Session | null) => {
-      console.log('🔐 Auth event:', event)
-      console.log('🪪 Session:', session)
-
-      if (event === 'SIGNED_IN' && session) {
-        setSession(session)
-        router.push('/dashboard')
-      }
-
-      if (event === 'SIGNED_OUT') {
-        setSession(null)
-        router.push('/login')
-      }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session)
+      if (event === 'SIGNED_OUT') router.push('/login')
+      if (event === 'SIGNED_IN') router.refresh()
     })
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [supabaseClient, router])
-
-  if (!isLoaded) return null
+  }, [supabase, router])
 
   return (
-    <SessionContextProvider supabaseClient={supabaseClient} initialSession={session}>
+    <Context.Provider value={{ supabase, session }}>
       {children}
-    </SessionContextProvider>
+    </Context.Provider>
   )
+}
+
+export const useSupabase = () => {
+  const context = useContext(Context)
+  if (context === undefined) {
+    throw new Error('useSupabase must be used within a SupabaseProvider')
+  }
+  return context.supabase
+}
+
+export const useSession = () => {
+  const context = useContext(Context)
+  if (context === undefined) {
+    throw new Error('useSession must be used within a SupabaseProvider')
+  }
+  return context.session
 }
