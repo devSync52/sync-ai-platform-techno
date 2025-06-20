@@ -8,7 +8,7 @@ const __dirname = dirname(__filename)
 
 const baseConfig = {
   turbopack: {
-    enabled: false,
+    enabled: true,
   },
   webpack(config) {
     config.resolve.alias['@'] = path.resolve(__dirname, 'src')
