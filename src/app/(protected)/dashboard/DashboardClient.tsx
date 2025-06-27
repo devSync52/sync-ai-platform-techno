@@ -32,42 +32,49 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const { cardsOrder, saveOrder, loading: loadingCards } = useDashboardPreferences(userId)
 
   useEffect(() => {
-  async function fetchData() {
-    const { data: account, error: accountError } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('created_by_user_id', userId)
-      .maybeSingle()
-
-    if (accountError) {
-      console.error('❌ Error fetching account:', accountError.message)
-      return
+    async function fetchData() {
+      // 🔍 Buscar os dados do usuário
+      const { data: userRecord, error: userError } = await supabase
+        .from('users')
+        .select('account_id, role')
+        .eq('id', userId)
+        .maybeSingle()
+  
+      if (userError || !userRecord) {
+        console.error('❌ Error fetching user info:', userError?.message)
+        return
+      }
+  
+      const userRole = userRecord.role
+      const userAccountId = userRecord.account_id
+  
+      if (!userAccountId) {
+        console.warn('⚠️ No account_id found for this user:', userId)
+        setAccountId(null)
+        setOrders([])
+        return
+      }
+  
+      setAccountId(userAccountId)
+  
+      // 🔄 Definir filtro dinâmico
+      const filterField = userRole === 'client' ? 'channel_account_id' : 'account_id'
+  
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('ai_orders_unified_4')
+        .select('*')
+        .eq(filterField, userAccountId)
+  
+      if (ordersError) {
+        console.error('❌ Error fetching orders:', ordersError.message)
+        return
+      }
+  
+      setOrders(ordersData || [])
     }
-
-    if (!account) {
-      console.warn('⚠️ No account found for this user:', userId)
-      setAccountId(null)
-      setOrders([])
-      return
-    }
-
-    setAccountId(account.id)
-
-    const { data: ordersData, error: ordersError } = await supabase
-      .from('ai_orders_unified_3')
-      .select('*')
-      .eq('account_id', account.id)
-
-    if (ordersError) {
-      console.error('❌ Error fetching orders:', ordersError.message)
-      return
-    }
-
-    setOrders(ordersData || [])
-  }
-
-  fetchData()
-}, [userId, supabase])
+  
+    fetchData()
+  }, [userId, supabase])
 
   const filteredOrders = orders.filter((o) => {
     const matchesSource = sourceFilter === 'all' || o.source === sourceFilter

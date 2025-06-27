@@ -17,7 +17,7 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
 
   const { data: userData } = await supabase
     .from('users')
-    .select('name, email, role')
+    .select('name, email, role, logo_url')
     .eq('id', user.id)
     .single()
 

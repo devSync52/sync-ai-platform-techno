@@ -35,21 +35,28 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const session = useSession()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
-  const navItems = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/channels', label: 'Customers', icon: Building2 },
-    { href: '/bot-training', label: 'Bot training', icon: BotIcon },
-    { href: '/ai-settings', label: 'AI Settings', icon: Cog },
-    { href: '/products', label: 'Inventory', icon: BoxIcon },
-    { href: '/staff', label: 'Staff', icon: User2Icon },
-  ]
+  // Buscar role do usuário
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', session?.user.id)
+        .single()
 
-  const settingsItems = [
-    { href: '/settings/company', label: 'Company', icon: FormInputIcon },
-    { href: '/settings/integrations', label: 'Integrations', icon: Plug },
-    { href: '/settings/profile', label: 'My profile', icon: UserCircle2 }
-  ]
+      if (error) {
+        console.error('Error fetching user role:', error.message)
+      } else {
+        setUserRole(data?.role)
+      }
+    }
+
+    if (session?.user) {
+      fetchUserRole()
+    }
+  }, [session?.user])
 
   useEffect(() => {
     if (pathname.startsWith('/settings')) setSettingsOpen(true)
@@ -60,6 +67,40 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  const navItems = [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/channels', label: 'Customers', icon: Building2 },
+    { href: '/bot-training', label: 'Bot training', icon: BotIcon },
+    { href: '/ai-settings', label: 'AI Settings', icon: Cog },
+    { href: '/products', label: 'Inventory', icon: BoxIcon },
+    { href: '/staff', label: 'Staff', icon: User2Icon }
+  ]
+
+  // Ocultar itens se o user for client
+  const filteredNavItems = navItems.filter((item) => {
+    if (
+      userRole === 'client' &&
+      (item.href === '/bot-training' || item.href === '/ai-settings' || item.href === '/staff')
+    ) {
+      return false
+    }
+    return true
+  })
+
+  const baseSettingsItems = [
+    { href: '/settings/company', label: 'Company', icon: FormInputIcon },
+    { href: '/settings/integrations', label: 'Integrations', icon: Plug },
+    { href: '/settings/profile', label: 'My profile', icon: UserCircle2 }
+  ]
+  
+  const filteredSettingsItems = baseSettingsItems.filter((item) => {
+    // Esconde "Integrations" se for client
+    if (userRole === 'client' && item.href === '/settings/integrations') {
+      return false
+    }
+    return true
+  })
 
   return (
     <div className="flex flex-col h-full bg-[#3f2d90] text-white shadow-md">
@@ -76,7 +117,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
       {/* NAVIGATION */}
       <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {filteredNavItems.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href
           return (
             <Link
@@ -118,7 +159,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
               settingsOpen ? 'max-h-40' : 'max-h-0'
             }`}
           >
-            {settingsItems.map(({ href, label, icon: Icon }) => {
+            {filteredSettingsItems.map(({ href, label, icon: Icon }) => {
               const isActive = pathname === href
               return (
                 <Link
@@ -148,7 +189,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
           </div>
           <div className="flex flex-col leading-tight">
             <span className="text-white font-medium">{session?.user.email}</span>
-            <span className="text-white text-xs">Admin</span>
+            <span className="text-white text-xs">{userRole ?? '—'}</span>
           </div>
         </div>
         <button
