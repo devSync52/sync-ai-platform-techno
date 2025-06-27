@@ -1,154 +1,96 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
-import { Loader2, Lock } from 'lucide-react'
-import Image from 'next/image'
-import InputIcon from '@/components/ui/inputIcon'
-import Link from 'next/link'
-import Head from 'next/head'
+import { useRouter } from 'next/navigation'
+import { useSupabase } from '@/components/supabase-provider'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 
-export default function ResetPasswordPage() {
-  const supabase = useSupabaseClient()
-  const searchParams = useSearchParams()
+export default function AcceptInvitePage() {
   const router = useRouter()
+  const supabase = useSupabase()
 
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [sessionReady, setSessionReady] = useState(false)
+  const [tokenData, setTokenData] = useState<{
+    access_token: string
+    refresh_token: string
+  } | null>(null)
 
+  const [error, setError] = useState<string | null>(null)
+
+  // 🔍 Extrai os tokens da URL com hash
   useEffect(() => {
-    const access_token = searchParams.get('access_token')
-    const refresh_token = searchParams.get('refresh_token')
-  
-    if (access_token && refresh_token) {
-      supabase.auth
-        .setSession({ access_token, refresh_token })
-        .then(({ error }) => {
-          if (error) {
-            console.error('Error setting session:', error)
-            setMessage('❌ Failed to validate session.')
-          } else {
-            setSessionReady(true)
-          }
-        })
-    } else {
-      setMessage('❌ Missing or invalid link.')
-    }
-  }, [searchParams, supabase])
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash
+      const params = new URLSearchParams(hash.substring(1))
+      const access_token = params.get('access_token')
+      const refresh_token = params.get('refresh_token')
 
-  const handleReset = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setMessage('')
+      if (access_token && refresh_token) {
+        setTokenData({ access_token, refresh_token })
+      } else {
+        setError('Invalid or expired invitation link.')
+      }
+    }
+  }, [])
+
+  const handleSubmit = async () => {
+    if (!password || !tokenData) return
+
     setLoading(true)
-    setSuccess(false)
 
-    if (password.length < 8) {
-      setMessage('❌ Password must be at least 8 characters.')
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token,
+    })
+
+    if (sessionError) {
+      setError('Failed to authenticate session.')
       setLoading(false)
       return
     }
 
-    if (password !== confirmPassword) {
-      setMessage("❌ Passwords don't match.")
+    // 👇 Atualiza a senha
+    const { error: pwError } = await supabase.auth.updateUser({
+      password,
+    })
+
+    if (pwError) {
+      setError('Failed to set password.')
       setLoading(false)
       return
     }
 
-    const { error } = await supabase.auth.updateUser({ password })
+    // ✅ Marca convite como aceito
+    const { error: finalizeError } = await supabase.functions.invoke('finalize_invite', {
+      body: { access_token: tokenData.access_token },
+    })
 
-    if (error) {
-      setMessage(`❌ ${error.message}`)
-    } else {
-      setSuccess(true)
-      setMessage('✅ Password successfully updated! Redirecting...')
-      setTimeout(() => router.push('/login'), 2500)
+    if (finalizeError) {
+      setError('Failed to finalize invitation.')
+      setLoading(false)
+      return
     }
 
-    setLoading(false)
+    router.push('/login')
   }
 
+  if (error) return <div className="p-6 text-red-600">{error}</div>
+  if (!tokenData) return <div className="p-6">⏳ Loading...</div>
+
   return (
-    <>
-      <Head>
-        <title>Reset Password | SynC AI</title>
-      </Head>
-
-      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary to-primary text-gray-900">
-        <div className="mb-6">
-          <Image
-            src="/sync-ai-plataform-logo.svg"
-            alt="SynC AI Logo"
-            width={250}
-            height={80}
-            priority
-          />
-        </div>
-
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
-          <h1 className="text-2xl font-bold text-center text-primary">
-          Welcome! Set your password
-          </h1>
-
-          {message && (
-            <div
-              className={`text-sm text-center px-4 py-2 rounded-md font-medium ${
-                success
-                  ? 'text-green-700 bg-green-100 border border-green-300'
-                  : 'text-red-700 bg-red-100 border border-red-300'
-              }`}
-            >
-              {message}
-            </div>
-          )}
-
-          {!sessionReady ? (
-            <div className="text-center text-sm">
-              <p className="mb-2">Validating your link...</p>
-              <Link
-                href="/login"
-                className="text-primary font-semibold hover:underline"
-              >
-                ← Return to login
-              </Link>
-            </div>
-          ) : (
-            <form onSubmit={handleReset} className="space-y-4">
-              <InputIcon
-                icon={<Lock size={18} />}
-                toggleVisibility
-                placeholder="New password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <InputIcon
-                icon={<Lock size={18} />}
-                toggleVisibility
-                placeholder="Confirm new password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-              <button
-                type="submit"
-                className="w-full bg-primary text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 flex items-center justify-center"
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : (
-                  'Reset Password'
-                )}
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
-    </>
+    <div className="p-6 max-w-md mx-auto">
+      <h1 className="text-xl font-bold mb-4">Set your password</h1>
+      <Input
+        type="password"
+        placeholder="New password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <Button className="mt-4 w-full" onClick={handleSubmit} disabled={loading}>
+        {loading ? 'Saving...' : 'Save and continue'}
+      </Button>
+    </div>
   )
 }
