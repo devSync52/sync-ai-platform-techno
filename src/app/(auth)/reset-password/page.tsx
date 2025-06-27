@@ -10,6 +10,7 @@ import Link from 'next/link'
 import Head from 'next/head'
 
 export default function ResetPasswordPage() {
+  const [accessToken, setAccessToken] = useState('')
   const supabase = useSupabaseClient()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -22,10 +23,12 @@ export default function ResetPasswordPage() {
   const [sessionReady, setSessionReady] = useState(false)
 
   useEffect(() => {
-    const access_token = searchParams.get('access_token')
-    const refresh_token = searchParams.get('refresh_token')
-  
+    const hash = window.location.hash
+    const params = new URLSearchParams(hash.replace('#', ''))
+    const access_token = params.get('access_token')
+    const refresh_token = params.get('refresh_token')
     if (access_token && refresh_token) {
+      setAccessToken(access_token)
       supabase.auth
         .setSession({ access_token, refresh_token })
         .then(({ error }) => {
@@ -39,7 +42,7 @@ export default function ResetPasswordPage() {
     } else {
       setMessage('❌ Missing or invalid link.')
     }
-  }, [searchParams, supabase])
+  }, [supabase])
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -127,7 +130,7 @@ export default function ResetPasswordPage() {
                 required
               />
               <InputIcon
-                icon={<Lock size={18} />}
+                icon={<Lock size={17} />}
                 toggleVisibility
                 placeholder="Confirm new password"
                 value={confirmPassword}

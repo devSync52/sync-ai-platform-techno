@@ -114,7 +114,7 @@ export default function AcceptInvitePage() {
             src="/sync-ai-plataform-logo.svg"
             alt="SynC AI Logo"
             width={250}
-            height={80}
+            height={81}
             priority
           />
         </div>
