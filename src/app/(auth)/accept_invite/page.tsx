@@ -149,7 +149,7 @@ export default function AcceptInvitePage() {
                 required
               />
               <InputIcon
-                icon={<Lock size={18} />}
+                icon={<Lock size={19} />}
                 toggleVisibility
                 placeholder="Confirm new password"
                 value={confirmPassword}
