@@ -1,49 +1,41 @@
 'use server'
 
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/utils/supabase/server'
+
+type Params = {
+  email: string
+  role: string
+  accountId: string
+  invitedBy: string
+}
 
 export async function sendStaffInviteAction({
   email,
   role,
   accountId,
   invitedBy,
-}: {
-  email: string
-  role: string
-  accountId: string
-  invitedBy: string
-}) {
-  const supabase = createServerComponentClient({ cookies })
+}: Params): Promise<{ success: boolean; message?: string }> {
+  const supabase = createClient()
 
   try {
-    console.log('[sendStaffInviteAction] Dados recebidos:', {
-      email,
-      role,
-      accountId,
-      invitedBy,
-    })
-
+    // Faça a chamada para sua Edge Function (exemplo com fetch)
     const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send_staff_invite`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
       },
-      body: JSON.stringify({
-        email,
-        role,
-        accountId,
-        invitedBy,
-      }),
+      body: JSON.stringify({ email, role, accountId, invitedBy }),
     })
 
-    const result = await response.json()
-    if (!response.ok) throw new Error(result.error || 'Failed to invite user')
+    if (!response.ok) {
+      const errorBody = await response.text()
+      return { success: false, message: `HTTP ${response.status} - ${errorBody}` }
+    }
 
-    return { success: true, userId: result.user_id }
-  } catch (err: any) {
-    console.error('[sendStaffInviteAction] Erro:', err)
-    return { success: false, message: err.message }
+    const result = await response.json()
+
+    return { success: true, message: result.message }
+  } catch (error: any) {
+    return { success: false, message: error.message }
   }
 }

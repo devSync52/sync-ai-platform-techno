@@ -5,7 +5,7 @@ import { sendStaffInviteAction } from '@/actions/sendStaffInviteAction'
 import { resendInviteAction } from '@/actions/resendInviteAction'
 import { revokeInviteAction } from '@/actions/revokeInviteAction'
 import { toast } from 'sonner'
-import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
+import { useSession, useSupabase } from '@/components/supabase-provider'
 
 interface StaffUser {
   id: string
@@ -17,7 +17,7 @@ interface StaffUser {
   invite_sent_at?: string
 }
 
-export default function InviteStaffSection({ accountId }: { accountId: string }) {
+export function InviteStaffSection({ accountId }: { accountId: string }) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('staff-user')
   const [loading, setLoading] = useState(false)
@@ -25,7 +25,7 @@ export default function InviteStaffSection({ accountId }: { accountId: string })
   const [revoking, setRevoking] = useState<string | null>(null)
   const [team, setTeam] = useState<StaffUser[]>([])
   const session = useSession()
-  const supabase = useSupabaseClient()
+  const supabase = useSupabase()
 
   const fetchTeam = async () => {
     const { data, error } = await supabase
@@ -49,12 +49,12 @@ export default function InviteStaffSection({ accountId }: { accountId: string })
     setLoading(true)
     const result = await sendStaffInviteAction({
       email,
-      role,
+      role: role as 'staff-user' | 'staff-admin' | 'admin',
       accountId,
       invitedBy: session.user.id,
     })
 
-    if (result.success) {
+    if (result?.success) {
       toast.success('Invitation sent successfully!')
       setEmail('')
       setRole('staff-user')
@@ -69,7 +69,7 @@ export default function InviteStaffSection({ accountId }: { accountId: string })
   const handleResend = async (email: string) => {
     setResending(email)
     const result = await resendInviteAction({ email })
-    if (result.success) {
+    if (result?.success) {
       toast.success('Invitation resent!')
       fetchTeam()
     } else {
@@ -81,7 +81,7 @@ export default function InviteStaffSection({ accountId }: { accountId: string })
   const handleRevoke = async (email: string) => {
     setRevoking(email)
     const result = await revokeInviteAction({ email })
-    if (result.success) {
+    if (result?.success) {
       toast.success('Invitation revoked!')
       fetchTeam()
     } else {
@@ -162,40 +162,40 @@ export default function InviteStaffSection({ accountId }: { accountId: string })
           <ul className="space-y-2">
             {team.map((member) => (
               <li
-              key={member.id}
-              className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gray-50 px-4 py-3 rounded space-y-2 sm:space-y-0"
-            >
-              <div className="min-w-0">
-                <p className="font-medium text-sm break-words">{member.email}</p>
-                <p className="text-xs text-gray-500 break-words">
-                  {renderRole(member.role)} • Invited on {formatDate(member.invite_sent_at)}
-                </p>
-              </div>
-            
-              <div className="flex flex-wrap items-center gap-2">
-                {renderStatus(member.invite_status)}
-            
-                {['sent', 'accepted'].includes(member.invite_status?.toLowerCase() || '') && (
-                  <>
-                    <button
-                      onClick={() => handleResend(member.email)}
-                      disabled={resending === member.email}
-                      className="text-xs text-blue-700 border border-blue-300 px-3 py-1 rounded-full hover:bg-blue-50 transition whitespace-nowrap"
-                    >
-                      {resending === member.email ? 'Resending...' : 'Resend'}
-                    </button>
-            
-                    <button
-                      onClick={() => handleRevoke(member.email)}
-                      disabled={revoking === member.email}
-                      className="text-xs text-red-700 border border-red-300 px-3 py-1 rounded-full hover:bg-red-50 transition whitespace-nowrap"
-                    >
-                      {revoking === member.email ? 'Revoking...' : 'Revoke'}
-                    </button>
-                  </>
-                )}
-              </div>
-            </li>
+                key={member.id}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gray-50 px-4 py-3 rounded space-y-2 sm:space-y-0"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-sm break-words">{member.email}</p>
+                  <p className="text-xs text-gray-500 break-words">
+                    {renderRole(member.role)} • Invited on {formatDate(member.invite_sent_at)}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {renderStatus(member.invite_status)}
+
+                  {['sent', 'accepted'].includes(member.invite_status?.toLowerCase() || '') && (
+                    <>
+                      <button
+                        onClick={() => handleResend(member.email)}
+                        disabled={resending === member.email}
+                        className="text-xs text-blue-700 border border-blue-300 px-3 py-1 rounded-full hover:bg-blue-50 transition whitespace-nowrap"
+                      >
+                        {resending === member.email ? 'Resending...' : 'Resend'}
+                      </button>
+
+                      <button
+                        onClick={() => handleRevoke(member.email)}
+                        disabled={revoking === member.email}
+                        className="text-xs text-red-700 border border-red-300 px-3 py-1 rounded-full hover:bg-red-50 transition whitespace-nowrap"
+                      >
+                        {revoking === member.email ? 'Revoking...' : 'Revoke'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </li>
             ))}
           </ul>
         )}

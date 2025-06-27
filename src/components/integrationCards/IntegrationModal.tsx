@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useEffect, useMemo, useState } from 'react'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { useSupabase } from '@/components/supabase-provider'
 import { toast } from 'sonner'
 import { integrationFields } from './integrationFields'
 import AES from 'crypto-js/aes'
@@ -21,26 +21,26 @@ interface Field {
 
 interface Props {
   open: boolean
-  onClose: () => void
+  handleClose: () => void
   accountId: string
   type: keyof typeof integrationFields
   existingData?: {
     credentials?: string
   }
-  onSaved: () => void
+  handleSaved: () => void
 }
 
 const ENCRYPTION_KEY = process.env.NEXT_PUBLIC_CREDENTIAL_SECRET || 'SYNC_SECRET'
 
 export default function IntegrationModal({
   open,
-  onClose,
+  handleClose,
   accountId,
   type,
   existingData,
-  onSaved
+  handleSaved
 }: Props) {
-  const supabase = useSupabaseClient()
+  const supabase = useSupabase()
   const fields = useMemo(() => integrationFields[type] || [], [type])
   const [formData, setFormData] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
@@ -98,13 +98,13 @@ export default function IntegrationModal({
       toast.error('Error saving integration')
     } else {
       toast.success('Integration saved')
-      onSaved()
-      onClose()
+      handleSaved()
+      handleClose()
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>

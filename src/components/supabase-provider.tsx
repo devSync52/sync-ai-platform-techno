@@ -34,13 +34,22 @@ export function SupabaseProvider({
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (event === 'SIGNED_OUT') router.push('/login')
-      if (event === 'SIGNED_IN') router.refresh()
+  
+      if (event === 'SIGNED_OUT') {
+        const pathname = window.location.pathname
+        const isResetPage = pathname.startsWith('/reset-password') || pathname.startsWith('/accept-invite')
+        
+        if (!isResetPage) {
+          router.push('/login')
+        }
+      }
+  
+      if (event === 'SIGNED_IN') {
+        router.refresh()
+      }
     })
-
-    return () => {
-      subscription.unsubscribe()
-    }
+  
+    return () => subscription.unsubscribe()
   }, [supabase, router])
 
   return (

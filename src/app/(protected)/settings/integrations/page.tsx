@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { useSupabase } from '@/components/supabase-provider'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import IntegrationCard from '@/components/integrationCards/integrationCard'
 import IntegrationModal from '@/components/integrationCards/IntegrationModal'
@@ -21,8 +21,8 @@ const availableIntegrations: { name: string; type: IntegrationType }[] = [
 ]
 
 export default function IntegrationsPage() {
+  const supabase = useSupabase()
   const user = useCurrentUser()
-  const supabase = useSupabaseClient()
   const [integrations, setIntegrations] = useState<Record<string, IntegrationData>>({})
   const [loading, setLoading] = useState(true)
 
@@ -34,10 +34,16 @@ export default function IntegrationsPage() {
     if (!user?.account_id) return
 
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('account_integrations')
       .select('type, status, last_synced_at, credentials')
       .eq('account_id', user.account_id)
+
+    if (error) {
+      console.error('Error loading integrations:', error.message)
+      setLoading(false)
+      return
+    }
 
     const map: Record<string, IntegrationData> = {}
     data?.forEach((item) => {
@@ -57,7 +63,9 @@ export default function IntegrationsPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-      <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Integrations</h1>
+        <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">
+          Integrations
+        </h1>
       </div>
 
       {loading ? (
@@ -73,7 +81,7 @@ export default function IntegrationsPage() {
                 type={type}
                 status={data?.status || null}
                 lastSynced={data?.last_synced_at || null}
-                accountId={user.account_id}
+                accountId={user?.account_id || ''}
                 onClick={() => {
                   setModalType(type)
                   setModalData(data || null)
@@ -88,13 +96,13 @@ export default function IntegrationsPage() {
 
       {modalType && user?.account_id && (
         <IntegrationModal
-          open={modalOpen}
-          onClose={() => setModalOpen(false)}
-          accountId={user.account_id}
-          type={modalType}
-          existingData={modalData || undefined}
-          onSaved={fetchIntegrations}
-        />
+        open={modalOpen}
+        handleClose={() => setModalOpen(false)}
+        accountId={user.account_id!}
+        type={modalType}
+        existingData={modalData || undefined}
+        handleSaved={fetchIntegrations}
+      />
       )}
     </div>
   )

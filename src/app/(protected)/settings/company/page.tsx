@@ -1,14 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { CompanyForm } from './companyForm'
+import { useSupabase, useSession } from '@/components/supabase-provider'
+import { Card, CardContent } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { CompanyForm } from '@/components/client/company/CompanyForm'
 
 export default function CompanySettingsPage() {
-  const supabase = useSupabaseClient()
-  const user = useUser()
+  const supabase = useSupabase()
+  const session = useSession()
+  const userId = session?.user?.id
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -29,15 +30,35 @@ export default function CompanySettingsPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!user) return
-      const { data: types } = await supabase.from('account_types').select('id, label').order('label', { ascending: true })
+      if (!userId) return
+      const { data: types } = await supabase
+        .from('account_types')
+        .select('id, label')
+        .order('label', { ascending: true })
+
       if (types) setAccountTypes(types)
 
-      const { data: userRecord } = await supabase.from('users').select('account_id').eq('id', user.id).single()
-      if (!userRecord?.account_id) return setLoading(false)
+      const { data: userRecord } = await supabase
+        .from('users')
+        .select('account_id')
+        .eq('id', userId)
+        .single()
 
-      const { data: account } = await supabase.from('accounts').select('*').eq('id', userRecord.account_id).maybeSingle()
-      if (!account) return setLoading(false)
+      if (!userRecord?.account_id) {
+        setLoading(false)
+        return
+      }
+
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('id', userRecord.account_id)
+        .maybeSingle()
+
+      if (!account) {
+        setLoading(false)
+        return
+      }
 
       setName(account.name || '')
       setEmail(account.email || '')
@@ -56,7 +77,7 @@ export default function CompanySettingsPage() {
     }
 
     fetchData()
-  }, [supabase, user])
+  }, [supabase, userId])
 
   const handleZipChange = async (value: string) => {
     setZip(value)
@@ -80,36 +101,70 @@ export default function CompanySettingsPage() {
   }
 
   const handleSave = async () => {
+    if (!userId) return
+
     setSaving(true)
 
-    const { data: userRecord } = await supabase.from('users').select('account_id').eq('id', user?.id).single()
+    const { data: userRecord } = await supabase
+      .from('users')
+      .select('account_id')
+      .eq('id', userId)
+      .single()
 
     if (!userRecord?.account_id) {
-      const { data: created, error } = await supabase.from('accounts').insert([{
-        name, email, tax_id: taxId, phone, zip_code: zip,
-        address_line_1: address.address_line_1,
-        city: address.city,
-        state: address.state,
-        country: address.country,
-        type_id: accountType,
-        created_by_user_id: user?.id
-      }]).select().single()
+      const { data: created, error } = await supabase
+        .from('accounts')
+        .insert([{
+          name,
+          email,
+          tax_id: taxId,
+          phone,
+          zip_code: zip,
+          address_line_1: address.address_line_1,
+          city: address.city,
+          state: address.state,
+          country: address.country,
+          type_id: accountType,
+          created_by_user_id: userId
+        }])
+        .select()
+        .single()
 
-      if (error || !created?.id) return toast.error('Could not create account.')
+      if (error || !created?.id) {
+        toast.error('Could not create account.')
+        setSaving(false)
+        return
+      }
 
-      await supabase.from('users').update({ account_id: created.id }).eq('id', user?.id)
+      await supabase
+        .from('users')
+        .update({ account_id: created.id })
+        .eq('id', userId)
+
       toast.success('Account created successfully.')
     } else {
-      const { error } = await supabase.from('accounts').update({
-        name, email, tax_id: taxId, phone, zip_code: zip,
-        address_line_1: address.address_line_1,
-        city: address.city,
-        state: address.state,
-        country: address.country,
-        type_id: accountType,
-      }).eq('id', userRecord.account_id)
+      const { error } = await supabase
+        .from('accounts')
+        .update({
+          name,
+          email,
+          tax_id: taxId,
+          phone,
+          zip_code: zip,
+          address_line_1: address.address_line_1,
+          city: address.city,
+          state: address.state,
+          country: address.country,
+          type_id: accountType
+        })
+        .eq('id', userRecord.account_id)
 
-      if (error) return toast.error('Failed to update account.')
+      if (error) {
+        toast.error('Failed to update account.')
+        setSaving(false)
+        return
+      }
+
       toast.success('Company updated!')
     }
 
@@ -119,28 +174,28 @@ export default function CompanySettingsPage() {
   return (
     <div className="max-w-8xl mx-auto p-6">
       <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Company Settings</h1>
-  
+
       <Card className="border shadow-md rounded-2xl">
         <CardContent className="pt-6">
-          <CompanyForm
-            name={name}
-            setName={setName}
-            email={email}
-            setEmail={setEmail}
-            taxId={taxId}
-            setTaxId={setTaxId}
-            phone={phone}
-            setPhone={setPhone}
-            zip={zip}
-            handleZipChange={handleZipChange}
-            address={address}
-            setAddress={setAddress}
-            accountType={accountType}
-            setAccountType={setAccountType}
-            accountTypes={accountTypes}
-            saving={saving}
-            handleSave={handleSave}
-          />
+        <CompanyForm
+  name={name}
+  nameChanged={setName}
+  email={email}
+  emailChanged={setEmail}
+  taxId={taxId}
+  taxIdChanged={setTaxId}
+  phone={phone}
+  phoneChanged={setPhone}
+  zip={zip}
+  zipChanged={handleZipChange}
+  address={address}
+  addressChanged={setAddress}
+  accountType={accountType}
+  accountTypeChanged={setAccountType}
+  accountTypes={accountTypes}
+  saving={saving}
+  submitForm={handleSave}
+/>
         </CardContent>
       </Card>
     </div>

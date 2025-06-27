@@ -12,6 +12,7 @@ interface HeaderProps {
     email: string
     role?: string
     avatarLetter?: string
+    avatarUrl?: string | null
   }
 }
 
@@ -95,19 +96,28 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
         {showDropdown && (
           <div className="absolute right-[-20px] top-[50px] w-64 border rounded-xl shadow-lg z-50 animate-fade-in bg-white">
             <div className="flex flex-col items-center p-4 border-b">
-              <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-600">
-                {user.avatarLetter || (user.name ? user.name.charAt(0).toUpperCase() : '?')}
-              </div>
-              <p className="font-medium mt-2">{user.name}</p>
-              <p className="text-xs text-gray-500">{user.email}</p>
-              {user.role && (
-                <span
-                  className={`mt-1 px-2 py-0.5 text-xs rounded-full font-medium ${roleColors.bg} ${roleColors.text}`}
-                >
-                  {formatRoleLabel(user.role)}
-                </span>
-              )}
-            </div>
+            {user.avatarUrl ? (
+  <img
+    src={user.avatarUrl}
+    alt="Avatar"
+    className="w-14 h-14 rounded-full object-cover border"
+  />
+) : (
+  <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-600">
+    {user.name ? user.name.charAt(0).toUpperCase() : '?'}
+  </div>
+)}
+
+  <p className="font-medium mt-2">{user.name}</p>
+  <p className="text-xs text-gray-500">{user.email}</p>
+  {user.role && (
+    <span
+      className={`mt-1 px-2 py-0.5 text-xs rounded-full font-medium ${roleColors.bg} ${roleColors.text}`}
+    >
+      {formatRoleLabel(user.role)}
+    </span>
+  )}
+</div>
             <ul className="text-sm py-2">
               <li
                 onClick={() => router.push('/settings/profile')}

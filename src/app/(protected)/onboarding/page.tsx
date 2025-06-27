@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
+import { useSession, useSupabase } from '@/components/supabase-provider'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Image from 'next/image'
@@ -11,7 +11,7 @@ import { Building, MapPin } from 'lucide-react'
 
 export default function OnboardingPage() {
   const session = useSession()
-  const supabase = useSupabaseClient()
+  const supabase = useSupabase()
   const router = useRouter()
 
   const [company, setCompany] = useState('')

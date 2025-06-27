@@ -108,7 +108,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const ordersInTransit = filteredOrders.filter(
     (o) => o.order_status?.toLowerCase() === 'shipped'
   ).length
-  console.log('Status disponíveis:', [...new Set(orders.map(o => o.order_status))])
   const returns = filteredOrders.filter(
     (o) => o.order_status?.toLowerCase() === 'cancelled'
   ).length

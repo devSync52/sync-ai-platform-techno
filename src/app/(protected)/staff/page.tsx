@@ -1,20 +1,30 @@
-import InviteStaffSection from '@/components/InviteStaffSection'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+'use client'
 
-export default async function StaffPage() {
-  const supabase = createServerComponentClient({ cookies })
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+import { InviteStaffSection } from '@/components/InviteStaffSection'
+import { useSession, useSupabase } from '@/components/supabase-provider'
+import { useEffect, useState } from 'react'
 
-  const { data: userData } = await supabase
-    .from('users')
-    .select('account_id')
-    .eq('id', user?.id)
-    .single()
+export default function StaffPage() {
+  const supabase = useSupabase()
+  const session = useSession()
+  const [accountId, setAccountId] = useState<string | null>(null)
 
-  const accountId = userData?.account_id
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('account_id')
+        .eq('id', session.user.id)
+        .single()
+      if (!error && data?.account_id) setAccountId(data.account_id)
+    }
+
+    load()
+  }, [session, supabase])
+
+  if (!session) return null
 
   return (
     <div className="p-6">

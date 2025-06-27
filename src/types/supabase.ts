@@ -86,3 +86,11 @@ export type ProductList = {
   product_type: string | null
   created_at: string
 }
+
+export type CurrentUser = {
+  id: string
+  email: string
+  role: string
+  // 👇 adicione isso:
+  account_id: string
+}
