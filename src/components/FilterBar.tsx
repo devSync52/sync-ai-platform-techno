@@ -96,19 +96,7 @@ export default function FilterBar({
 })}
         </div>
 
-        {/* Reset button */}
-        {hasFiltersActive && (
-          <Button
-            onClick={onReset}
-            className="flex items-center gap-1 text-sm text-white"
-          >
-            <X className="w-4 h-4" />
-            Clear filters
-          </Button>
-        )}
-        <span className="text-sm text-gray-500">
-          Showing <strong>{filteredCount}</strong> of <strong>{totalCount}</strong>
-        </span>
+
       </div>
     </div>
   )

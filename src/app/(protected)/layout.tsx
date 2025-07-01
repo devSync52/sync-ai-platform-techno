@@ -4,9 +4,11 @@ import { redirect } from 'next/navigation'
 import { PropsWithChildren } from 'react'
 import { headers } from 'next/headers'
 import ProtectedLayoutClient from './ProtectedLayoutClient'
+import '@/styles/daypicker-custom.css'
 
 export default async function ProtectedLayout({ children }: PropsWithChildren) {
   const supabase = await createServerSupabaseClient()
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -17,10 +19,17 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
 
   const { data: userData } = await supabase
     .from('users')
-    .select('name, email, role, logo_url')
+    .select('name, email, role, account_id')
     .eq('id', user.id)
     .single()
 
+  const { data: accountData } = await supabase
+    .from('accounts')
+    .select('logo')
+    .eq('id', userData?.account_id)
+    .single()
+
+  // Buscar avatar individual do user (user_details)
   const { data: userDetails } = await supabase
     .from('user_details')
     .select('avatar_url')
@@ -29,7 +38,7 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
 
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') || ''
-  const isOnboarding = pathname.startsWith('/onboarding')
+  const isOnboarding = pathname.startsWith('/protected/onboarding')
 
   const headerUser = {
     name: userData?.name ?? '—',
@@ -37,6 +46,7 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
     role: userData?.role ?? 'client',
     avatarLetter: userData?.name?.charAt(0).toUpperCase() ?? 'U',
     avatarUrl: userDetails?.avatar_url ?? undefined,
+    logoUrl: accountData?.logo ?? undefined,
   }
 
   return (

@@ -5,31 +5,42 @@ import { ProductList } from '@/types/supabase'
 import FilterBar from '@/components/FilterBar'
 import { Button } from '@/components/ui/button'
 
+interface Props {
+  accountId: string | null
+  companyName: string
+  userRole: string
+}
 
-export default function ImportProductsClient({ accountId }: { accountId: string }) {
+export default function ImportProductsClient({ accountId, companyName, userRole }: Props) {
   const [products, setProducts] = useState<ProductList[]>([])
   const [loading, setLoading] = useState(true)
-
   const [searchTerm, setSearchTerm] = useState('')
   const [companyFilter, setCompanyFilter] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
-
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
-  const [sortBy, setSortBy] = useState<'sku' | 'name' | 'price'>('sku') 
+  const [sortBy, setSortBy] = useState<'sku' | 'name' | 'price'>('sku')
 
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true)
-      const res = await fetch(`/api/products?account_id=${accountId}`)
+  
+      const queryParams = new URLSearchParams()
+      queryParams.set('role', userRole)
+  
+      if (accountId) {
+        queryParams.set('account_id', accountId)
+      }
+  
+      const res = await fetch(`/api/products?${queryParams.toString()}`)
       const data = await res.json()
       setProducts(data.products || [])
       setLoading(false)
     }
-
+  
     fetchProducts()
-  }, [accountId])
+  }, [accountId, userRole])
 
   const filtered = products.filter((p) => {
     return (
@@ -47,24 +58,24 @@ export default function ImportProductsClient({ accountId }: { accountId: string 
     if (sortBy === 'price') return (b.site_price || 0) - (a.site_price || 0)
     return 0
   })
-  
+
   const paginatedProducts = sorted.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   )
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage)  
+  const totalPages = Math.ceil(filtered.length / itemsPerPage)
 
   const exportToCSV = (data: any[], filename = 'products.csv') => {
     const csv = [
-      Object.keys(data[0]).join(','), // header
+      Object.keys(data[0]).join(','),
       ...data.map(row =>
         Object.values(row).map(val =>
           typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val
         ).join(',')
       )
     ].join('\n')
-  
+
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
@@ -99,50 +110,45 @@ export default function ImportProductsClient({ accountId }: { accountId: string 
           {
             label: 'Type',
             value: typeFilter ?? '',
-            options: ['All locations', ...Array.from(new Set(products.map(p => p.warehouse_name).filter((v): v is string => !!v)))],
-            onChange: (v) => setTypeFilter(v !== 'All' ? v : null)
-          },
-          {
-            label: 'Type',
-            value: typeFilter ?? '',
             options: ['All types', ...Array.from(new Set(products.map(p => p.product_type).filter((v): v is string => !!v)))],
             onChange: (v) => setTypeFilter(v !== 'All' ? v : null)
           }
         ]}
       />
-    <div className="flex items-center justify-end gap-4 mb-0 text-sm">
+
+      <div className="flex items-center justify-end gap-4 mb-0 text-sm">
         <span>Show:</span>
-            {[10, 25, 50].map((count) => (
-         <button
+        {[10, 25, 50].map((count) => (
+          <button
             key={count}
             className={`px-1 py-1 rounded ${itemsPerPage === count ? 'bg-primary/10 text-primary font-bold' : 'text-gray-600'}`}
             onClick={() => {
-        setItemsPerPage(count)
-        setCurrentPage(1)
-      }}
-    >
-      {count}
-    </button>
-  ))}
+              setItemsPerPage(count)
+              setCurrentPage(1)
+            }}
+          >
+            {count}
+          </button>
+        ))}
 
-  <span>Sort by:</span>
-  <select
-    value={sortBy}
-    onChange={(e) => setSortBy(e.target.value as any)}
-    className="border border-gray-300 rounded px-2 py-1"
-  >
-    <option value="sku">SKU</option>
-    <option value="name">Name</option>
-    <option value="price">Price</option>
-  </select>
+        <span>Sort by:</span>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as any)}
+          className="border border-gray-300 rounded px-2 py-1"
+        >
+          <option value="sku">SKU</option>
+          <option value="name">Name</option>
+          <option value="price">Price</option>
+        </select>
 
-  <Button
-  onClick={() => exportToCSV(filtered)}
-  className="text-sm"
->
-  Export CSV
-</Button>
-</div>
+        <Button
+          onClick={() => exportToCSV(filtered)}
+          className="text-sm"
+        >
+          Export CSV
+        </Button>
+      </div>
       <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-100 text-gray-600">

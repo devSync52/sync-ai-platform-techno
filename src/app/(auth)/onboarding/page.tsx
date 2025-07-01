@@ -71,9 +71,33 @@ export default function OnboardingPage() {
     const result = await response.json()
     if (result.success) {
       toast.success('Welcome!')
-      router.push('/dashboard')
-    } else {
-      toast.error(result.error || 'Failed to create account')
+    
+      // ✅ Aguarda até que o Supabase reflita o account_id para esse usuário
+      const maxTries = 10
+      let tries = 0
+      let confirmed = false
+    
+      while (tries < maxTries && !confirmed) {
+        const { data: userCheck, error } = await supabase
+          .from('users')
+          .select('account_id')
+          .eq('id', session.user.id)
+          .maybeSingle()
+    
+        if (userCheck?.account_id) {
+          confirmed = true
+          break
+        }
+    
+        await new Promise((r) => setTimeout(r, 250)) // espera 250ms
+        tries++
+      }
+    
+      if (confirmed) {
+        router.push('/dashboard')
+      } else {
+        toast.error('We couldn’t confirm your account setup. Try again.')
+      }
     }
     setLoading(false)
   }

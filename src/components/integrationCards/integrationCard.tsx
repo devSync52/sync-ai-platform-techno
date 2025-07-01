@@ -50,7 +50,10 @@ export default function IntegrationCard({
       const response = await fetch(`${process.env.NEXT_PUBLIC_FUNCTIONS_URL}/${functionName}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: accountId })
+        body: JSON.stringify({
+          account_id: accountId,
+          type: type
+        })
       })
 
       const result = await response.json()
@@ -98,15 +101,45 @@ export default function IntegrationCard({
           </button>
 
           <button
-            onClick={handleTestConnection}
-            disabled={testing || !accountId}
-            className="bg-gray-100 border text-sm px-3 py-2 rounded-md hover:bg-gray-200 transition"
-          >
-            {testing ? 'Testing...' : 'Test'}
-          </button>
+    onClick={async () => {
+      if (!accountId) return
+
+      const toastId = toast.loading(`${status === 'active' ? 'Disconnecting' : 'Connecting'} ${title}...`)
+
+      if (status === 'active') {
+        // 🔌 Desconectar
+        const { error } = await supabase
+          .from('account_integrations')
+          .update({ status: 'inactive' })
+          .eq('account_id', accountId)
+          .eq('type', type)
+
+        if (error) {
+          console.error('[disconnect] error:', error)
+          toast.error(`❌ Failed to disconnect ${title}`, { id: toastId })
+        } else {
+          toast.success(`🔌 ${title} disconnected`, { id: toastId })
+          onTested?.()
+        }
+      } else {
+        // ⚡ Conectar
+        await handleTestConnection()
+      }
+    }}
+    disabled={!accountId || testing}
+    className="text-white px-4 py-2 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition"
+  >
+    {status === 'active'
+      ? testing
+        ? 'Disconnecting...'
+        : 'Disconnect'
+      : testing
+        ? 'Connecting...'
+        : 'Connect'}
+  </button>
         </div>
 
-        <div className="text-center">Select:</div>
+        
       </div>
     </div>
   )

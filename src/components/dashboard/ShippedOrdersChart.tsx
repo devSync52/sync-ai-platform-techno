@@ -13,45 +13,47 @@ export default function ShippedOrdersChart() {
       const { data, error } = await supabase
         .from('view_all_orders')
         .select('order_date, status')
-
+  
       if (error) {
         console.error('❌ Error fetching shipped orders:', error)
         return
       }
-
+  
       const now = new Date()
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-
+  
       const filtered = (data || []).filter((order) => {
         const date = new Date(order.order_date)
         return date >= oneDayAgo && date <= now
       })
-
-      const byHour = filtered.reduce((acc: any[], order: any) => {
+  
+      type HourData = { hour: string; shipped: number }
+  
+      const byHour = filtered.reduce((acc: HourData[], order) => {
         const hour = new Date(order.order_date).getHours().toString().padStart(2, '0')
         const key = `${hour}:00`
-
-        const isShipped = order.status === 3
-
-        const found = acc.find((item) => item.hour === key)
-
-        if (found) {
-          if (isShipped) found.shipped += 1
+  
+        const isShipped = Number(order.status) === 3
+  
+        const existing = acc.find((item) => item.hour === key)
+  
+        if (existing) {
+          if (isShipped) existing.shipped += 1
         } else {
           acc.push({
             hour: key,
             shipped: isShipped ? 1 : 0,
           })
         }
-
+  
         return acc
       }, [])
-
-      byHour.sort((a, b) => a.hour.localeCompare(b.hour))
-
+  
+      byHour.sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
+  
       setData(byHour)
     }
-
+  
     fetchData()
   }, [])
 

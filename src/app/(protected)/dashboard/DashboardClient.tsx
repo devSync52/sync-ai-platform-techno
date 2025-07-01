@@ -2,38 +2,69 @@
 
 import { useEffect, useState } from 'react'
 import { useSupabase } from '@/components/supabase-provider'
-import { ShoppingBag, DollarSignIcon, PackageCheck } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import OrderDetailsSc from '@/components/modals/OrderDetailsSc'
-import { SyncOrdersButton } from '@/components/buttons/SyncOrdersButton'
-import FilterBar from '@/components/FilterBar'
-import DashboardGrid from '@/components/dashboard/DashboardGrid'
-import NewOrdersChart from '@/components/dashboard/NewOrderChart'
-import ShippedOrdersChart from '@/components/dashboard/ShippedOrdersChart'
+import { ShoppingBag, DollarSignIcon, PackageCheck, Settings2 } from 'lucide-react'
 import { DashboardCard } from '@/types/dashboard'
+import ShippedOrdersChart from '@/components/dashboard/ShippedOrdersChart'
+import NewOrdersChart from '@/components/dashboard/NewOrderChart'
 import { useDashboardPreferences } from '@/hooks/useDashboardPreferences'
+import { DateRangePicker } from '@/components/ui/DateRangePicker'
+import { DateRange } from 'react-day-picker'
+import { startOfMonth, endOfMonth } from 'date-fns'
+import '@/styles/daypicker-custom.css'
+import DashboardGrid from '@/components/dashboard/DashboardGrid'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
+import DashboardBuilder from '@/components/dashboard/DashboardBuilder'
+import SalesVsPreviousMonthChart from '@/components/dashboard/SalesVsPreviousMonthChart'
+import SalesByMarketplaceChart from '@/components/dashboard/SalesByMarketplaceChart'
+import OrdersPerDayChart from '@/components/dashboard/OrdersPerDayChart'
+import LowStockAlertChart from '@/components/dashboard/LowStockAlertChart'
+import ReorderForecastChart from '@/components/dashboard/ReorderForecastChart'
+import TopSellingProductsChart from '@/components/dashboard/TopSellingProductsChart'
+import { Button } from '@/components/ui/button'
+
+
 
 export default function DashboardClient({ userId }: { userId: string }) {
   const supabase = useSupabase()
 
+  const [selectedRange, setSelectedRange] = useState<DateRange | undefined>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  })
+
+  
+
+
   const [orders, setOrders] = useState<any[]>([])
   const [accountId, setAccountId] = useState<string | null>(null)
 
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string | null>(null)
-  const [sourceFilter, setSourceFilter] = useState<string>('all')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
-  const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [startDate, setStartDate] = useState(() =>
+    startOfMonth(new Date()).toISOString().split('T')[0]
+  )
+  const [endDate, setEndDate] = useState(() =>
+    endOfMonth(new Date()).toISOString().split('T')[0]
+  )
 
-  const { cardsOrder, saveOrder, loading: loadingCards } = useDashboardPreferences(userId)
+  const {
+    cardsOrder = [],
+    visibleCards = [],
+    saveOrder,
+    toggleCard,
+    resetLayout,
+    reloadPreferences,
+    loading,
+  } = useDashboardPreferences(userId)
+
+  const [openBuilder, setOpenBuilder] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
-      // 🔍 Buscar os dados do usuário
       const { data: userRecord, error: userError } = await supabase
         .from('users')
         .select('account_id, role')
@@ -49,7 +80,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
       const userAccountId = userRecord.account_id
   
       if (!userAccountId) {
-        console.warn('⚠️ No account_id found for this user:', userId)
         setAccountId(null)
         setOrders([])
         return
@@ -57,13 +87,19 @@ export default function DashboardClient({ userId }: { userId: string }) {
   
       setAccountId(userAccountId)
   
-      // 🔄 Definir filtro dinâmico
-      const filterField = userRole === 'client' ? 'channel_account_id' : 'account_id'
-  
-      const { data: ordersData, error: ordersError } = await supabase
+      let query = supabase
         .from('ai_orders_unified_4')
         .select('*')
-        .eq(filterField, userAccountId)
+        .gte('order_date', startDate)
+        .lte('order_date', endDate)
+  
+      if (userRole === 'client') {
+        query = query.eq('channel_account_id', userAccountId)
+      } else {
+        query = query.eq('account_id', userAccountId)
+      }
+  
+      const { data: ordersData, error: ordersError } = await query
   
       if (ordersError) {
         console.error('❌ Error fetching orders:', ordersError.message)
@@ -74,61 +110,22 @@ export default function DashboardClient({ userId }: { userId: string }) {
     }
   
     fetchData()
-  }, [userId, supabase])
+  }, [userId, supabase, startDate, endDate])
 
-  const filteredOrders = orders.filter((o) => {
-    const matchesSource = sourceFilter === 'all' || o.source === sourceFilter
-    const matchesSearch =
-      (o.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.marketplace_code?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-        o.client_name?.toLowerCase().includes(searchTerm.toLowerCase()))
+  
 
-    const matchesStatus = statusFilter ? o.order_status === statusFilter : true
-
-    const orderDate = o.order_date ? new Date(o.order_date) : null
-    const from = startDate ? new Date(startDate) : null
-    const to = endDate ? new Date(endDate) : null
-    const matchesDate =
-      (!from || (orderDate && orderDate >= from)) &&
-      (!to || (orderDate && orderDate <= to))
-
-    return matchesSource && matchesSearch && matchesStatus && matchesDate
-  })
-
-  const sortedOrders = [...filteredOrders].sort((a, b) => {
-    const dateA = new Date(a.order_date || '').getTime()
-    const dateB = new Date(b.order_date || '').getTime()
-    return dateB - dateA
-  })
-
-  const paginatedOrders = sortedOrders.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
-
-  // 🔥 KPIs Cálculos
-  const totalOrders = filteredOrders.length
-  const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.grand_total || 0), 0)
+  const totalOrders = orders.length
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.grand_total || 0), 0)
   const averageTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0
-
-  const ordersInTransit = filteredOrders.filter(
-    (o) => o.order_status?.toLowerCase() === 'shipped'
-  ).length
-  const returns = filteredOrders.filter(
-    (o) => o.order_status?.toLowerCase() === 'cancelled'
+  const ordersInTransit = orders.filter(o => o.order_status?.toLowerCase() === 'shipped').length
+  const returns = orders.filter(o => o.order_status?.toLowerCase() === 'cancelled').length
+  const pendingOrders = orders.filter(o =>
+    ['pending', 'processing'].includes(o.order_status?.toLowerCase())
   ).length
 
-  const pendingOrders = filteredOrders.filter(
-    (o) =>
-      ['pending', 'processing'].includes(
-        o.order_status?.toLowerCase()
-      )
-  ).length
-
-  const dashboardCards: DashboardCard[]= [
+  const dashboardCards: DashboardCard[] = [
     {
-      id: 'orders',
+      id: 'total_orders',
       label: (
         <div className="flex items-center gap-3">
           <ShoppingBag />
@@ -141,7 +138,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       type: 'kpi',
     },
     {
-      id: 'sales',
+      id: 'total_sales',
       label: (
         <div className="flex items-center gap-3">
           <DollarSignIcon />
@@ -177,7 +174,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       type: 'kpi',
     },
     {
-      id: 'orders_in_transit',
+      id: 'orders_shipped',
       label: (
         <div className="flex items-center gap-3">
           <PackageCheck />
@@ -225,220 +222,70 @@ export default function DashboardClient({ userId }: { userId: string }) {
       label: <ShippedOrdersChart />,
       type: 'chart',
     },
+    {
+      id: 'sales_vs_previous_month_chart',
+      label: <SalesVsPreviousMonthChart />,
+      type: 'chart',
+    },
+    {
+      id: 'sales_by_marketplace_chart',
+      label: <SalesByMarketplaceChart />,
+      type: 'chart',
+    },
+    {
+      id: 'orders_per_day_chart',
+      label: <OrdersPerDayChart />,
+      type: 'chart',
+    },
+    {
+      id: 'top_selling_products_chart',
+      label: accountId ? <TopSellingProductsChart accountId={accountId} /> : null,
+      type: 'chart',
+    }
   ]
-  const exportToCSV = (data: any[], filename = 'orders.csv') => {
-    const csv = [
-      Object.keys(data[0] || {}).join(','),
-      ...data.map((row) =>
-        Object.values(row)
-          .map((val) =>
-            typeof val === 'string' ? `"${val.replace(/"/g, '""')}` : val
-          )
-          .join(',')
-      ),
-    ].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.setAttribute('download', filename)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-  const statusOptions = Array.from(new Set(orders.map((o) => o.order_status))).filter(Boolean)
 
-  if (loadingCards) return <p>Loading dashboard...</p>
+  const displayedCards = (cardsOrder.length > 0 ? cardsOrder : dashboardCards.map(card => card.id))
+    .filter(id => visibleCards.includes(id))
+
+
 
   return (
-  
-        
-    <div className="p-6"><h1 className="text-2xl font-bold text-primary mb-2">Dashboard</h1>
-      <div className="bg-gray-50 min-h-screen p-4 sm:p-0 space-y-6">
-        {/* Cards + Gráfico com Drag & Drop */}
-        <DashboardGrid
-          cards={dashboardCards}
-          order={cardsOrder.length ? cardsOrder : dashboardCards.map((c) => c.id)}
-          onDragEnd={saveOrder}
-        />
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex items-center justify-between mb-4">
+  <h1 className="text-2xl mr-3 font-bold text-primary">Dashboard</h1>
+  <Sheet open={openBuilder} onOpenChange={(open) => {
+    setOpenBuilder(open)
+    if (!open) reloadPreferences()
+  }}>
+    <SheetTrigger asChild>
+      <Button variant="outline" className="text-sm">
+        <Settings2 className="w-4 h-4 mr-2" />
+        Customize
+      </Button>
+    </SheetTrigger>
+    <SheetContent side="right" className="w-[90vw] sm:w-[600px] overflow-y-auto p-6">
+      <DashboardBuilder userId={userId} />
+    </SheetContent>
+  </Sheet>
+</div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-primary">Orders</h1>
-          {accountId && <SyncOrdersButton accountId={accountId} />}
-        </div>
 
-        {/* Filtros */}
-        <FilterBar
-          title="Unified Orders"
-          placeholder="Search by Order ID, Client, or Marketplace"
-          searchTerm={searchTerm}
-          onSearch={setSearchTerm}
-          totalCount={orders.length}
-          filteredCount={filteredOrders.length}
-          onReset={() => {
-            setSearchTerm('')
-            setStatusFilter(null)
-            setStartDate('')
-            setEndDate('')
-            setSourceFilter('all')
-          }}
-          filters={[
-            {
-              label: 'Source',
-              value: sourceFilter,
-              options: ['All source', 'sellercloud', 'extensiv'],
-              onChange: setSourceFilter,
-            },
-            {
-              label: 'Start Date',
-              value: startDate,
-              type: 'date',
-              options: [],
-              onChange: setStartDate,
-            },
-            {
-              label: 'End Date',
-              value: endDate,
-              type: 'date',
-              options: [],
-              onChange: setEndDate,
-            },
-            {
-              label: 'Status',
-              value: statusFilter ?? '',
-              options: ['All status', ...statusOptions],
-              onChange: (v) => setStatusFilter(v !== 'All' ? v : null),
-            },
-          ]}
-        />
-
-        {/* Pagination */}
-        <div className="flex items-center justify-end gap-4 mb-0 text-sm">
-          <span>Show:</span>
-          {[10, 25, 50].map((count) => (
-            <button
-              key={count}
-              className={`px-1 py-1 rounded ${
-                itemsPerPage === count
-                  ? 'bg-primary/10 text-primary font-bold'
-                  : 'text-gray-600'
-              }`}
-              onClick={() => {
-                setItemsPerPage(count)
-                setCurrentPage(1)
-              }}
-            >
-              {count}
-            </button>
-          ))}
-          <Button onClick={() => exportToCSV(filteredOrders)} className="text-sm">
-            Export CSV
-          </Button>
-        </div>
-
-       {/* Tabela */}
-       <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-100 text-gray-600">
-              <tr>
-                <th className="py-3 px-4 text-left font-medium">Order ID</th>
-                <th className="py-3 px-4 text-left font-medium">Source</th>
-                <th className="py-3 px-4 text-left font-medium">Order Date</th>
-                <th className="py-3 px-4 text-left font-medium">Status</th>
-                <th className="py-3 px-4 text-left font-medium">Total</th>
-                <th className="py-3 px-4 text-left font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {paginatedOrders.map((order, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="py-3 px-4 font-medium text-gray-800">
-                    {order.order_id}
-                    <div className="text-xs text-gray-500">
-                      {order.client_name || '—'}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        order.source === 'sellercloud'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-purple-500 text-white'
-                      }`}
-                    >
-                      {order.source}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-gray-500">
-                    {order.order_date?.split('T')[0]}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        order.order_status === 'Shipped'
-                          ? 'bg-green-100 text-green-700'
-                          : order.order_status === 'Processing'
-                          ? 'bg-[#3f2d90]/20 text-[#3f2d90]'
-                          : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {order.order_status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-gray-800">
-                    {order.grand_total !== null
-                      ? `$${Number(order.grand_total).toFixed(2)}`
-                      : '—'}
-                  </td>
-                  <td className="py-3 px-4 text-sm">
-                    <button
-                      onClick={() => {
-                        setSelectedOrder(order)
-                        setModalOpen(true)
-                      }}
-                      className="text-white px-1 py-1 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition min-w-[80px]"
-                    >
-                      Details
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Pagination */}
-          <div className="flex justify-between items-center p-4 text-sm">
-            <span className="text-gray-600">
-              Showing {itemsPerPage * (currentPage - 1) + 1} -{' '}
-              {Math.min(currentPage * itemsPerPage, filteredOrders.length)} of{' '}
-              {filteredOrders.length}
-            </span>
-            <div className="space-x-2">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 border rounded disabled:opacity-50"
-              >
-                Prev
-              </button>
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 border rounded disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Modal */}
-        <OrderDetailsSc
-          order={selectedOrder}
-          open={modalOpen}
-          onClose={() => setModalOpen(false)}
-        />
+        <DateRangePicker
+  date={selectedRange}
+  setDate={(range) => {
+    setSelectedRange(range)
+    setStartDate(range?.from?.toISOString().slice(0, 10) || '')
+    setEndDate(range?.to?.toISOString().slice(0, 10) || '')
+  }}
+/>
       </div>
+
+      <DashboardGrid
+  cards={dashboardCards.filter((card) => visibleCards.includes(card.id))}
+  order={displayedCards}
+  onDragEnd={(newOrder) => saveOrder(newOrder)}
+/>
     </div>
   )
 }

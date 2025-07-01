@@ -10,6 +10,9 @@ const baseConfig = {
   turbopack: {
     enabled: true,
   },
+  images: {
+    domains: ['euzjrgnyzfgldubqglba.supabase.co'], // substitua pelo seu domínio Supabase se for outro
+  },
   webpack(config) {
     config.resolve.alias['@'] = path.resolve(__dirname, 'src')
     return config

@@ -7,7 +7,6 @@ type DashboardPreferences = {
   saveOrder: (newOrder: string[]) => Promise<void>
   toggleCard: (cardId: string) => Promise<void>
   resetLayout: () => Promise<void>
-  reloadPreferences: () => Promise<void>
   loading: boolean
 }
 
@@ -24,42 +23,41 @@ export function useDashboardPreferences(userId: string): DashboardPreferences {
     'orders_shipped',
     'returns',
     'pending_orders',
-    'new_orders_chart',
-    'shipped_orders_chart',
     'sales_vs_previous_month_chart',
     'sales_by_marketplace_chart',
     'orders_per_day_chart',
-    'top_selling_products_chart',
+    'low_stock_alert_chart',
+    'reorder_forecast_chart',
   ]
 
-  const loadPrefs = async () => {
-    setLoading(true)
-
-    const { data, error } = await supabase
-      .from('dashboard_preferences')
-      .select('cards_order, visible_cards')
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    if (error) {
-      console.error('[DashboardPreferences] Load error:', error.message)
-    }
-
-    if (data) {
-      setCardsOrder(data.cards_order ?? defaultCards)
-      setVisibleCards(data.visible_cards ?? defaultCards)
-    } else {
-      setCardsOrder(defaultCards)
-      setVisibleCards(defaultCards)
-    }
-
-    setLoading(false)
-  }
-
   useEffect(() => {
-    if (userId) {
-      loadPrefs()
+    if (!userId) return
+
+    const loadPrefs = async () => {
+      setLoading(true)
+
+      const { data, error } = await supabase
+        .from('dashboard_preferences')
+        .select('cards_order, visible_cards')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (error) {
+        console.error('[DashboardPreferences] Load error:', error.message)
+      }
+
+      if (data) {
+        setCardsOrder(data.cards_order ?? defaultCards)
+        setVisibleCards(data.visible_cards ?? defaultCards)
+      } else {
+        setCardsOrder(defaultCards)
+        setVisibleCards(defaultCards)
+      }
+
+      setLoading(false)
     }
+
+    loadPrefs()
   }, [userId, supabase])
 
   const savePrefs = async (
@@ -85,16 +83,11 @@ export function useDashboardPreferences(userId: string): DashboardPreferences {
     const updated = visibleCards.includes(cardId)
       ? visibleCards.filter(id => id !== cardId)
       : [...visibleCards, cardId]
-
     await savePrefs(cardsOrder, updated)
   }
 
   const resetLayout = async () => {
     await savePrefs(defaultCards, defaultCards)
-  }
-
-  const reloadPreferences = async () => {
-    await loadPrefs()
   }
 
   return {
@@ -103,9 +96,7 @@ export function useDashboardPreferences(userId: string): DashboardPreferences {
     saveOrder,
     toggleCard,
     resetLayout,
-    reloadPreferences,
     loading,
   }
 }
-
 export type { DashboardPreferences }

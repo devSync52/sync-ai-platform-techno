@@ -4,8 +4,16 @@ import { createServerClient } from '@supabase/ssr'
 import { Database } from '@/types/supabase'
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
+  const requestHeaders = new Headers(req.headers)
 
+  // 🔧 Cria a response com headers clonados do request
+  const res = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
+
+  // 🔐 Autenticação via Supabase
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -30,6 +38,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
+  // ✅ Agora esse header será acessível no layout.tsx
   res.headers.set('x-pathname', req.nextUrl.pathname)
 
   return res
@@ -37,6 +46,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/(protected)/(.*)',
+    '/((?!login|register|forgot-password|reset-password|onboarding|accept-invite|api|_next|favicon.ico|public).*)',
   ],
 }

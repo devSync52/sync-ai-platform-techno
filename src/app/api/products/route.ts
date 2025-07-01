@@ -1,25 +1,33 @@
-import { NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function GET(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
   const { searchParams } = new URL(req.url)
-  const account_id = searchParams.get('account_id')
+  const accountId = searchParams.get('account_id')
+  const role = searchParams.get('role') // 'client', 'admin', 'owner'
 
-  if (!account_id) {
-    return NextResponse.json({ success: false, error: 'Missing account_id' }, { status: 400 })
+  let query = supabase.from('sellercloud_products').select('*')
+
+  if (!accountId) {
+    return new Response(JSON.stringify({ error: 'Missing account_id' }), { status: 400 })
   }
 
-  const { data, error } = await supabase
-    .from('view_products_dashboard')
-    .select('*')
-    .eq('account_id', account_id)
+  if (role === 'client') {
+    query = query.eq('channel_id', accountId)
+  } else {
+    query = query.eq('account_id', accountId)
+  }
+
+  const { data, error } = await query
 
   if (error) {
-    console.error('[products] Error:', error.message)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    console.error('[api/products] 🔥 Erro ao buscar produtos:', error.message)
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
   }
 
-  return NextResponse.json({ success: true, products: data })
+  return new Response(JSON.stringify({ products: data }), { status: 200 })
 }

@@ -4,19 +4,24 @@ import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { cn } from '@/lib/utils'
 
+// Wrapper principal
 interface SheetProps extends React.ComponentPropsWithoutRef<typeof Dialog.Root> {}
-
 function Sheet({ children, ...props }: SheetProps) {
   return <Dialog.Root {...props}>{children}</Dialog.Root>
 }
 
+// Trigger para abrir
 const SheetTrigger = Dialog.Trigger
 
+// Conteúdo do modal lateral
 function SheetContent({
   side = 'right',
   className,
+  children,
   ...props
-}: React.ComponentPropsWithoutRef<typeof Dialog.Content> & { side?: 'top' | 'bottom' | 'left' | 'right' }) {
+}: React.ComponentPropsWithoutRef<typeof Dialog.Content> & {
+  side?: 'top' | 'bottom' | 'left' | 'right'
+}) {
   return (
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 bg-black/50 z-40" />
@@ -30,9 +35,41 @@ function SheetContent({
           className
         )}
         {...props}
-      />
+      >
+        <div className="p-6 space-y-4">
+          {/* ✅ Título obrigatório para acessibilidade */}
+          <SheetTitle>Customize your dashboard</SheetTitle>
+
+          {/* Conteúdo passado ao Sheet */}
+          {children}
+        </div>
+      </Dialog.Content>
     </Dialog.Portal>
   )
 }
 
-export { Sheet, SheetTrigger, SheetContent }
+// Header genérico (opcional)
+function SheetHeader({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col space-y-1.5 p-6">{children}</div>
+}
+
+// Título acessível
+const SheetTitle = React.forwardRef<
+  HTMLHeadingElement,
+  React.HTMLAttributes<HTMLHeadingElement>
+>(({ className, ...props }, ref) => (
+  <Dialog.Title
+    ref={ref}
+    className={cn('text-lg font-semibold leading-none tracking-tight', className)}
+    {...props}
+  />
+))
+SheetTitle.displayName = 'SheetTitle'
+
+export {
+  Sheet,
+  SheetTrigger,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+}

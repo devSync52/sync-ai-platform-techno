@@ -19,7 +19,8 @@ import {
   BotIcon,
   User2Icon,
   Cog,
-  UserCircle2
+  UserCircle2,
+  ShoppingBag
 } from 'lucide-react'
 
 import { useEffect, useState } from 'react'
@@ -70,6 +71,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/orders', label: 'Orders', icon: ShoppingBag },
     { href: '/channels', label: 'Customers', icon: Building2 },
     { href: '/bot-training', label: 'Bot training', icon: BotIcon },
     { href: '/ai-settings', label: 'AI Settings', icon: Cog },
@@ -81,7 +83,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const filteredNavItems = navItems.filter((item) => {
     if (
       userRole === 'client' &&
-      (item.href === '/bot-training' || item.href === '/ai-settings' || item.href === '/staff')
+      (item.href === '/bot-training' || item.href === '/ai-settings' || item.href === '/staff' || item.href === '/channels')
     ) {
       return false
     }

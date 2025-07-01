@@ -1,4 +1,5 @@
 import './globals.css'
+import '@/styles/daypicker-custom.css'
 import { Toaster } from 'sonner'
 
 export const metadata = {

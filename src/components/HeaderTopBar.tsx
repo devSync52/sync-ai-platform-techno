@@ -13,6 +13,7 @@ interface HeaderProps {
     role?: string
     avatarLetter?: string
     avatarUrl?: string | null
+    logoUrl?: string | null
   }
 }
 
@@ -68,10 +69,22 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
 
   return (
     <div className="hidden lg:flex items-center justify-between h-20 px-6 bg-white border-b shadow-sm relative">
-      {/* Logo + título */}
       <div className="flex items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900"></h1>
-      </div>
+      {user.role === 'client' ? (
+  user.logoUrl ? (
+    <img
+      src={user.logoUrl}
+      alt="Company Logo"
+      className="w-50 h-10 object-contain rounded-md"
+    />
+  ) : (
+    <div className="w-10 h-10 rounded-md bg-gray-100 border flex items-center justify-center text-sm text-gray-500">
+      No Logo
+    </div>
+  )
+) : null}
+
+</div>
 
       {/* Ações */}
       <div className="flex items-center gap-4 relative" ref={dropdownRef}>
@@ -96,28 +109,27 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
         {showDropdown && (
           <div className="absolute right-[-20px] top-[50px] w-64 border rounded-xl shadow-lg z-50 animate-fade-in bg-white">
             <div className="flex flex-col items-center p-4 border-b">
-            {user.avatarUrl ? (
-  <img
-    src={user.avatarUrl}
-    alt="Avatar"
-    className="w-14 h-14 rounded-full object-cover border"
-  />
-) : (
-  <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-600">
-    {user.name ? user.name.charAt(0).toUpperCase() : '?'}
-  </div>
-)}
-
-  <p className="font-medium mt-2">{user.name}</p>
-  <p className="text-xs text-gray-500">{user.email}</p>
-  {user.role && (
-    <span
-      className={`mt-1 px-2 py-0.5 text-xs rounded-full font-medium ${roleColors.bg} ${roleColors.text}`}
-    >
-      {formatRoleLabel(user.role)}
-    </span>
-  )}
-</div>
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt="Avatar"
+                  className="w-14 h-14 rounded-full object-cover border"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-600">
+                  {user.name ? user.name.charAt(0).toUpperCase() : '?'}
+                </div>
+              )}
+              <p className="font-medium mt-2">{user.name}</p>
+              <p className="text-xs text-gray-500">{user.email}</p>
+              {user.role && (
+                <span
+                  className={`mt-1 px-2 py-0.5 text-xs rounded-full font-medium ${roleColors.bg} ${roleColors.text}`}
+                >
+                  {formatRoleLabel(user.role)}
+                </span>
+              )}
+            </div>
             <ul className="text-sm py-2">
               <li
                 onClick={() => router.push('/settings/profile')}

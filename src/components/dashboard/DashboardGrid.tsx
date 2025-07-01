@@ -11,11 +11,11 @@ import {
   arrayMove,
   SortableContext,
   useSortable,
-  verticalListSortingStrategy,
+  rectSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { cn } from '@/lib/utils'
 import { DashboardCard } from '@/types/dashboard'
+import { cn } from '@/lib/utils'
 
 type DashboardGridProps = {
   cards: DashboardCard[]
@@ -31,17 +31,17 @@ export default function DashboardGrid({
   const sensors = useSensors(useSensor(PointerSensor))
 
   const sortedCards = order
-    .map((id) => cards.find((c) => c.id === id))
+    .map((id) => cards.find((c) => c?.id === id))
     .filter(Boolean) as DashboardCard[]
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event
-    if (active.id !== over.id) {
-      const oldIndex = order.indexOf(active.id)
-      const newIndex = order.indexOf(over.id)
-      const newOrder = arrayMove(order, oldIndex, newIndex)
-      onDragEnd(newOrder)
-    }
+    if (!over || active.id === over.id) return
+
+    const oldIndex = order.indexOf(active.id)
+    const newIndex = order.indexOf(over.id)
+    const newOrder = arrayMove(order, oldIndex, newIndex)
+    onDragEnd(newOrder)
   }
 
   return (
@@ -50,8 +50,8 @@ export default function DashboardGrid({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={order} strategy={verticalListSortingStrategy}>
-      <div className="grid grid-cols-3 gap-4">
+      <SortableContext items={order} strategy={rectSortingStrategy}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {sortedCards.map((card) => (
             <SortableCard key={card.id} card={card} allCards={cards} />
           ))}
@@ -83,7 +83,7 @@ function SortableCard({
       {...attributes}
       {...listeners}
       className={cn(
-        'rounded-xl p-4 bg-white shadow border cursor-grab',
+        'rounded-2xl p-4 bg-white shadow-sm border cursor-grab min-h-[110px]',
         getCardWidth(card),
         getCardHeight(card, allCards)
       )}
@@ -98,15 +98,15 @@ function SortableCard({
 }
 
 function getCardWidth(card: DashboardCard) {
+  // Deixe todos os cards com span 1, se quiser destacar chart: use col-span-2
   return 'col-span-1'
 }
 
 function getCardHeight(card: DashboardCard, allCards: DashboardCard[]) {
-    const isChart = card.type === 'chart'
-    const kpiCards = allCards.filter((c) => c.type !== 'chart').length
-  
-    if (isChart) return 'row-span-3'
-    if (kpiCards === 1) return 'row-span-3'
-    if (kpiCards === 2) return 'row-span-2'
-    return 'row-span-1'
-  }
+  const isChart = card.type === 'chart'
+  const kpiCards = allCards.filter((c) => c.type === 'kpi').length
+
+  if (isChart) return 'min-h-[250px]'
+  if (kpiCards <= 2) return 'min-h-[180px]'
+  return 'min-h-[140px]'
+}
