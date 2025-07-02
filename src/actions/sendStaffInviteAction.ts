@@ -1,41 +1,54 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
-
-type Params = {
-  email: string
-  role: string
-  accountId: string
-  invitedBy: string
-}
-
 export async function sendStaffInviteAction({
   email,
   role,
   accountId,
-  invitedBy,
-}: Params): Promise<{ success: boolean; message?: string }> {
-  const supabase = createClient()
+  invitedBy
+}: {
+  email: string
+  role: 'staff-user' | 'staff-admin' | 'admin'
+  accountId: string
+  invitedBy: string
+}) {
+  const password = generateSecurePassword() // ou defina uma fixa para testes
+  const name = email.split('@')[0] // nome simplificado
+  console.log('[sendStaffInviteAction] Enviando convite para:', {
+    email, accountId, invitedBy, role
+  })
 
   try {
-    // Faça a chamada para sua Edge Function (exemplo com fetch)
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send_staff_invite`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send_staff_invite_custom`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
       },
-      body: JSON.stringify({ email, role, accountId, invitedBy }),
+      body: JSON.stringify({
+        email,
+        password,
+        name,
+        role,
+        accountId,
+        invitedBy
+      })
     })
 
-    if (!response.ok) {
-      const errorBody = await response.text()
-      return { success: false, message: `HTTP ${response.status} - ${errorBody}` }
-    }
-
     const result = await response.json()
+    if (!response.ok) throw new Error(result.error || 'Unknown error')
 
-    return { success: true, message: result.message }
-  } catch (error: any) {
-    return { success: false, message: error.message }
+    return { success: true }
+  } catch (err: any) {
+    console.error('[sendStaffInviteAction] Erro:', err)
+    return { success: false, message: err.message }
   }
+}
+
+function generateSecurePassword(length = 12) {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()'
+  let password = ''
+  for (let i = 0; i < length; i++) {
+    password += charset[Math.floor(Math.random() * charset.length)]
+  }
+  return password
 }

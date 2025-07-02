@@ -4,12 +4,8 @@ import { useState, useEffect } from 'react'
 import { Channel, ChannelMarketplace } from '@/types/supabase'
 import { sendInviteAction } from '@/actions/sendInvite'
 import { resendInviteAction } from '@/actions/resendInvite'
-import { importProductsByChannelAction } from '@/actions/importProductsByChannel'
-import ChannelDetailsModal from '@/components/modals/ChannelDetailsModal'
-import { Tooltip } from 'react-tooltip'
 import { toast } from 'sonner'
 import Table from '@/components/ui/table'
-import { SyncChannelsButton } from '@/components/buttons/SyncChannelsButton'
 
 interface InvitationSimple {
   id: string
@@ -40,37 +36,18 @@ export default function ChannelsClient({
   marketplaces,
   invitations: initialInvitations,
 }: ChannelsClientProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
-
   const [searchTerm, setSearchTerm] = useState('')
   const [filteredChannels, setFilteredChannels] = useState<Channel[]>(channels)
   const [loading, setLoading] = useState(false)
-
   const [sourceFilter, setSourceFilter] = useState<string>('')
-
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteChannelId, setInviteChannelId] = useState<string | null>(null)
-
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [resendingId, setResendingId] = useState<string | null>(null)
-  const [importingId, setImportingId] = useState<string | null>(null)
-
   const [invitations, setInvitations] = useState<InvitationSimple[]>(initialInvitations || [])
-
   const itemsPerPage = 10
   const [currentPage, setCurrentPage] = useState(1)
-
-  const handleOpenModal = (channel: Channel) => {
-    setSelectedChannel(channel)
-    setIsModalOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false)
-    setSelectedChannel(null)
-  }
 
   useEffect(() => {
     setLoading(true)
@@ -92,18 +69,12 @@ export default function ChannelsClient({
     return () => clearTimeout(timeout)
   }, [searchTerm, channels, sourceFilter])
 
-  const resolveMarketplaceLogo = (name: string) => {
-    const normalized = name.toLowerCase()
-    if (normalized.includes('amazon')) return 'amazon'
-    if (normalized.includes('wayfair')) return 'wayfair'
-    if (normalized.includes('walmart')) return 'walmart'
-    if (normalized.includes('ebay')) return 'ebay'
-    return 'generic'
+  const findInvitation = (channelId: string) => {
+    return invitations?.find((inv) => inv.channel_id === channelId) || null
   }
 
   const findInvitationStatus = (channelId: string) => {
-    const invitation = invitations?.find((inv) => inv.channel_id === channelId)
-    return invitation?.status || 'No Invite'
+    return findInvitation(channelId)?.status || 'No Invite'
   }
 
   const renderInvitationStatus = (status: string) => {
@@ -163,18 +134,6 @@ export default function ChannelsClient({
     setResendingId(null)
   }
 
-  const handleImportProducts = async (channel: Channel) => {
-    setImportingId(channel.id)
-    const result = await importProductsByChannelAction(channel.id)
-    setImportingId(null)
-
-    if (result.success) {
-      toast.success(`Imported ${result.upserted || 0} products.`)
-    } else {
-      toast.error(result.error || 'Import failed')
-    }
-  }
-
   const paginatedChannels = filteredChannels.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -204,7 +163,6 @@ export default function ChannelsClient({
             </option>
           ))}
         </select>
-        {accountId && <SyncChannelsButton accountId={accountId} />}
       </div>
 
       {loading ? (
@@ -226,23 +184,18 @@ export default function ChannelsClient({
             <tbody>
               {paginatedChannels.length > 0 ? (
                 paginatedChannels.map((channel) => {
-                  const channelMarketplaces = marketplaces.filter((mkt) => mkt.channel_id === channel.id)
                   const status = findInvitationStatus(channel.id)
 
                   return (
                     <tr key={channel.id} className="border-t border-gray-200 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-gray-500 text-sm uppercase">
-                        {channel.name}
-                        
-                      </td>
+                      <td className="py-3 px-4 text-gray-500 text-sm uppercase">{channel.name}</td>
                       <td className="py-3 px-4">{renderSourceTag(channel.source)}</td>
                       <td className="py-3 px-4 text-gray-500">{channel.email ?? '-'}</td>
                       <td className="py-3 px-4 text-gray-500">{channel.country ?? '-'}</td>
                       <td className="py-3 px-4 text-gray-500">{channel.city ?? '-'}</td>
-                      
                       <td className="p-3 text-sm">{renderInvitationStatus(status)}</td>
                       <td className="p-3 text-center space-y-2">
-                        {status === 'pending' ? (
+                        {status.toLowerCase() === 'pending' ? (
                           <button
                             onClick={() => handleResendInvite(channel.id)}
                             className="w-full px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
@@ -281,11 +234,9 @@ export default function ChannelsClient({
               >
                 Previous
               </button>
-
               <span className="text-gray-700 text-sm">
                 Page {currentPage} of {totalPages}
               </span>
-
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
@@ -298,17 +249,10 @@ export default function ChannelsClient({
         </>
       )}
 
-      <ChannelDetailsModal
-        channel={selectedChannel}
-        open={isModalOpen}
-        onClose={handleCloseModal}
-        marketplaces={marketplaces}
-      />
-
       {inviteModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Send Invite</h2>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50" aria-modal="true" role="dialog">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Invite Channel</h2>
             <input
               type="email"
               className="w-full border px-4 py-3 rounded mb-4 text-sm"
@@ -325,8 +269,8 @@ export default function ChannelsClient({
               </button>
               <button
                 onClick={sendInvite}
-                className="px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-                disabled={sendingId !== null}
+                className={`px-4 py-3 rounded text-sm ${sendingId ? 'bg-green-400 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                disabled={!!sendingId}
               >
                 {sendingId ? 'Sending...' : 'Send'}
               </button>

@@ -68,13 +68,29 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
 
   const handleResend = async (email: string) => {
     setResending(email)
-    const result = await resendInviteAction({ email })
+  
+    const member = team.find((m) => m.email === email)
+  
+    if (!member || !session?.user?.id) {
+      toast.error('Missing data to resend invitation.')
+      setResending(null)
+      return
+    }
+  
+    const result = await sendStaffInviteAction({
+      email,
+      role: member.role as 'staff-user' | 'staff-admin' | 'admin',
+      accountId,
+      invitedBy: session.user.id,
+    })
+  
     if (result?.success) {
       toast.success('Invitation resent!')
       fetchTeam()
     } else {
       toast.error(result.message || 'Failed to resend')
     }
+  
     setResending(null)
   }
 

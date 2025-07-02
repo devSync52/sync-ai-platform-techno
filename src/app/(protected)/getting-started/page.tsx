@@ -27,7 +27,7 @@ export default function GettingStartedPage() {
   const [loading, setLoading] = useState(true)
   const [accountId, setAccountId] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState('')
-  const [showProductModal, setShowProductModal] = useState(false)
+  const [showProductModal, setShowModal] = useState(false)
 
   useEffect(() => {
     const fetchSetupStatus = async () => {
@@ -162,7 +162,7 @@ export default function GettingStartedPage() {
               </div>
             ) : step.key === 'inventory' && accountId ? (
               <div className="mt-auto">
-                <Button onClick={() => setShowProductModal(true)}>
+                <Button onClick={() => setShowModal(true)}>
                   Import Product
                 </Button>
               </div>
@@ -185,10 +185,10 @@ export default function GettingStartedPage() {
 
       {showProductModal && accountId && (
         <ImportProductsModal
-          accountId={accountId}
-          companyName={companyName}
-          onClose={() => setShowProductModal(false)}
-        />
+        accountId={accountId}
+        companyName={companyName}
+        onCloseAction={() => setShowModal(false)}
+      />
       )}
 
       {!loading && allDone && (

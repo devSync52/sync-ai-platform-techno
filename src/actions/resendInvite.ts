@@ -1,36 +1,32 @@
 'use server'
 
-import { createServerClient } from '@/utils/supabase/server'
-
-interface ResendInviteParams {
+export async function resendInviteAction({
+  channelId,
+}: {
   channelId: string
-}
-
-export async function resendInviteAction({ channelId }: ResendInviteParams) {
+}) {
   try {
-    const supabase = await createServerClient()
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/resend_channel_invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+      },
+      body: JSON.stringify({ channelId }),
+    })
 
-    // Buscar o convite existente para esse canal
-    const { data: invitation, error } = await supabase
-      .from('invitations')
-      .select('email, token')
-      .eq('channel_id', channelId)
-      .single()
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error || 'Unknown error')
 
-    if (error || !invitation) {
-      console.error('Error fetching invitation for resend:', error)
-      return { success: false, message: 'Invitation not found.' }
+    return {
+      success: true,
+      message: result.message || 'Invite resent successfully',
     }
-
-    const { email, token } = invitation
-
-    // Aqui no futuro você pode disparar um email real com Resend
-
-    console.log(`🔄 Resending invite to ${email} with token ${token}`)
-
-    return { success: true, message: 'Invite resent successfully!' }
-  } catch (err) {
-    console.error('Unexpected error resending invite:', err)
-    return { success: false, message: 'Unexpected server error.' }
+  } catch (err: any) {
+    console.error('[resendInviteAction] Erro ao reenviar convite:', err.message)
+    return {
+      success: false,
+      message: err.message,
+    }
   }
 }

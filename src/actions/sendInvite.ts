@@ -1,43 +1,34 @@
 'use server'
 
-import { createServerClient } from '@/utils/supabase/server'
-import { revalidatePath } from 'next/cache'
-import { v4 as uuidv4 } from 'uuid'
-
-interface SendInviteParams {
+export async function sendInviteAction({
+  channelId,
+  email
+}: {
   channelId: string
   email: string
-}
-
-export async function sendInviteAction({ channelId, email }: SendInviteParams) {
+}) {
   try {
-    const supabase = await createServerClient()
-    const token = uuidv4()
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send_channel_invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+      },
+      body: JSON.stringify({ channelId, email })
+    })
+    console.log('[sendInviteAction] Dados enviados:', { channelId, email })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error || 'Unknown error')
 
-    const { data, error } = await supabase
-      .from('invitations')
-      .insert([
-        {
-          channel_id: channelId,
-          email: email,
-          token: token,
-          status: 'pending',
-        },
-      ])
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error inserting invitation:', error)
-      return { success: false, message: 'Error sending invite.' }
+    return {
+      success: true,
+      invitation: result.invitation || null // pode vir com dados úteis do backend
     }
-
-    // Opcional: revalidar cache da página se precisar
-    revalidatePath('/channels')
-
-    return { success: true, message: 'Invite sent successfully!', invitation: data }
-  } catch (err) {
-    console.error('Unexpected error in sendInviteAction:', err)
-    return { success: false, message: 'Unexpected server error.' }
+  } catch (err: any) {
+    console.error('[sendInviteAction] Erro ao enviar convite:', err.message)
+    return {
+      success: false,
+      message: err.message
+    }
   }
 }

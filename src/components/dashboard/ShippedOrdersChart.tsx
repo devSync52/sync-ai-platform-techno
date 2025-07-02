@@ -1,7 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts'
 import { supabase } from '@/lib/supabase-browser'
 import { PackageCheck } from 'lucide-react'
 
@@ -11,32 +19,31 @@ export default function ShippedOrdersChart() {
   useEffect(() => {
     async function fetchData() {
       const { data, error } = await supabase
-        .from('view_all_orders')
-        .select('order_date, status')
-  
+        .from('ai_orders_unified_4')
+        .select('order_date, shipping_status')
+
       if (error) {
         console.error('❌ Error fetching shipped orders:', error)
         return
       }
-  
+
       const now = new Date()
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  
+
       const filtered = (data || []).filter((order) => {
         const date = new Date(order.order_date)
         return date >= oneDayAgo && date <= now
       })
-  
-      type HourData = { hour: string; shipped: number }
-  
-      const byHour = filtered.reduce((acc: HourData[], order) => {
-        const hour = new Date(order.order_date).getHours().toString().padStart(2, '0')
+
+      const byHour = filtered.reduce((acc: { hour: string; shipped: number }[], order) => {
+        const date = new Date(order.order_date)
+        const hour = date.getHours().toString().padStart(2, '0')
         const key = `${hour}:00`
-  
-        const isShipped = Number(order.status) === 3
-  
+
+        const isShipped = Number(order.shipping_status) === 3
+
         const existing = acc.find((item) => item.hour === key)
-  
+
         if (existing) {
           if (isShipped) existing.shipped += 1
         } else {
@@ -45,15 +52,14 @@ export default function ShippedOrdersChart() {
             shipped: isShipped ? 1 : 0,
           })
         }
-  
+
         return acc
       }, [])
-  
+
       byHour.sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
-  
       setData(byHour)
     }
-  
+
     fetchData()
   }, [])
 

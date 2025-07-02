@@ -10,18 +10,22 @@ import { Button } from '@/components/ui/button'
 interface Props {
   accountId: string
   companyName: string
-  onClose: () => void
+  onCloseAction: () => void
 }
 
-export default function ImportProductsModal({ accountId, companyName, onClose }: Props) {
-  const [source, setSource] = useState<'sellercloud' | 'extensiv' | 'project44'>('sellercloud')
+export default function ImportProductsModal({
+  accountId,
+  companyName,
+  onCloseAction
+}: Props) {
+  const [source, setSource] = useState<'sellercloud' | 'extensiv'>('sellercloud')
   const [step, setStep] = useState<'select' | 'loading'>('select')
   const [isPending, startTransition] = useTransition()
 
   const handleImport = () => {
     setStep('loading')
     startTransition(async () => {
-      const result = await importProductsByAccountAction(accountId)
+      const result = await importProductsByAccountAction(accountId, source)
       if (result.success) {
         toast.success(`✅ Imported ${result.upserted} products for ${companyName}`)
       } else {
@@ -29,7 +33,7 @@ export default function ImportProductsModal({ accountId, companyName, onClose }:
       }
       setTimeout(() => {
         setStep('select')
-        onClose()
+        onCloseAction()
       }, 1000)
     })
   }
@@ -44,7 +48,12 @@ export default function ImportProductsModal({ accountId, companyName, onClose }:
             </h2>
             <p className="text-sm text-center text-gray-900 mb-6">Select the import channel</p>
             <div className="flex items-center justify-center gap-6 mb-6">
-              <label className="flex flex-col items-center gap-2 cursor-pointer">
+              {/* ✅ Sellercloud */}
+              <label
+                className={`flex flex-col items-center gap-2 cursor-pointer border rounded-md p-2 transition ${
+                  source === 'sellercloud' ? 'ring-2 ring-primary bg-gray-50' : 'opacity-60'
+                }`}
+              >
                 <input
                   type="radio"
                   name="source"
@@ -56,19 +65,35 @@ export default function ImportProductsModal({ accountId, companyName, onClose }:
                 <Image src="/logos/sellercloud.png" alt="Sellercloud" width={90} height={90} />
                 <span className="text-xs">Sellercloud</span>
               </label>
-              <label className="flex flex-col items-center gap-2 opacity-40 cursor-not-allowed">
-                <input type="radio" name="source" disabled />
+
+              {/* ✅ Extensiv */}
+              <label
+                className={`flex flex-col items-center gap-2 cursor-pointer border rounded-md p-2 transition ${
+                  source === 'extensiv' ? 'ring-2 ring-primary bg-gray-50' : 'opacity-60'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="source"
+                  value="extensiv"
+                  checked={source === 'extensiv'}
+                  onChange={() => setSource('extensiv')}
+                  className="hidden"
+                />
                 <Image src="/logos/extensiv.png" alt="Extensiv" width={90} height={90} />
                 <span className="text-xs">Extensiv</span>
               </label>
+
+              {/* ❌ Project44 ainda desativado */}
               <label className="flex flex-col items-center gap-2 opacity-40 cursor-not-allowed">
                 <input type="radio" name="source" disabled />
                 <Image src="/logos/project44.png" alt="Project44" width={90} height={90} />
                 <span className="text-xs">Project 44</span>
               </label>
             </div>
+
             <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={onClose} className="text-sm">Cancel</Button>
+            <Button variant="ghost" onClick={onCloseAction} className="text-sm">Cancel</Button>
               <Button onClick={handleImport} disabled={isPending} className="text-sm">
                 {isPending ? 'Importing...' : 'Confirm Import'}
               </Button>
