@@ -187,7 +187,7 @@ export default function GettingStartedPage() {
         <ImportProductsModal
         accountId={accountId}
         companyName={companyName}
-        onCloseAction={() => setShowModal(false)}
+        onClose={() => setShowModal(false)} // ✅ Nome agora bate
       />
       )}
 

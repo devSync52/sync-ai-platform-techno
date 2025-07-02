@@ -10,13 +10,13 @@ import { Button } from '@/components/ui/button'
 interface Props {
   accountId: string
   companyName: string
-  onCloseAction: () => void
+  onClose: () => void // ✅ nome simplificado
 }
 
 export default function ImportProductsModal({
   accountId,
   companyName,
-  onCloseAction
+  onClose
 }: Props) {
   const [source, setSource] = useState<'sellercloud' | 'extensiv'>('sellercloud')
   const [step, setStep] = useState<'select' | 'loading'>('select')
@@ -33,7 +33,7 @@ export default function ImportProductsModal({
       }
       setTimeout(() => {
         setStep('select')
-        onCloseAction()
+        onClose()
       }, 1000)
     })
   }
@@ -84,7 +84,7 @@ export default function ImportProductsModal({
                 <span className="text-xs">Extensiv</span>
               </label>
 
-              {/* ❌ Project44 ainda desativado */}
+              {/* ❌ Project44 desativado */}
               <label className="flex flex-col items-center gap-2 opacity-40 cursor-not-allowed">
                 <input type="radio" name="source" disabled />
                 <Image src="/logos/project44.png" alt="Project44" width={90} height={90} />
@@ -93,7 +93,7 @@ export default function ImportProductsModal({
             </div>
 
             <div className="flex justify-end gap-3">
-            <Button variant="ghost" onClick={onCloseAction} className="text-sm">Cancel</Button>
+              <Button variant="ghost" onClick={onClose} className="text-sm">Cancel</Button>
               <Button onClick={handleImport} disabled={isPending} className="text-sm">
                 {isPending ? 'Importing...' : 'Confirm Import'}
               </Button>
