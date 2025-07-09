@@ -15,6 +15,7 @@ interface StaffUser {
   created_at: string
   invite_status?: string
   invite_sent_at?: string
+  has_logged_in?: boolean
 }
 
 export function InviteStaffSection({ accountId }: { accountId: string }) {
@@ -110,13 +111,13 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
     return role === 'staff-admin' ? 'Admin' : 'User'
   }
 
-  const renderStatus = (status: string | undefined) => {
+  const renderStatus = (status: string | undefined, hasLoggedIn: boolean) => {
     let color = 'bg-gray-100 text-gray-600 border border-gray-300'
     let label = 'Unknown'
 
     const normalized = status?.toLowerCase()
 
-    if (normalized === 'accepted') {
+    if (normalized === 'accepted' && hasLoggedIn) {
       color = 'bg-green-100 text-green-700 border border-green-300'
       label = 'Accepted'
     } else if (normalized === 'expired') {
@@ -189,7 +190,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {renderStatus(member.invite_status)}
+                  {renderStatus(member.invite_status, member.has_logged_in || false)}
 
                   {['sent', 'accepted'].includes(member.invite_status?.toLowerCase() || '') && (
                     <>
