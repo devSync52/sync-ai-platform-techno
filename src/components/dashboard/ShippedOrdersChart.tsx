@@ -37,8 +37,11 @@ export default function ShippedOrdersChart() {
 
       const byHour = filtered.reduce((acc: { hour: string; shipped: number }[], order) => {
         const date = new Date(order.order_date)
-        const hour = date.getHours().toString().padStart(2, '0')
-        const key = `${hour}:00`
+        let hour = date.getHours()
+        const ampm = hour >= 12 ? 'PM' : 'AM'
+        hour = hour % 12
+        hour = hour ? hour : 12
+        const key = `${hour} ${ampm}`
 
         const isShipped = Number(order.shipping_status) === 3
 
@@ -56,7 +59,20 @@ export default function ShippedOrdersChart() {
         return acc
       }, [])
 
-      byHour.sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
+      // Sort by hour in 24-hour format for correct ordering
+      byHour.sort((a, b) => {
+        // Parse hour and AM/PM for sorting
+        const parseHour = (h: string) => {
+          const [num, ampm] = h.split(' ')
+          let n = parseInt(num)
+          if (ampm === 'AM') {
+            return n === 12 ? 0 : n
+          } else {
+            return n === 12 ? 12 : n + 12
+          }
+        }
+        return parseHour(a.hour) - parseHour(b.hour)
+      })
       setData(byHour)
     }
 

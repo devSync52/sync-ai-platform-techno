@@ -214,7 +214,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
     },
     {
       id: 'new_orders_chart',
-      label: <NewOrdersChart />,
+      label: <div key={`new-orders-${Math.random()}`}><NewOrdersChart /></div>,
       type: 'chart',
     },
     {

@@ -17,14 +17,28 @@ export default function TopSellingProductsTable({ accountId }: { accountId: stri
 
   useEffect(() => {
     async function fetchData() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role, account_id')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!userData) return
+
       const lastMonthDate = subMonths(new Date(), 1)
       const from = startOfMonth(lastMonthDate).toISOString()
       const to = endOfMonth(lastMonthDate).toISOString()
 
       const { data, error } = await supabase
-        .from('ai_sellercloud_sku_sales_per_day')
+        .from('ai_sellercloud_sku_sales_per_day_v2')
         .select('sku, quantity_sold, total_revenue')
-        .eq('account_id', accountId)
+        .eq(userData.role === 'client' ? 'channel_account_id' : 'account_id', accountId)
         .gte('sales_date', from)
         .lte('sales_date', to)
 

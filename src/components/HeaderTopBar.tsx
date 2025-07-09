@@ -71,18 +71,16 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
     <div className="hidden lg:flex items-center justify-between h-20 px-6 bg-white border-b shadow-sm relative">
       <div className="flex items-center gap-4">
       {user.role === 'client' ? (
-  user.logoUrl ? (
-    <img
-      src={user.logoUrl}
-      alt="Company Logo"
-      className="w-50 h-10 object-contain rounded-md"
-    />
-  ) : (
-    <div className="w-10 h-10 rounded-md bg-gray-100 border flex items-center justify-center text-sm text-gray-500">
-      No Logo
-    </div>
-  )
-) : null}
+        user.logoUrl ? (
+          <img
+            src={user.logoUrl}
+            alt="Company Logo"
+            className="w-50 h-10 object-contain rounded-md"
+          />
+        ) : (
+          <div className="text-xl font-semibold text-gray-400">Your Logo</div>
+        )
+      ) : null}
 
 </div>
 

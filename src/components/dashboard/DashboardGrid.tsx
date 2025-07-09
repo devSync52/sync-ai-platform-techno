@@ -81,18 +81,22 @@ function SortableCard({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
       className={cn(
-        'rounded-2xl p-4 bg-white shadow-sm border cursor-grab min-h-[110px]',
+        'rounded-2xl bg-white shadow-sm border min-h-[110px]',
         getCardWidth(card),
         getCardHeight(card, allCards)
       )}
     >
-      {typeof card.label === 'string' ? (
-        <p className="text-lg font-semibold">{card.label}</p>
-      ) : (
-        card.label
-      )}
+      <div {...listeners} className="cursor-grab p-2">
+        <span className="sr-only">Drag</span>
+      </div>
+      <div className="p-4">
+        {typeof card.label === 'string' ? (
+          <p className="text-lg font-semibold">{card.label}</p>
+        ) : (
+          card.label
+        )}
+      </div>
     </div>
   )
 }

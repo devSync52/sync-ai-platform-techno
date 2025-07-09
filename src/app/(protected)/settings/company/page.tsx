@@ -5,6 +5,7 @@ import { useSupabase, useSession } from '@/components/supabase-provider'
 import { Card, CardContent } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { CompanyForm } from '@/components/client/company/CompanyForm'
+import { Input } from '@/components/ui/input'
 
 export default function CompanySettingsPage() {
   const supabase = useSupabase()
@@ -27,6 +28,7 @@ export default function CompanySettingsPage() {
     state: '',
     country: ''
   })
+  const [logo, setLogo] = useState('')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,6 +74,7 @@ export default function CompanySettingsPage() {
         state: account.state || '',
         country: account.country || ''
       })
+      if (account.logo) setLogo(account.logo)
 
       setLoading(false)
     }
@@ -125,7 +128,8 @@ export default function CompanySettingsPage() {
           state: address.state,
           country: address.country,
           type_id: accountType,
-          created_by_user_id: userId
+          created_by_user_id: userId,
+          logo,
         }])
         .select()
         .single()
@@ -155,7 +159,8 @@ export default function CompanySettingsPage() {
           city: address.city,
           state: address.state,
           country: address.country,
-          type_id: accountType
+          type_id: accountType,
+          logo,
         })
         .eq('id', userRecord.account_id)
 
@@ -177,25 +182,82 @@ export default function CompanySettingsPage() {
 
       <Card className="border shadow-md rounded-2xl">
         <CardContent className="pt-6">
-        <CompanyForm
-  name={name}
-  nameChanged={setName}
-  email={email}
-  emailChanged={setEmail}
-  taxId={taxId}
-  taxIdChanged={setTaxId}
-  phone={phone}
-  phoneChanged={setPhone}
-  zip={zip}
-  zipChanged={handleZipChange}
-  address={address}
-  addressChanged={setAddress}
-  accountType={accountType}
-  accountTypeChanged={setAccountType}
-  accountTypes={accountTypes}
-  saving={saving}
-  submitForm={handleSave}
-/>
+          <div className="mb-6 flex items-center gap-6">
+            <div className="shrink-0">
+              {logo ? (
+                <img
+                  src={logo}
+                  alt="Company logo"
+                  className="h-20 w-20 rounded-full object-cover border border-gray-300 bg-white"
+                />
+              ) : (
+                <div className="h-20 w-20 rounded-full bg-gray-100 border flex items-center justify-center text-xs text-gray-500">
+                  Your Logo
+                </div>
+              )}
+            </div>
+            <div>
+              <label
+                htmlFor="logo-upload"
+                className="cursor-pointer inline-block rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:bg-primary/90 transition"
+              >
+                Upload Logo
+              </label>
+              <input
+                id="logo-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file || !userId) return
+
+                  const fileExt = file.name.split('.').pop()
+                  const fileName = `${userId}-${Date.now()}.${fileExt}`
+                  const filePath = `logos/${userId}/${fileName}`
+
+                  const { error: uploadError } = await supabase.storage.from('img').upload(filePath, file, {
+                    upsert: true,
+                  })
+
+                  if (uploadError) {
+                    toast.error('Failed to upload logo.')
+                    return
+                  }
+
+                  const { data: urlData } = supabase.storage.from('img').getPublicUrl(filePath)
+                  const publicUrl = urlData?.publicUrl
+
+                  if (!publicUrl) {
+                    toast.error('Could not get logo URL.')
+                    return
+                  }
+
+                  setLogo(publicUrl)
+                  toast.success('Logo uploaded!')
+                }}
+              />
+            </div>
+          </div>
+          <CompanyForm
+            name={name}
+            nameChanged={setName}
+            email={email}
+            emailChanged={setEmail}
+            taxId={taxId}
+            taxIdChanged={setTaxId}
+            phone={phone}
+            phoneChanged={setPhone}
+            zip={zip}
+            zipChanged={handleZipChange}
+            address={address}
+            addressChanged={setAddress}
+            accountType={accountType}
+            accountTypeChanged={setAccountType}
+            accountTypes={accountTypes}
+            saving={saving}
+            submitForm={handleSave}
+          />
         </CardContent>
       </Card>
     </div>

@@ -29,8 +29,12 @@ export default function NewOrdersChart() {
       })
 
       const byHour = filtered.reduce((acc: any[], order: any) => {
-        const hour = new Date(order.order_date).getHours().toString().padStart(2, '0')
-        const key = `${hour}:00`
+        const dateObj = new Date(order.order_date)
+        let hour = dateObj.getHours()
+        const ampm = hour >= 12 ? 'PM' : 'AM'
+        hour = hour % 12
+        hour = hour ? hour : 12 // the hour '0' should be '12'
+        const key = `${hour} ${ampm}`
         const amount = order.total_amount ? parseFloat(order.total_amount) : 0
 
         const found = acc.find((item) => item.hour === key)
@@ -79,30 +83,44 @@ export default function NewOrdersChart() {
             <p className="text-xs text-gray-500">Last 24 hours</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowOrderCount(!showOrderCount)}
-          className="text-xs text-primary underline"
-        >
-          {showOrderCount ? 'Show value' : 'Show number of orders'}
-        </button>
+        <div className="relative z-50" style={{ pointerEvents: 'auto' }}>
+          <button
+            onClick={() => {
+              console.log('🔁 Toggle clicked:', !showOrderCount)
+              setShowOrderCount(!showOrderCount)
+            }}
+            className="text-xs text-primary underline"
+          >
+            {showOrderCount ? 'Show value' : 'Show number of orders'}
+          </button>
+        </div>
       </div>
       <div className="h-[200px] mt-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="hour" hide />
-            <YAxis hide />
-            <Tooltip />
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="#3f2d90"
-              strokeWidth={3}
-              dot={{ r: 4 }}
-              activeDot={{ r: 6 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+      <ResponsiveContainer width="100%" height="100%">
+  <LineChart
+    key={showOrderCount ? 'orders' : 'value'} 
+    data={data}
+  >
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="hour" hide />
+    <YAxis hide />
+    <Tooltip
+      formatter={(value: number) =>
+        showOrderCount
+          ? [`${value} orders`, 'Orders']
+          : [value.toLocaleString('en-US', { style: 'currency', currency: 'USD' }), 'Sales']
+      }
+    />
+    <Line
+      type="monotone"
+      dataKey={showOrderCount ? 'value' : 'amount'}
+      stroke="#3f2d90"
+      strokeWidth={3}
+      dot={{ r: 4 }}
+      activeDot={{ r: 6 }}
+    />
+  </LineChart>
+</ResponsiveContainer>
       </div>
     </div>
   )

@@ -19,7 +19,7 @@ const COLORS = [
 ]
 
 export default function SalesByMarketplaceChart() {
-  const [data, setData] = useState<{ marketplace: string; orders: number }[]>([])
+  const [data, setData] = useState<{ marketplace: string; orders: number; logo?: string }[]>([])
   const [selectedMonth, setSelectedMonth] = useState(new Date())
 
   const months = [
@@ -34,8 +34,8 @@ export default function SalesByMarketplaceChart() {
       const to = endOfMonth(selectedMonth).toISOString().split('T')[0]
 
       const { data, error } = await supabase
-        .from('view_all_orders')
-        .select('marketplace_name, order_date')
+        .from('view_all_orders_v2')
+        .select('marketplace_name, order_date, logo')
         .gte('order_date', from)
         .lte('order_date', to)
 
@@ -47,11 +47,17 @@ export default function SalesByMarketplaceChart() {
       const grouped = data.reduce((acc, curr) => {
         const key = curr.marketplace_name || 'Unknown'
         if (!acc[key]) {
-          acc[key] = { marketplace: key, orders: 0 }
+          // Add logo from backend if exists, else fallback to filename based on marketplace name
+          let logo = curr.logo
+          if (!logo && curr.marketplace_name) {
+            const filename = curr.marketplace_name.toLowerCase().replace(/\s+/g, '')
+            logo = `/logos/${filename}.png`
+          }
+          acc[key] = { marketplace: key, orders: 0, logo }
         }
         acc[key].orders += 1
         return acc
-      }, {} as Record<string, { marketplace: string; orders: number }>)
+      }, {} as Record<string, { marketplace: string; orders: number; logo?: string }>)
 
       const result = Object.values(grouped).sort((a, b) => b.orders - a.orders)
       setData(result)
@@ -99,11 +105,30 @@ export default function SalesByMarketplaceChart() {
               dataKey="orders"
               nameKey="marketplace"
               cx="50%"
-              cy="60%"
+              cy="50%"
               outerRadius={80}
               innerRadius={45}
               paddingAngle={5}
-                label
+              labelLine={false}
+              label={({ cx, cy, midAngle, outerRadius, index }) => {
+                const RADIAN = Math.PI / 180
+                const radius = outerRadius + 30
+                const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                const marketplace = data[index]?.marketplace?.toLowerCase().replace(/\s+/g, '')
+                // Use logo from data if available, else fallback to filename
+                const logoSrc = data[index]?.logo || `/logos/${marketplace}.png`
+                return (
+                  <image
+                    href={logoSrc}
+                    x={x - 12}
+                    y={y - 12}
+                    width={35}
+                    height={35}
+                    preserveAspectRatio="xMidYMid meet"
+                  />
+                )
+              }}
             >
               {data.map((_, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
