@@ -29,6 +29,7 @@ export default function CompanySettingsPage() {
     country: ''
   })
   const [logo, setLogo] = useState('')
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,7 +43,7 @@ export default function CompanySettingsPage() {
 
       const { data: userRecord } = await supabase
         .from('users')
-        .select('account_id')
+        .select('account_id, role')
         .eq('id', userId)
         .single()
 
@@ -50,6 +51,8 @@ export default function CompanySettingsPage() {
         setLoading(false)
         return
       }
+
+      setUserRole(userRecord.role)
 
       const { data: account } = await supabase
         .from('accounts')
@@ -105,6 +108,7 @@ export default function CompanySettingsPage() {
 
   const handleSave = async () => {
     if (!userId) return
+    if (userRole === 'staff-user') return
 
     setSaving(true)
 
@@ -197,46 +201,51 @@ export default function CompanySettingsPage() {
               )}
             </div>
             <div>
-              <label
-                htmlFor="logo-upload"
-                className="cursor-pointer inline-block rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:bg-primary/90 transition"
-              >
-                Upload Logo
-              </label>
-              <input
-                id="logo-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (!file || !userId) return
+              {userRole !== 'staff-user' && (
+                <>
+                  <label
+                    htmlFor="logo-upload"
+                    className="cursor-pointer inline-block rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:bg-primary/90 transition"
+                  >
+                    Upload Logo
+                  </label>
+                  <input
+                    id="logo-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file || !userId) return
 
-                  const fileExt = file.name.split('.').pop()
-                  const fileName = `${userId}-${Date.now()}.${fileExt}`
-                  const filePath = `logos/${userId}/${fileName}`
+                      const fileExt = file.name.split('.').pop()
+                      const fileName = `${userId}-${Date.now()}.${fileExt}`
+                      const filePath = `logos/${userId}/${fileName}`
 
-                  const { error: uploadError } = await supabase.storage.from('img').upload(filePath, file, {
-                    upsert: true,
-                  })
+                      const { error: uploadError } = await supabase.storage.from('img').upload(filePath, file, {
+                        upsert: true,
+                      })
 
-                  if (uploadError) {
-                    toast.error('Failed to upload logo.')
-                    return
-                  }
+                      if (uploadError) {
+                        toast.error('Failed to upload logo.')
+                        return
+                      }
 
-                  const { data: urlData } = supabase.storage.from('img').getPublicUrl(filePath)
-                  const publicUrl = urlData?.publicUrl
+                      const { data: urlData } = supabase.storage.from('img').getPublicUrl(filePath)
+                      const publicUrl = urlData?.publicUrl
 
-                  if (!publicUrl) {
-                    toast.error('Could not get logo URL.')
-                    return
-                  }
+                      if (!publicUrl) {
+                        toast.error('Could not get logo URL.')
+                        return
+                      }
 
-                  setLogo(publicUrl)
-                  toast.success('Logo uploaded!')
-                }}
-              />
+                      setLogo(publicUrl)
+                      console.log('[Debug] Saving logo for account', userId, '→', publicUrl)
+                      toast.success('Logo uploaded!')
+                    }}
+                  />
+                </>
+              )}
             </div>
           </div>
           <CompanyForm
@@ -257,6 +266,7 @@ export default function CompanySettingsPage() {
             accountTypes={accountTypes}
             saving={saving}
             submitForm={handleSave}
+            disabled={userRole === 'staff-user'}
           />
         </CardContent>
       </Card>

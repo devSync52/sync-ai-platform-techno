@@ -79,10 +79,10 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/staff', label: 'Staff', icon: User2Icon }
   ]
 
-  // Ocultar itens se o user for client
+  // Ocultar itens se o user for client ou staff-user
   const filteredNavItems = navItems.filter((item) => {
     if (
-      userRole === 'client' &&
+      (userRole === 'client' || userRole === 'staff-user') &&
       (item.href === '/bot-training' || item.href === '/ai-settings' || item.href === '/staff' || item.href === '/channels')
     ) {
       return false
@@ -97,8 +97,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   ]
   
   const filteredSettingsItems = baseSettingsItems.filter((item) => {
-    // Esconde "Integrations" se for client
-    if (userRole === 'client' && item.href === '/settings/integrations') {
+    // Esconde "Integrations" se for client ou staff-user
+    if ((userRole === 'client' || userRole === 'staff-user') && item.href === '/settings/integrations') {
       return false
     }
     return true

@@ -16,6 +16,7 @@ interface StaffUser {
   invite_status?: string
   invite_sent_at?: string
   has_logged_in?: boolean
+  last_login_at?: string | null
 }
 
 export function InviteStaffSection({ accountId }: { accountId: string }) {
@@ -111,13 +112,11 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
     return role === 'staff-admin' ? 'Admin' : 'User'
   }
 
-  const renderStatus = (status: string | undefined, hasLoggedIn: boolean) => {
+  const renderStatus = (status: string | undefined) => {
     let color = 'bg-gray-100 text-gray-600 border border-gray-300'
-    let label = 'Unknown'
-
+    let label: React.ReactNode = 'Unknown'
     const normalized = status?.toLowerCase()
-
-    if (normalized === 'accepted' && hasLoggedIn) {
+    if (normalized === 'accepted') {
       color = 'bg-green-100 text-green-700 border border-green-300'
       label = 'Accepted'
     } else if (normalized === 'expired') {
@@ -130,7 +129,6 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
       color = 'bg-yellow-100 text-yellow-700 border border-yellow-300'
       label = 'Pending'
     }
-
     return <span className={`text-xs px-3 py-1 rounded-full ${color}`}>{label}</span>
   }
 
@@ -180,18 +178,38 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
             {team.map((member) => (
               <li
                 key={member.id}
-                className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gray-50 px-4 py-3 rounded space-y-2 sm:space-y-0"
+                className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] sm:items-center bg-gray-50 px-4 py-3 rounded gap-y-2 gap-x-4"
               >
-                <div className="min-w-0">
-                  <p className="font-medium text-sm break-words">{member.email}</p>
-                  <p className="text-xs text-gray-500 break-words">
-                    {renderRole(member.role)} • Invited on {formatDate(member.invite_sent_at)}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-medium text-sm break-words">{member.email}</p>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        
+                        <span>• Invited on {formatDate(member.invite_sent_at)}</span>
+                      </div>
+                    </div>
+                    {member.last_login_at && (
+                      <div className="text-xs text-gray-500 sm:text-right mt-1 sm:mt-0">
+                        Last login: {new Date(member.last_login_at).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: false
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  {renderStatus(member.invite_status)}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {renderStatus(member.invite_status, member.has_logged_in || false)}
-
                   {['sent', 'accepted'].includes(member.invite_status?.toLowerCase() || '') && (
                     <>
                       <button
@@ -211,6 +229,14 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
                       </button>
                     </>
                   )}
+                  <select
+                          className="border px-2 py-1 rounded text-xs bg-white"
+                          value={member.role}
+                          disabled
+                        >
+                          <option value="staff-user">Staff - User</option>
+                          <option value="staff-admin">Staff - Admin</option>
+                        </select>
                 </div>
               </li>
             ))}

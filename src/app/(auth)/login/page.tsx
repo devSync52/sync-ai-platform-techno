@@ -44,6 +44,14 @@ export default function LoginPage() {
       return
     }
 
+    await supabase
+      .from('users')
+      .update({
+        has_logged_in: true,
+        last_login_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+
     // 🔍 Verifica se o user tem account_id
     const { data: userRecord, error: fetchError } = await supabase
       .from('users')

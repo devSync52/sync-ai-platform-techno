@@ -42,6 +42,7 @@ export type CompanyFormProps = {
   accountTypes: AccountType[]
   saving: boolean
   submitForm: () => void
+  disabled?: boolean
 }
 
 export function CompanyForm({
@@ -54,6 +55,7 @@ export function CompanyForm({
   accountType, accountTypeChanged,
   accountTypes,
   saving, submitForm,
+  disabled,
 }: CompanyFormProps) {
   const formatPhone = (val: string) =>
     val.replace(/\D/g, '')
@@ -80,11 +82,11 @@ export function CompanyForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-sm text-gray-700">Company Name</label>
-            <Input value={name} onChange={handleNameChange} />
+            <Input value={name} onChange={handleNameChange} disabled={disabled} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-gray-700">Account Type</label>
-            <Select value={accountType || ''} onValueChange={accountTypeChanged}>
+            <Select value={accountType || ''} onValueChange={accountTypeChanged} disabled={disabled}>
               <SelectTrigger className="h-9 rounded-md border px-3 py-2 text-sm">
                 <SelectValue placeholder="Select type..." />
               </SelectTrigger>
@@ -103,15 +105,15 @@ export function CompanyForm({
           </div>
           <div>
             <label className="text-sm text-gray-700">Email</label>
-            <Input type="email" value={email} onChange={handleEmailChange} />
+            <Input type="email" value={email} onChange={handleEmailChange} disabled={disabled} />
           </div>
           <div>
             <label className="text-sm text-gray-700">Tax ID</label>
-            <Input value={taxId} onChange={handleTaxIdChange} />
+            <Input value={taxId} onChange={handleTaxIdChange} disabled={disabled} />
           </div>
           <div>
             <label className="text-sm text-gray-700">Phone</label>
-            <Input value={phone} onChange={handlePhoneChange} />
+            <Input value={phone} onChange={handlePhoneChange} disabled={disabled} />
           </div>
         </div>
       </div>
@@ -121,29 +123,29 @@ export function CompanyForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-sm text-gray-700">ZIP Code</label>
-            <Input value={zip} onChange={handleZipChange} />
+            <Input value={zip} onChange={handleZipChange} disabled={disabled} />
           </div>
           <div>
             <label className="text-sm text-gray-700">Address</label>
-            <Input value={address.address_line_1} onChange={(e) => handleAddressChange('address_line_1', e.target.value)} />
+            <Input value={address.address_line_1} onChange={(e) => handleAddressChange('address_line_1', e.target.value)} disabled={disabled} />
           </div>
           <div>
             <label className="text-sm text-gray-700">City</label>
-            <Input value={address.city} onChange={(e) => handleAddressChange('city', e.target.value)} />
+            <Input value={address.city} onChange={(e) => handleAddressChange('city', e.target.value)} disabled={disabled} />
           </div>
           <div>
             <label className="text-sm text-gray-700">State</label>
-            <Input value={address.state} onChange={(e) => handleAddressChange('state', e.target.value)} />
+            <Input value={address.state} onChange={(e) => handleAddressChange('state', e.target.value)} disabled={disabled} />
           </div>
           <div>
             <label className="text-sm text-gray-700">Country</label>
-            <Input value={address.country} onChange={(e) => handleAddressChange('country', e.target.value)} />
+            <Input value={address.country} onChange={(e) => handleAddressChange('country', e.target.value)} disabled={disabled} />
           </div>
         </div>
       </div>
 
       <div className="pt-4 border-t">
-        <Button onClick={submitForm} disabled={saving} className="px-6 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white">
+        <Button onClick={submitForm} disabled={saving || disabled} className="px-6 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white">
           {saving ? <Loader2 className="animate-spin mr-2" size={18} /> : null}
           Save Settings
         </Button>

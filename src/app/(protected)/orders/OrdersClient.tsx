@@ -100,7 +100,7 @@ if (endDate) {
 
 if (searchTerm) {
   query = query.or(
-    `order_id.ilike.%${searchTerm}%,marketplace_code.ilike.%${searchTerm}%,client_name.ilike.%${searchTerm}%`
+    `order_id.ilike.%${searchTerm}%,marketplace_name.ilike.%${searchTerm}%,client_name.ilike.%${searchTerm}%,order_source_order_id.ilike.%${searchTerm}%`
   )
 }
 
@@ -168,7 +168,11 @@ const { data, count, error } = await query.range(start, end)
 
       <FilterBar
         title="Unified Orders"
-        placeholder="Search by Order ID, Client, or Marketplace"
+        placeholder={
+          userRole === 'client'
+            ? 'Search by Order ID or Marketplace'
+            : 'Search by Order ID, Client, or Marketplace'
+        }
         searchTerm={searchTerm}
         onSearch={setSearchTerm}
         totalCount={totalCount}
@@ -179,13 +183,16 @@ const { data, count, error } = await query.range(start, end)
           setSourceFilter('all')
         }}
         filters={[
-          {
-            label: 'Source',
-            value: sourceFilter,
-            options: ['All source', 'sellercloud', 'extensiv'],
-            onChange: setSourceFilter,
-          },
-
+          ...(userRole !== 'client'
+            ? [
+                {
+                  label: 'Source',
+                  value: sourceFilter,
+                  options: ['All source', 'sellercloud', 'extensiv'],
+                  onChange: setSourceFilter,
+                },
+              ]
+            : []),
           {
             label: 'Status',
             value: statusFilter ?? '',
@@ -224,6 +231,7 @@ const { data, count, error } = await query.range(start, end)
             <tr>
               <th className="py-3 px-4 text-left font-medium">Order ID</th>
               <th className="py-3 px-4 text-left font-medium">Marketplace</th>
+              <th className="py-3 px-4 text-left font-medium">Order Marketplace ID</th>
               {userRole !== 'client' && (
   <th className="py-3 px-4 text-left font-medium">Source</th>
 )}
@@ -253,6 +261,9 @@ const { data, count, error } = await query.range(start, end)
     )}
     
   </div>
+</td>
+<td className="py-3 px-4 text-gray-700">
+  {order.order_source_order_id || '—'}
 </td>{userRole !== 'client' && (
                 <td className="py-3 px-4">
                   <span

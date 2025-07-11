@@ -101,12 +101,12 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
           setSearchTerm('')
         }}
         filters={[
-          {
-            label: 'Company',
-            value: companyFilter ?? '',
-            options: ['All Companies', ...Array.from(new Set(products.map(p => p.company).filter((v): v is string => !!v)))],
-            onChange: (v) => setCompanyFilter(v !== 'All' ? v : null)
-          },
+          //{
+            //label: 'Company',
+            //value: companyFilter ?? '',
+            //options: ['All Companies', ...Array.from(new Set(products.map(p => p.company).filter((v): v is string => !!v)))],
+            //onChange: (v) => setCompanyFilter(v !== 'All' ? v : null)
+          //},
           {
             label: 'Type',
             value: typeFilter ?? '',
