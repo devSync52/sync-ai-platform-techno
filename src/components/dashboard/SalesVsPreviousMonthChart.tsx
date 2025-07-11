@@ -29,7 +29,7 @@ export default function SalesVsPreviousMonthChart() {
 
       const { data, error } = await supabase
         .from('view_all_orders')
-        .select('total_amount')
+        .select('grand_total')
         .gte('order_date', start.toISOString().slice(0, 10))
         .lte('order_date', end.toISOString().slice(0, 10))
 
@@ -38,7 +38,7 @@ export default function SalesVsPreviousMonthChart() {
         return { month: label, total: 0, orders: 0 }
       }
 
-      const total = data.reduce((sum, o) => sum + (o.total_amount || 0), 0)
+      const total = data.reduce((sum, o) => sum + (o.grand_total || 0), 0)
       return { month: label, total, orders: data.length }
     }
 

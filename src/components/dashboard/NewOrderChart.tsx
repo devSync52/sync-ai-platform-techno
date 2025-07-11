@@ -11,31 +11,28 @@ export default function NewOrdersChart() {
 
   useEffect(() => {
     async function fetchData() {
-      const { data, error } = await supabase
-        .from('view_all_orders')
-        .select('order_date, total_amount')
+      const now = new Date().toISOString()
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+      const { data: filtered, error } = await supabase
+        .from('view_all_orders_v2')
+        .select('order_date, grand_total')
+        .gte('order_date', oneDayAgo)
+        .lte('order_date', now)
 
       if (error) {
         console.error('❌ Error fetching new orders:', error)
         return
       }
 
-      const now = new Date()
-      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-
-      const filtered = (data || []).filter((order) => {
-        const date = new Date(order.order_date)
-        return date >= oneDayAgo && date <= now
-      })
-
-      const byHour = filtered.reduce((acc: any[], order: any) => {
+      const byHour = (filtered || []).reduce((acc: any[], order: any) => {
         const dateObj = new Date(order.order_date)
         let hour = dateObj.getHours()
         const ampm = hour >= 12 ? 'PM' : 'AM'
         hour = hour % 12
         hour = hour ? hour : 12 // the hour '0' should be '12'
         const key = `${hour} ${ampm}`
-        const amount = order.total_amount ? parseFloat(order.total_amount) : 0
+        const amount = order.grand_total ? parseFloat(order.grand_total) : 0
 
         const found = acc.find((item) => item.hour === key)
 

@@ -22,7 +22,7 @@ export default function OrderCharts() {
     async function fetchData() {
       const { data, error } = await supabase
         .from('view_all_orders')
-        .select('order_date, total_amount, status')
+        .select('order_date, grand_total, status')
 
       if (error) {
         console.error('❌ Error fetching data:', error)
@@ -41,7 +41,7 @@ export default function OrderCharts() {
         const hour = new Date(order.order_date).getHours().toString().padStart(2, '0')
         const key = `${hour}:00`
 
-        const amount = order.total_amount ? parseFloat(order.total_amount) : 0
+        const amount = order.total_amount ? parseFloat(order.grand_total) : 0
 
         const found = acc.find((item) => item.hour === key)
 
