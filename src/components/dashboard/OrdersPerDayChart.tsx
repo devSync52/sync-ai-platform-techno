@@ -23,7 +23,13 @@ const getLastThreeMonths = (): MonthOption[] => {
   })
 }
 
-export default function OrdersPerDayChart() {
+export default function OrdersPerDayChart({
+  userRole,
+  userAccountId,
+}: {
+  userRole: string
+  userAccountId: string
+}) {
   const monthOptions = getLastThreeMonths()
   const [selectedMonth, setSelectedMonth] = useState<MonthOption>(monthOptions[0])
   const [data, setData] = useState<{ date: string; count: number }[]>([])
@@ -39,12 +45,20 @@ export default function OrdersPerDayChart() {
       let more = true
 
       while (more) {
-        const { data, error } = await supabase
+        let query = supabase
           .from('view_all_orders')
           .select('order_date')
           .gte('order_date', start)
           .lte('order_date', end)
           .range(from, to)
+
+        if (userRole === 'client') {
+          query = query.eq('channel_account_id', userAccountId)
+        } else {
+          query = query.eq('account_id', userAccountId)
+        }
+
+        const { data, error } = await query
 
         if (error) {
           console.error('❌ Error fetching orders:', error)
@@ -77,7 +91,7 @@ export default function OrdersPerDayChart() {
     }
 
     fetchOrders()
-  }, [selectedMonth])
+  }, [selectedMonth, userRole, userAccountId])
 
   const totalOrders = data.reduce((sum, d) => sum + d.count, 0)
 

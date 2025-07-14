@@ -18,7 +18,13 @@ const COLORS = [
   '#e879f9', '#f472b6', '#fb7185', '#f59e0b', '#84cc16',
 ]
 
-export default function SalesByMarketplaceChart() {
+export default function SalesByMarketplaceChart({
+  userRole,
+  userAccountId,
+}: {
+  userRole: string
+  userAccountId: string
+}) {
   const [data, setData] = useState<{ marketplace: string; orders: number; logo?: string }[]>([])
   const [selectedMonth, setSelectedMonth] = useState(new Date())
 
@@ -33,11 +39,19 @@ export default function SalesByMarketplaceChart() {
       const from = startOfMonth(selectedMonth).toISOString().split('T')[0]
       const to = endOfMonth(selectedMonth).toISOString().split('T')[0]
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('view_all_orders_v2')
         .select('marketplace_name, order_date, logo')
         .gte('order_date', from)
         .lte('order_date', to)
+
+      if (userRole === 'client') {
+        query = query.eq('channel_account_id', userAccountId)
+      } else {
+        query = query.eq('account_id', userAccountId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('❌ Error fetching marketplace data:', error)
@@ -64,7 +78,7 @@ export default function SalesByMarketplaceChart() {
     }
 
     fetchData()
-  }, [selectedMonth])
+  }, [selectedMonth, userRole, userAccountId])
 
   const totalOrders = data.reduce((sum, d) => sum + d.orders, 0)
 

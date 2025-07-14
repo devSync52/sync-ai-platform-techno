@@ -37,7 +37,7 @@ export default function DashboardBuilder({ userId }: Props) {
 
   useEffect(() => {
     if (!loading) {
-      saveOrder(cardsOrder) // garantir que a ordem seja salva na primeira montagem
+      saveOrder(cardsOrder)
     }
   }, [cardsOrder])
 

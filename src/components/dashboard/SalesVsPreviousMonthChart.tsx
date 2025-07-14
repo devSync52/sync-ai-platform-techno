@@ -14,12 +14,18 @@ import { ShoppingBag } from 'lucide-react'
 import { supabase } from '@/lib/supabase-browser'
 import { format } from 'date-fns'
 
-export default function SalesVsPreviousMonthChart() {
+export default function SalesVsPreviousMonthChart({
+  userRole,
+  userAccountId,
+}: {
+  userRole: string
+  userAccountId: string
+}) {
   const [data, setData] = useState<{ month: string; total: number; orders: number }[]>([])
   const [showOrderCount, setShowOrderCount] = useState(false)
 
   useEffect(() => {
-    async function fetchMonthlyData(monthOffset: number) {
+    async function fetchMonthlyData(monthOffset: number, userRole: string, userAccountId: string) {
       const now = new Date()
       const month = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1)
       const label = format(month, 'MMMM')
@@ -27,11 +33,19 @@ export default function SalesVsPreviousMonthChart() {
       const start = new Date(month.getFullYear(), month.getMonth(), 1)
       const end = new Date(month.getFullYear(), month.getMonth() + 1, 0)
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('view_all_orders')
         .select('grand_total')
         .gte('order_date', start.toISOString().slice(0, 10))
         .lte('order_date', end.toISOString().slice(0, 10))
+
+      if (userRole === 'client') {
+        query = query.eq('channel_account_id', userAccountId)
+      } else {
+        query = query.eq('account_id', userAccountId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error(`❌ Error fetching data for ${label}:`, error)
@@ -44,15 +58,15 @@ export default function SalesVsPreviousMonthChart() {
 
     async function fetchAll() {
       const months = await Promise.all([
-        fetchMonthlyData(0),
-        fetchMonthlyData(1),
-        fetchMonthlyData(2),
+        fetchMonthlyData(0, userRole, userAccountId),
+        fetchMonthlyData(1, userRole, userAccountId),
+        fetchMonthlyData(2, userRole, userAccountId),
       ])
       setData(months.reverse()) // Para mostrar do mais antigo ao atual
     }
 
     fetchAll()
-  }, [])
+  }, [userRole, userAccountId])
 
   const totalValue = data.reduce((sum, d) => sum + (showOrderCount ? d.orders : d.total), 0)
 

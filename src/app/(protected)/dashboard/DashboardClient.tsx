@@ -43,6 +43,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   const [orders, setOrders] = useState<any[]>([])
   const [accountId, setAccountId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   const [startDate, setStartDate] = useState(() =>
     startOfMonth(new Date()).toISOString().split('T')[0]
@@ -77,6 +78,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       }
   
       const userRole = userRecord.role
+      setUserRole(userRole)
       const userAccountId = userRecord.account_id
   
       if (!userAccountId) {
@@ -214,27 +216,47 @@ export default function DashboardClient({ userId }: { userId: string }) {
     },
     {
       id: 'new_orders_chart',
-      label: <div key={`new-orders-${Math.random()}`}><NewOrdersChart /></div>,
+      label: userRole && accountId ? (
+        <div key={`new-orders-${Math.random()}`}>
+          <NewOrdersChart userRole={userRole} userAccountId={accountId} />
+        </div>
+      ) : null,
       type: 'chart',
     },
     {
       id: 'shipped_orders_chart',
-      label: <ShippedOrdersChart />,
+      label: userRole && accountId ? (
+        <div key={`shipped-orders-${Math.random()}`}>
+          <ShippedOrdersChart userRole={userRole} userAccountId={accountId} />
+        </div>
+      ) : null,
       type: 'chart',
     },
     {
       id: 'sales_vs_previous_month_chart',
-      label: <SalesVsPreviousMonthChart />,
+      label: userRole && accountId ? (
+        <div key={`sales-vs-previous-${Math.random()}`}>
+          <SalesVsPreviousMonthChart userRole={userRole} userAccountId={accountId} />
+        </div>
+      ) : null,
       type: 'chart',
     },
     {
       id: 'sales_by_marketplace_chart',
-      label: <SalesByMarketplaceChart />,
+      label: userRole && accountId ? (
+        <div key={`sales-by-marketplace-${Math.random()}`}>
+          <SalesByMarketplaceChart userRole={userRole} userAccountId={accountId} />
+        </div>
+      ) : null,
       type: 'chart',
     },
     {
       id: 'orders_per_day_chart',
-      label: <OrdersPerDayChart />,
+      label: userRole && accountId ? (
+        <div key={`orders-per-day-${Math.random()}`}>
+          <OrdersPerDayChart userRole={userRole} userAccountId={accountId} />
+        </div>
+      ) : null,
       type: 'chart',
     },
     {

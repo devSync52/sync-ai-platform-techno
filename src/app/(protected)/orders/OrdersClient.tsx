@@ -17,6 +17,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
   const [accountId, setAccountId] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [allStatusOptions, setAllStatusOptions] = useState<string[]>([])
 
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
@@ -70,10 +71,25 @@ export default function OrdersClient({ userId }: { userId: string }) {
       if (!userAccountId) return
   
       setAccountId(userAccountId)
+
+      const { data: statusRows, error: statusError } = await supabase
+        .from('ai_orders_unified_4')
+        .select('order_status')
+        .eq(userRole === 'client' ? 'channel_account_id' : 'account_id', userAccountId)
+
+      if (statusError) {
+        console.error('❌ Error fetching status options:', statusError.message)
+      } else {
+        const allStatuses = Array.from(new Set(statusRows?.map(r => r.order_status).filter(Boolean)))
+        setAllStatusOptions(allStatuses)
+      }
   
       let query = supabase
-  .from('ai_orders_unified_4')
-  .select('*', { count: 'exact' })
+        .from('ai_orders_unified_6')
+        .select(
+          'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id',
+          { count: 'exact' }
+        )
 
 // ✅ Filtrar corretamente dependendo da role
 if (userRole === 'client') {
@@ -152,8 +168,6 @@ const { data, count, error } = await query.range(start, end)
     document.body.removeChild(link)
   }
 
-  const statusOptions = Array.from(new Set(orders.map((o) => o.order_status))).filter(Boolean)
-
   return (
     <div className="p-6">
         <div className="flex items-center justify-between mb-4">
@@ -188,16 +202,16 @@ const { data, count, error } = await query.range(start, end)
                 {
                   label: 'Source',
                   value: sourceFilter,
-                  options: ['All source', 'sellercloud', 'extensiv'],
-                  onChange: setSourceFilter,
+                  options: ['All sources', 'sellercloud', 'extensiv'],
+                  onChange: (v: string) => setSourceFilter(v === 'All sources' ? 'all' : v),
                 },
               ]
             : []),
           {
             label: 'Status',
-            value: statusFilter ?? '',
-            options: ['All status', ...statusOptions],
-            onChange: (v) => setStatusFilter(v !== 'All' ? v : null),
+            value: statusFilter ?? 'all',
+            options: ['All status', ...allStatusOptions],
+            onChange: (v: string) => setStatusFilter(v !== 'All status' ? v : null),
           },
         ]}
       />
@@ -300,7 +314,7 @@ const { data, count, error } = await query.range(start, end)
                 <td className="py-3 px-4 text-sm">
                   <button
                     onClick={() => {
-                      setSelectedOrder(order)
+                      setSelectedOrder({ ...order, id: order.order_uuid })
                       setModalOpen(true)
                     }}
                     className="text-white px-1 py-1 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition min-w-[80px]"
@@ -340,7 +354,7 @@ const { data, count, error } = await query.range(start, end)
       <OrderDetailsSc
         order={selectedOrder}
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onCloseAction={() => setModalOpen(false)}
       />
     </div>
   )

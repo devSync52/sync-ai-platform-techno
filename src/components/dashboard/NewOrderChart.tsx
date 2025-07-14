@@ -5,7 +5,13 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianG
 import { supabase } from '@/lib/supabase-browser'
 import { ShoppingBag } from 'lucide-react'
 
-export default function NewOrdersChart() {
+export default function NewOrdersChart({
+  userRole,
+  userAccountId,
+}: {
+  userRole: string
+  userAccountId: string
+}) {
   const [data, setData] = useState<{ hour: string; value: number; amount: number }[]>([])
   const [showOrderCount, setShowOrderCount] = useState(false)
 
@@ -14,11 +20,19 @@ export default function NewOrdersChart() {
       const now = new Date().toISOString()
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-      const { data: filtered, error } = await supabase
+      let query = supabase
         .from('view_all_orders_v2')
         .select('order_date, grand_total')
         .gte('order_date', oneDayAgo)
         .lte('order_date', now)
+
+      if (userRole === 'client') {
+        query = query.eq('channel_account_id', userAccountId)
+      } else {
+        query = query.eq('account_id', userAccountId)
+      }
+
+      const { data: filtered, error } = await query
 
       if (error) {
         console.error('❌ Error fetching new orders:', error)
@@ -56,7 +70,7 @@ export default function NewOrdersChart() {
     }
 
     fetchData()
-  }, [])
+  }, [userRole, userAccountId])
 
   const totalValue = data.reduce((sum, d) => sum + (showOrderCount ? d.value : d.amount), 0)
 

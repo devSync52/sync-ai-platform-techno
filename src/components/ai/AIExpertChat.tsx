@@ -175,7 +175,7 @@ export default function AIExpertChat({
         </div>
       )}
 
-      <QuickPrompts onPrompt={handleQuickPrompt} />
+      <QuickPrompts onPrompt={handleQuickPrompt} isClient={user_type === 'client'} />
 
       <div className="border-t p-4 flex items-center gap-2">
         <button

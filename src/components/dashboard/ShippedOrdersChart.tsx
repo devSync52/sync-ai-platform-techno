@@ -12,18 +12,39 @@ import {
 } from 'recharts'
 import { supabase } from '@/lib/supabase-browser'
 import { PackageCheck } from 'lucide-react'
+import { totalmem } from 'os'
 
-export default function ShippedOrdersChart() {
-  const [data, setData] = useState<{ hour: string; shipped: number }[]>([])
+export default function ShippedOrdersChart({
+  userRole,
+  userAccountId,
+}: {
+  userRole: string
+  userAccountId: string
+}) {
+  const [data, setData] = useState<{ hour: string; shipped: number; total_items: number }[]>([])
+  const [showItems, setShowItems] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
-      const { data, error } = await supabase
-        .from('ai_orders_unified_4')
-        .select('order_date, shipping_status')
+      let query = supabase
+        .from('ai_shipping_info_sc_v2')
+        .select('order_date, shipping_status, items_count')
+
+      if (userRole === 'client') {
+        query = query.eq('channel_account_id', userAccountId)
+      } else {
+        query = query.eq('account_id', userAccountId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
-        console.error('❌ Error fetching shipped orders:', error)
+        console.error('❌ Error fetching shipped orders:', {
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+          code: error?.code,
+        })
         return
       }
 
@@ -35,7 +56,7 @@ export default function ShippedOrdersChart() {
         return date >= oneDayAgo && date <= now
       })
 
-      const byHour = filtered.reduce((acc: { hour: string; shipped: number }[], order) => {
+      const byHour = filtered.reduce((acc: { hour: string; shipped: number; total_items: number }[], order) => {
         const date = new Date(order.order_date)
         let hour = date.getHours()
         const ampm = hour >= 12 ? 'PM' : 'AM'
@@ -44,15 +65,20 @@ export default function ShippedOrdersChart() {
         const key = `${hour} ${ampm}`
 
         const isShipped = Number(order.shipping_status) === 3
+        const itemsCount = Number(order.items_count) || 0
 
         const existing = acc.find((item) => item.hour === key)
 
         if (existing) {
-          if (isShipped) existing.shipped += 1
+          if (isShipped) {
+            existing.shipped += 1
+            existing.total_items += itemsCount
+          }
         } else {
           acc.push({
             hour: key,
             shipped: isShipped ? 1 : 0,
+            total_items: isShipped ? itemsCount : 0,
           })
         }
 
@@ -77,9 +103,10 @@ export default function ShippedOrdersChart() {
     }
 
     fetchData()
-  }, [])
+  }, [userRole, userAccountId])
 
   const totalShipped = data.reduce((sum, d) => sum + d.shipped, 0)
+  const totalItems = data.reduce((sum, d) => sum + d.total_items, 0)
 
   return (
     <div className="h-full w-full bg-white rounded-2xl p-5 shadow-sm">
@@ -89,11 +116,17 @@ export default function ShippedOrdersChart() {
             <PackageCheck size={20} />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-700">Shipped Orders</p>
-            <p className="text-xl font-bold text-green-600">{totalShipped}</p>
+            <p className="text-sm font-semibold text-gray-700">Shipped</p>
+            <p className="text-xl font-bold text-green-600">{totalShipped} Orders / {totalItems} Items</p>
             <p className="text-xs text-gray-500">Last 24 hours</p>
           </div>
         </div>
+        <button
+          onClick={() => setShowItems(!showItems)}
+          className="text-xs text-green-600 underline hover:text-green-800 transition"
+        >
+          {showItems ? 'Show Orders' : 'Show Items'}
+        </button>
       </div>
       <div className="h-[200px] mt-4">
         <ResponsiveContainer width="100%" height="100%">
@@ -104,7 +137,7 @@ export default function ShippedOrdersChart() {
             <Tooltip />
             <Line
               type="monotone"
-              dataKey="shipped"
+              dataKey={showItems ? 'total_items' : 'shipped'}
               stroke="#17a34a"
               strokeWidth={3}
               dot={{ r: 4 }}

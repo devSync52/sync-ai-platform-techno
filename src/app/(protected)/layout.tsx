@@ -12,16 +12,32 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  //console.log('[Supabase Auth User]', user)
 
   if (!user) {
     redirect('/login')
   }
 
-  const { data: userData } = await supabase
+  let { data: userData } = await supabase
     .from('users')
     .select('name, email, role, account_id')
     .eq('id', user.id)
     .single()
+
+  if (!userData) {
+    const { data: insertedUser } = await supabase
+      .from('users')
+      .insert({
+        id: user.id,
+        email: user.email,
+        role: 'staff-user',
+        account_id: null, 
+      })
+      .select('name, email, role, account_id')
+      .single()
+
+    userData = insertedUser
+  }
 
   const { data: accountData } = await supabase
     .from('accounts')

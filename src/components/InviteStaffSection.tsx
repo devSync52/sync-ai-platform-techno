@@ -29,12 +29,33 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
   const session = useSession()
   const supabase = useSupabase()
 
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
+  const [selectedMember, setSelectedMember] = useState<StaffUser | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  useEffect(() => {
+    const fetchCurrentUserRole = async () => {
+      if (!session?.user?.id) return
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', session.user.id)
+        .maybeSingle()
+      if (data?.role) {
+        setCurrentUserRole(data.role)
+      }
+    }
+
+    fetchCurrentUserRole()
+  }, [session?.user?.id])
+
   const fetchTeam = async () => {
     const { data, error } = await supabase
-      .from('invited_staff_view')
-      .select('*')
+      .from('invited_staff_view_v2')
+      .select('*', { head: false, count: 'exact' })
       .eq('account_id', accountId)
-
+      .abortSignal(new AbortController().signal)
+    
     if (!error) setTeam(data || [])
   }
 
@@ -186,7 +207,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
                       <p className="font-medium text-sm break-words">{member.email}</p>
                       <div className="flex items-center gap-2 text-xs text-gray-500">
                         
-                        <span>• Invited on {formatDate(member.invite_sent_at)}</span>
+                        <span>Invited on {formatDate(member.invite_sent_at)}</span>
                       </div>
                     </div>
                     {member.last_login_at && (
@@ -210,7 +231,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {['sent', 'accepted'].includes(member.invite_status?.toLowerCase() || '') && (
+                  {['sent', 'accepted'].includes((member.invite_status || '').toLowerCase()) && (
                     <>
                       <button
                         onClick={() => handleResend(member.email)}
@@ -229,20 +250,75 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
                       </button>
                     </>
                   )}
-                  <select
-                          className="border px-2 py-1 rounded text-xs bg-white"
-                          value={member.role}
-                          disabled
-                        >
-                          <option value="staff-user">Staff - User</option>
-                          <option value="staff-admin">Staff - Admin</option>
-                        </select>
+                  {(() => {
+                    const canEdit =
+                      currentUserRole === 'admin' ||
+                      (currentUserRole === 'staff-admin' && member.role === 'staff-user');
+                    return canEdit;
+                  })() ? (
+                    <button
+                      onClick={() => {
+                        setSelectedMember(member)
+                        setIsModalOpen(true)
+                      }}
+                      className="text-xs text-indigo-700 border border-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-50 transition whitespace-nowrap"
+                    >
+                      Edit Role
+                    </button>
+                  ) : (
+                    <p className="text-xs text-gray-600">{renderRole(member.role)}</p>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {isModalOpen && selectedMember && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm shadow-lg space-y-4">
+            <h2 className="text-lg font-semibold">Edit Role</h2>
+            <select
+              className="w-full border px-4 py-2 rounded text-sm"
+              value={selectedMember.role}
+              onChange={async (e) => {
+                const newRole = e.target.value
+                console.log('[UpdateRole]', {
+                  selectedMember,
+                  accountId,
+                  newRole
+                })
+                const { error } = await supabase
+                  .from('users')
+                  .update({ role: newRole })
+                  .eq('id', selectedMember.id)
+                  .eq('account_id', accountId)
+
+                if (!error) {
+                  toast.success('Role updated!')
+                  fetchTeam()
+                  setIsModalOpen(false)
+                  setSelectedMember(null)
+                } else {
+                  toast.error('Failed to update role.')
+                }
+              }}
+            >
+              <option value="staff-user">Staff - User</option>
+              <option value="staff-admin">Staff - Admin</option>
+            </select>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-sm text-gray-600 px-3 py-1 rounded hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
