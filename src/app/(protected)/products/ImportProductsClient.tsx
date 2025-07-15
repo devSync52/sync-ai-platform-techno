@@ -42,19 +42,31 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
     fetchProducts()
   }, [accountId, userRole])
 
-  const filtered = products.filter((p) => {
+  const deduplicated = Object.values(
+    products.reduce((acc, product) => {
+      if (
+        !acc[product.sku] ||
+        new Date(product.updated_at ?? 0) > new Date(acc[product.sku].updated_at ?? 0)
+      ) {
+        acc[product.sku] = product
+      }
+      return acc
+    }, {} as Record<string, ProductList>)
+  )
+
+  const filtered = deduplicated.filter((p) => {
     return (
       (!companyFilter || p.company === companyFilter) &&
       (!statusFilter || (statusFilter === 'Active' ? p.is_active : !p.is_active)) &&
       (!typeFilter || p.product_type === typeFilter) &&
       (p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.product_name ?? '').toLowerCase().includes(searchTerm.toLowerCase()))
+        (p.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()))
     )
   })
 
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'sku') return a.sku.localeCompare(b.sku)
-    if (sortBy === 'name') return (a.product_name || '').localeCompare(b.product_name || '')
+    if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '')
     if (sortBy === 'price') return (b.site_price || 0) - (a.site_price || 0)
     return 0
   })
@@ -172,7 +184,7 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
                   {product.image_url ? (
                     <img
                       src={product.image_url}
-                      alt={product.product_name || 'Product image'}
+                      alt={product.name || 'Product image'}
                       width={40}
                       height={40}
                       className="rounded object-contain"
@@ -181,7 +193,7 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
                     <span className="text-xs text-gray-400">No image</span>
                   )}
                 </td>
-                <td className="py-3 px-4 text-gray-600">{product.product_name || '-'}</td>
+                <td className="py-3 px-4 text-gray-600">{product.name || '-'}</td>
                 <td className="py-3 px-4 text-gray-600">{product.dimensions || '-'}</td>
                 <td className="py-3 px-4 text-gray-600">{product.quantity_available ?? '-'}</td>
                 <td className="py-3 px-4 text-gray-600">{product.quantity_physical ?? '-'}</td>

@@ -12,7 +12,6 @@ import {
 } from 'recharts'
 import { supabase } from '@/lib/supabase-browser'
 import { PackageCheck } from 'lucide-react'
-import { totalmem } from 'os'
 
 export default function ShippedOrdersChart({
   userRole,
@@ -23,6 +22,7 @@ export default function ShippedOrdersChart({
 }) {
   const [data, setData] = useState<{ hour: string; shipped: number; total_items: number }[]>([])
   const [showItems, setShowItems] = useState(false)
+  const [period, setPeriod] = useState<'24h' | '7d' | '31d' | '3m'>(userRole === 'client' ? '7d' : '24h')
 
   useEffect(() => {
     async function fetchData() {
@@ -49,11 +49,29 @@ export default function ShippedOrdersChart({
       }
 
       const now = new Date()
-      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+      let startDate: Date
+      switch (period) {
+        case '24h':
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+          break
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          break
+        case '31d':
+          startDate = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000)
+          break
+        case '3m':
+          startDate = new Date(now)
+          startDate.setMonth(startDate.getMonth() - 3)
+          break
+        default:
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      }
 
       const filtered = (data || []).filter((order) => {
         const date = new Date(order.order_date)
-        return date >= oneDayAgo && date <= now
+        return date >= startDate && date <= now
       })
 
       const byHour = filtered.reduce((acc: { hour: string; shipped: number; total_items: number }[], order) => {
@@ -103,10 +121,17 @@ export default function ShippedOrdersChart({
     }
 
     fetchData()
-  }, [userRole, userAccountId])
+  }, [userRole, userAccountId, period])
 
   const totalShipped = data.reduce((sum, d) => sum + d.shipped, 0)
   const totalItems = data.reduce((sum, d) => sum + d.total_items, 0)
+
+  const periodLabel = {
+    '24h': 'Last 24 hours',
+    '7d': 'Last 7 days',
+    '31d': 'Last 31 days',
+    '3m': 'Last 3 months',
+  }[period]
 
   return (
     <div className="h-full w-full bg-white rounded-2xl p-5 shadow-sm">
@@ -118,15 +143,27 @@ export default function ShippedOrdersChart({
           <div>
             <p className="text-sm font-semibold text-gray-700">Shipped</p>
             <p className="text-xl font-bold text-green-600">{totalShipped} Orders / {totalItems} Items</p>
-            <p className="text-xs text-gray-500">Last 24 hours</p>
+            <p className="text-xs text-gray-500">{periodLabel}</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowItems(!showItems)}
-          className="text-xs text-green-600 underline hover:text-green-800 transition"
-        >
-          {showItems ? 'Show Orders' : 'Show Items'}
-        </button>
+        <div className="flex items-center gap-4">
+          {/* <button
+            onClick={() => setShowItems(!showItems)}
+            className="text-xs text-green-600 underline hover:text-green-800 transition"
+          >
+            {showItems ? 'Show Orders' : 'Show Items'}
+          </button> */}
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as '24h' | '7d' | '31d' | '3m')}
+            className="text-xs flex mt-1 items-center gap-1 text-green-600 border px-2 py-1 rounded-md hover:bg-muted"
+          >
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="31d">Last 31 days</option>
+            <option value="3m">Last 3 months</option>
+          </select>
+        </div>
       </div>
       <div className="h-[200px] mt-4">
         <ResponsiveContainer width="100%" height="100%">

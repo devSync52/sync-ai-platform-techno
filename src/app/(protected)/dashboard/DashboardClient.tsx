@@ -273,10 +273,24 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div className="flex items-center justify-between mb-4">
-  <h1 className="text-2xl mr-3 font-bold text-primary">Dashboard</h1>
-  <Sheet open={openBuilder} onOpenChange={(open) => {
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+  
+      <div className="space-y-2 mb-4">
+        <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
+        <div className="max-w-full">
+          <DateRangePicker
+            date={selectedRange}
+            setDate={(range) => {
+              setSelectedRange(range)
+              setStartDate(range?.from?.toISOString().slice(0, 10) || '')
+              setEndDate(range?.to?.toISOString().slice(0, 10) || '')
+            }}
+          />
+        </div>
+      </div>
+
+
+<Sheet open={openBuilder} onOpenChange={(open) => {
     setOpenBuilder(open)
     if (!open) reloadPreferences()
   }}>
@@ -290,17 +304,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
       <DashboardBuilder userId={userId} />
     </SheetContent>
   </Sheet>
-</div>
-
-
-        <DateRangePicker
-  date={selectedRange}
-  setDate={(range) => {
-    setSelectedRange(range)
-    setStartDate(range?.from?.toISOString().slice(0, 10) || '')
-    setEndDate(range?.to?.toISOString().slice(0, 10) || '')
-  }}
-/>
       </div>
 
       <DashboardGrid

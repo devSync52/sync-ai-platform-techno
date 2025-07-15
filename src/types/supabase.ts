@@ -85,6 +85,8 @@ export type ProductList = {
   is_active: boolean
   product_type: string | null
   created_at: string
+  updated_at?: string
+  name?: string
 }
 
 export type CurrentUser = {

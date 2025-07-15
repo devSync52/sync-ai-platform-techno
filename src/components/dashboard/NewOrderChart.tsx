@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react'
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { supabase } from '@/lib/supabase-browser'
 import { ShoppingBag } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function NewOrdersChart({
   userRole,
@@ -14,17 +20,24 @@ export default function NewOrdersChart({
 }) {
   const [data, setData] = useState<{ hour: string; value: number; amount: number }[]>([])
   const [showOrderCount, setShowOrderCount] = useState(false)
+  const [period, setPeriod] = useState<'24h' | '7d' | '31d' | '3m'>(userRole === 'client' ? '7d' : '24h')
 
   useEffect(() => {
     async function fetchData() {
-      const now = new Date().toISOString()
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const now = new Date()
+      let from = new Date()
+      switch (period) {
+        case '7d': from.setDate(now.getDate() - 7); break
+        case '31d': from.setDate(now.getDate() - 31); break
+        case '3m': from.setMonth(now.getMonth() - 3); break
+        default: from.setDate(now.getDate() - 1)
+      }
 
       let query = supabase
         .from('view_all_orders_v2')
         .select('order_date, grand_total')
-        .gte('order_date', oneDayAgo)
-        .lte('order_date', now)
+        .gte('order_date', from.toISOString())
+        .lte('order_date', now.toISOString())
 
       if (userRole === 'client') {
         query = query.eq('channel_account_id', userAccountId)
@@ -70,7 +83,7 @@ export default function NewOrdersChart({
     }
 
     fetchData()
-  }, [userRole, userAccountId])
+  }, [userRole, userAccountId, period])
 
   const totalValue = data.reduce((sum, d) => sum + (showOrderCount ? d.value : d.amount), 0)
 
@@ -91,7 +104,14 @@ export default function NewOrdersChart({
                     currency: 'USD',
                   })}
             </p>
-            <p className="text-xs text-gray-500">Last 24 hours</p>
+            <p className="text-xs text-gray-500">
+              {{
+                '24h': 'Last 24 hours',
+                '7d': 'Last 7 days',
+                '31d': 'Last 31 days',
+                '3m': 'Last 3 months',
+              }[period]}
+            </p>
           </div>
         </div>
         <div className="relative z-50" style={{ pointerEvents: 'auto' }}>
@@ -104,6 +124,27 @@ export default function NewOrdersChart({
           >
             {showOrderCount ? 'Show value' : 'Show number of orders'}
           </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="text-xs flex mt-1 items-center gap-1 text-primary border px-2 py-1 rounded-md hover:bg-muted">
+                {{
+                  '24h': 'Last 24 hours',
+                  '7d': 'Last 7 days',
+                  '31d': 'Last 31 days',
+                  '3m': 'Last 3 months',
+                }[period]}
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setPeriod('24h')}>Last 24 hours</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPeriod('7d')}>Last 7 days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPeriod('31d')}>Last 31 days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPeriod('3m')}>Last 3 months</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <div className="h-[200px] mt-4">

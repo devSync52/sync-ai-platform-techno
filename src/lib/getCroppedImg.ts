@@ -1,42 +1,27 @@
-export const getCroppedImg = async (
-  imageSrc: string,
-  croppedAreaPixels: { width: number; height: number; x: number; y: number }
-): Promise<Blob> => {
-  const image = await createImage(imageSrc)
+export async function getCroppedImg(imageSrc: string, pixelCrop: any): Promise<Blob> {
+  const image = new Image()
+  image.src = imageSrc
+  await new Promise((res) => { image.onload = res })
+
   const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')
-
-  if (!ctx) throw new Error('Failed to get canvas context')
-
-  canvas.width = croppedAreaPixels.width
-  canvas.height = croppedAreaPixels.height
-
+  canvas.width = pixelCrop.width
+  canvas.height = pixelCrop.height
+  const ctx = canvas.getContext('2d')!
   ctx.drawImage(
     image,
-    croppedAreaPixels.x,
-    croppedAreaPixels.y,
-    croppedAreaPixels.width,
-    croppedAreaPixels.height,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
     0,
     0,
-    croppedAreaPixels.width,
-    croppedAreaPixels.height
+    pixelCrop.width,
+    pixelCrop.height
   )
 
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, 'image/jpeg')
-  )
-
-  if (!blob) throw new Error('Canvas is empty')
-  return blob
-}
-
-function createImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = (error) => reject(error)
-    img.src = url
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob)
+    }, 'image/jpeg')
   })
 }

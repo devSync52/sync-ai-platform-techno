@@ -61,20 +61,20 @@ export function DateRangePicker({ date, setDate }: DateRangePickerProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-auto justify-start text-left font-normal text-sm">
+        <Button variant="outline" className="w-auto justify-start text-left font-normal text-sm"><p>Selected period</p>
           <CalendarIcon className="mr-2 h-4 w-4" />
           <span>{formatLabel(date)}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full max-w-[700px] flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-6 p-4 rounded-xl shadow-xl border bg-white z-50 mr-4">
+      <PopoverContent className="w-[95vw] md:w-full max-w-[700px] flex flex-col md:flex-row md:space-x-6 space-y-4 md:space-y-0 px-2 py-4 md:p-4 rounded-xl shadow-xl border bg-white z-[9999] mr-4 overflow-x-auto max-h-[90vh] overflow-y-auto">
         {/* Botões laterais */}
-        <div className="w-44 border-r pr-4">
-          <div className="flex flex-col gap-2">
+        <div className="w-full md:w-44 border-r md:pr-4">
+          <div className="flex flex-row flex-wrap gap-2 md:flex-col md:gap-2 md:mb-0 mb-2 md:justify-start justify-center">
             {predefinedRanges.map((item) => (
               <Button
                 key={item.label}
                 variant="ghost"
-                className="justify-start text-sm hover:bg-muted text-gray-800"
+                className="text-xs md:text-sm whitespace-nowrap px-3 py-1 border border-muted rounded-full text-primary hover:bg-muted"
                 onClick={() => {
                   setDate(item.range)
                   setOpen(false)
@@ -87,7 +87,7 @@ export function DateRangePicker({ date, setDate }: DateRangePickerProps) {
         </div>
 
         {/* Calendário e ações */}
-        <div className="flex flex-col items-center space-y-3 text-xs">
+        <div className="w-full flex flex-col items-center space-y-3 text-xs">
           <DayPicker
             initialFocus
             mode="range"
@@ -102,9 +102,9 @@ export function DateRangePicker({ date, setDate }: DateRangePickerProps) {
               range_middle: 'bg-primary/10 text-black',
               today: '',
             }}
-            className="flex justify-center text-sm"
+            className="flex justify-center flex-col md:flex-row text-sm"
             classNames={{
-              months: 'flex space-x-6 text-primary font-bold',
+              months: 'flex flex-col md:flex-row md:space-x-6 space-y-6 md:space-y-0 text-primary font-bold',
               month: 'space-y-2',
               caption: 'text-center font-medium',
               head_cell: 'text-muted-foreground w-8 text-[12px]',

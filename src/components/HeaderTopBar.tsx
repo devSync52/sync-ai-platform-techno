@@ -49,6 +49,7 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const [logoUrlWithVersion, setLogoUrlWithVersion] = useState('')
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -59,6 +60,29 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+useEffect(() => {
+  const handleLogoUpdate = () => {
+    const currentLogoUrl = user.logoUrl
+    if (currentLogoUrl) {
+      const separator = currentLogoUrl.includes('?') ? '&' : '?'
+      const versionedUrl = `${currentLogoUrl}${separator}v=${Date.now()}`
+      setLogoUrlWithVersion(versionedUrl)
+    } else {
+      setLogoUrlWithVersion('')
+    }
+  }
+
+  // Atualiza quando o evento for disparado
+  window.addEventListener('logo-updated', handleLogoUpdate)
+
+  // Atualiza se logoUrl mudar
+  handleLogoUpdate()
+
+  return () => {
+    window.removeEventListener('logo-updated', handleLogoUpdate)
+  }
+}, [user.logoUrl ?? ''])
 
   const roleColors = getRoleColors(user.role || '')
 
@@ -71,9 +95,9 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
     <div className="hidden lg:flex items-center justify-between h-20 px-6 bg-white border-b shadow-sm relative">
       <div className="flex items-center gap-4">
       {user.role === 'client' ? (
-        user.logoUrl ? (
+        logoUrlWithVersion ? (
           <img
-            src={user.logoUrl}
+            src={logoUrlWithVersion}
             alt="Company Logo"
             className="w-50 h-10 object-contain rounded-md"
           />
