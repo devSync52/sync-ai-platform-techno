@@ -20,7 +20,9 @@ import {
   User2Icon,
   Cog,
   UserCircle2,
-  ShoppingBag
+  ShoppingBag,
+  TicketIcon,
+  TicketPlus
 } from 'lucide-react'
 
 import { useEffect, useState } from 'react'
@@ -76,10 +78,9 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/bot-training', label: 'Bot training', icon: BotIcon },
     { href: '/ai-settings', label: 'AI Settings', icon: Cog },
     { href: '/products', label: 'Inventory', icon: BoxIcon },
-    { href: '/staff', label: 'Staff', icon: User2Icon }
+    { href: '/staff', label: 'Staff', icon: User2Icon },
+    { href: '/support', label: 'Support', icon: TicketPlus }
   ]
-
-  // Ocultar itens se o user for client ou staff-user
   const filteredNavItems = navItems.filter((item) => {
     if (
       (userRole === 'client' || userRole === 'staff-user') &&

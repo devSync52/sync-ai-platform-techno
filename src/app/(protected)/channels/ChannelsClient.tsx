@@ -74,7 +74,12 @@ export default function ChannelsClient({
   }
 
   const findInvitationStatus = (channelId: string) => {
-    return findInvitation(channelId)?.status || 'No Invite'
+    const invitation = findInvitation(channelId)
+    if (!invitation) return 'No Invite'
+    if (invitation.status === 'accepted') return 'Accepted'
+    // Nova verificação: se o usuário já fez login, considerar aceito
+    if (invitation.status === 'pending' && invitation.token === null) return 'Accepted'
+    return invitation.status
   }
 
   const renderInvitationStatus = (status: string) => {
@@ -132,6 +137,24 @@ export default function ChannelsClient({
     else toast.error(result.message)
 
     setResendingId(null)
+  }
+
+  const handleRevokeInvite = async (channelId: string) => {
+    if (!confirm('Are you sure you want to revoke this invite?')) return
+
+    const result = await fetch('/api/invitations/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channelId }),
+    })
+
+    const data = await result.json()
+    if (data.success) {
+      toast.success('Invite revoked')
+      setInvitations(prev => prev.filter(inv => inv.channel_id !== channelId))
+    } else {
+      toast.error(data.message || 'Failed to revoke invite')
+    }
   }
 
   const paginatedChannels = filteredChannels.slice(
@@ -194,23 +217,42 @@ export default function ChannelsClient({
                       <td className="py-3 px-4 text-gray-500">{channel.country ?? '-'}</td>
                       <td className="py-3 px-4 text-gray-500">{channel.city ?? '-'}</td>
                       <td className="p-3 text-sm">{renderInvitationStatus(status)}</td>
-                      <td className="p-3 text-center space-y-2">
-                        {status.toLowerCase() === 'pending' ? (
-                          <button
-                            onClick={() => handleResendInvite(channel.id)}
-                            className="w-full px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
-                            disabled={resendingId === channel.id}
-                          >
-                            {resendingId === channel.id ? 'Resending...' : 'Resend Invite'}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => openInviteModal(channel)}
-                            className="w-full px-3 py-2 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white text-xs rounded"
-                          >
-                            Send Invite
-                          </button>
-                        )}
+                      <td className="p-3 text-center align-top">
+                        <div className="flex flex-col items-center gap-1">
+                          {['pending', 'accepted'].includes(status.toLowerCase()) ? (
+                            <>
+                              {status.toLowerCase() === 'pending' && (
+                                <button
+                                  onClick={() => handleResendInvite(channel.id)}
+                                  className="w-full px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
+                                  disabled={resendingId === channel.id}
+                                >
+                                  {resendingId === channel.id ? 'Resending...' : 'Resend Invite'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleRevokeInvite(channel.id)}
+                                className="w-full px-3 py-2 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+                              >
+                                Revoke
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => openInviteModal(channel)}
+                              className="w-full px-3 py-2 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white text-xs rounded"
+                            >
+                              Send Invite
+                            </button>
+                          )}
+
+                          {/* Mostrar email do convite se existir */}
+                          {findInvitation(channel.id)?.email && (
+                            <div className="mt-2 text-[11px] text-gray-500 italic max-w-[150px] break-words">
+                              Sent to: {findInvitation(channel.id)?.email}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { sendStaffInviteAction } from '@/actions/sendStaffInviteAction'
 import { resendInviteAction } from '@/actions/resendInviteAction'
 import { revokeInviteAction } from '@/actions/revokeInviteAction'
+import { updateUserRoleAction } from '@/actions/updateUserRoleAction'
 import { toast } from 'sonner'
 import { useSession, useSupabase } from '@/components/supabase-provider'
 
@@ -34,6 +35,12 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   useEffect(() => {
+    console.log('[Session Claims]', {
+      id: session?.user?.id,
+      role: session?.user?.role,
+      app_metadata: session?.user?.app_metadata,
+      user_metadata: session?.user?.user_metadata
+    })
     const fetchCurrentUserRole = async () => {
       if (!session?.user?.id) return
       const { data, error } = await supabase
@@ -250,24 +257,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
                       </button>
                     </>
                   )}
-                  {(() => {
-                    const canEdit =
-                      currentUserRole === 'admin' ||
-                      (currentUserRole === 'staff-admin' && member.role === 'staff-user');
-                    return canEdit;
-                  })() ? (
-                    <button
-                      onClick={() => {
-                        setSelectedMember(member)
-                        setIsModalOpen(true)
-                      }}
-                      className="text-xs text-indigo-700 border border-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-50 transition whitespace-nowrap"
-                    >
-                      Edit Role
-                    </button>
-                  ) : (
-                    <p className="text-xs text-gray-600">{renderRole(member.role)}</p>
-                  )}
+                  
                 </div>
               </li>
             ))}
@@ -289,13 +279,14 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
                   accountId,
                   newRole
                 })
-                const { error } = await supabase
-                  .from('users')
-                  .update({ role: newRole })
-                  .eq('id', selectedMember.id)
-                  .eq('account_id', accountId)
+                const { success, error } = await updateUserRoleAction({
+                  userId: selectedMember.id,
+                  newRole
+                })
 
-                if (!error) {
+                console.log('[UpdateRole:result]', { success, error })
+
+                if (success) {
                   toast.success('Role updated!')
                   fetchTeam()
                   setIsModalOpen(false)
