@@ -40,7 +40,7 @@ export default function SalesByMarketplaceChart({
       const to = endOfMonth(selectedMonth).toISOString().split('T')[0]
 
       let query = supabase
-        .from('view_all_orders_v2')
+        .from('view_all_orders_v3')
         .select('marketplace_name, order_date, logo')
         .gte('order_date', from)
         .lte('order_date', to)
