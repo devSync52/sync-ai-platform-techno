@@ -90,7 +90,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setAccountId(userAccountId)
   
       let query = supabase
-        .from('ai_orders_unified_4')
+        .from('sellercloud_orders')
         .select('*')
         .gte('order_date', startDate)
         .lte('order_date', endDate)

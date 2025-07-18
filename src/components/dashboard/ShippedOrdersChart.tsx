@@ -26,9 +26,34 @@ export default function ShippedOrdersChart({
 
   useEffect(() => {
     async function fetchData() {
+      const now = new Date()
+      const nowUTC = new Date(now.toISOString())
+
+      let startDate: Date
+      switch (period) {
+        case '24h':
+          startDate = new Date(nowUTC.getTime() - 24 * 60 * 60 * 1000)
+          break
+        case '7d':
+          startDate = new Date(nowUTC.getTime() - 7 * 24 * 60 * 60 * 1000)
+          break
+        case '31d':
+          startDate = new Date(nowUTC.getTime() - 31 * 24 * 60 * 60 * 1000)
+          break
+        case '3m':
+          startDate = new Date(nowUTC)
+          startDate.setMonth(startDate.getMonth() - 3)
+          break
+        default:
+          startDate = new Date(nowUTC.getTime() - 24 * 60 * 60 * 1000)
+      }
+
       let query = supabase
         .from('ai_shipping_info_sc_v2')
         .select('order_date, shipping_status, items_count')
+        .gte('order_date', startDate.toISOString())
+        .lte('order_date', nowUTC.toISOString())
+        .eq('shipping_status', 3)
 
       if (userRole === 'client') {
         query = query.eq('channel_account_id', userAccountId)
@@ -48,33 +73,7 @@ export default function ShippedOrdersChart({
         return
       }
 
-      const now = new Date()
-
-      let startDate: Date
-      switch (period) {
-        case '24h':
-          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-          break
-        case '7d':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          break
-        case '31d':
-          startDate = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000)
-          break
-        case '3m':
-          startDate = new Date(now)
-          startDate.setMonth(startDate.getMonth() - 3)
-          break
-        default:
-          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-      }
-
-      const filtered = (data || []).filter((order) => {
-        const date = new Date(order.order_date)
-        return date >= startDate && date <= now
-      })
-
-      const byHour = filtered.reduce((acc: { hour: string; shipped: number; total_items: number }[], order) => {
+      const byHour = (data || []).reduce((acc: { hour: string; shipped: number; total_items: number }[], order) => {
         const date = new Date(order.order_date)
         let hour = date.getHours()
         const ampm = hour >= 12 ? 'PM' : 'AM'
@@ -82,21 +81,17 @@ export default function ShippedOrdersChart({
         hour = hour ? hour : 12
         const key = `${hour} ${ampm}`
 
-        const isShipped = Number(order.shipping_status) === 3
         const itemsCount = Number(order.items_count) || 0
-
         const existing = acc.find((item) => item.hour === key)
 
         if (existing) {
-          if (isShipped) {
-            existing.shipped += 1
-            existing.total_items += itemsCount
-          }
+          existing.shipped += 1
+          existing.total_items += itemsCount
         } else {
           acc.push({
             hour: key,
-            shipped: isShipped ? 1 : 0,
-            total_items: isShipped ? itemsCount : 0,
+            shipped: 1,
+            total_items: itemsCount,
           })
         }
 
@@ -117,6 +112,10 @@ export default function ShippedOrdersChart({
         }
         return parseHour(a.hour) - parseHour(b.hour)
       })
+
+      console.log('📦 Raw data from Supabase:', data)
+      console.log('📦 Grouped by hour:', byHour)
+
       setData(byHour)
     }
 

@@ -34,7 +34,7 @@ export default function SalesVsPreviousMonthChart({
       const end = new Date(month.getFullYear(), month.getMonth() + 1, 0)
 
       let query = supabase
-        .from('view_all_orders')
+        .from('view_all_orders_v3')
         .select('grand_total')
         .gte('order_date', start.toISOString().slice(0, 10))
         .lte('order_date', end.toISOString().slice(0, 10))

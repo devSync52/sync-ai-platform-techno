@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { Store } from 'lucide-react'
 import { supabase } from '@/lib/supabase-browser'
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
+import { format, subMonths, startOfMonth, endOfMonth, addMonths } from 'date-fns'
 
 const COLORS = [
   '#3f2d90', '#6366f1', '#8b5cf6', '#9333ea', '#c084fc',
@@ -36,42 +36,78 @@ export default function SalesByMarketplaceChart({
 
   useEffect(() => {
     async function fetchData() {
-      const from = startOfMonth(selectedMonth).toISOString().split('T')[0]
-      const to = endOfMonth(selectedMonth).toISOString().split('T')[0]
+      const from = format(startOfMonth(selectedMonth), 'yyyy-MM-dd')
+      const to = format(startOfMonth(addMonths(selectedMonth, 1)), 'yyyy-MM-dd')
 
-      let query = supabase
-        .from('view_all_orders_v3')
-        .select('marketplace_name, order_date, logo')
-        .gte('order_date', from)
-        .lte('order_date', to)
+      let allData: { marketplace_name: string; order_date: string; logo?: string; order_id?: string; channel_account_id?: string; account_id?: string }[] = []
+      const limit = 1000
+      let fromIdx = 0
+      let toIdx = limit - 1
+      let more = true
 
-      if (userRole === 'client') {
-        query = query.eq('channel_account_id', userAccountId)
-      } else {
-        query = query.eq('account_id', userAccountId)
+      while (more) {
+        let query = supabase
+          .from('view_all_orders_v3')
+          .select('marketplace_name, order_date, logo, order_id, channel_account_id, account_id')
+          .gte('order_date', from)
+          .lt('order_date', to)
+          .range(fromIdx, toIdx)
+
+        if (userRole === 'client') {
+          query = query.eq('channel_account_id', userAccountId)
+        } else {
+          query = query.eq('account_id', userAccountId)
+        }
+
+        const { data, error } = await query
+
+        if (error) {
+          console.error('❌ Error fetching marketplace data:', error)
+          break
+        }
+
+        allData = [...allData, ...(data || [])]
+
+        allData = allData.filter((item) => {
+          return userRole === 'client'
+            ? item.channel_account_id === userAccountId
+            : item.account_id === userAccountId
+        })
+
+        if ((data?.length || 0) < limit) {
+          more = false
+        } else {
+          fromIdx += limit
+          toIdx += limit
+        }
       }
 
-      const { data, error } = await query
+      const seen = new Set<string>()
+      const grouped = allData.reduce((acc, curr) => {
+        const rawName = curr.marketplace_name?.trim().toLowerCase()
+        if (!rawName) return acc
+        const normalizedName = rawName.charAt(0).toUpperCase() + rawName.slice(1) // ex: "amazon" -> "Amazon"
+        const uniqueKey = `${curr.order_id}-${rawName}`
 
-      if (error) {
-        console.error('❌ Error fetching marketplace data:', error)
-        return
-      }
+        if (seen.has(uniqueKey)) return acc
+        seen.add(uniqueKey)
 
-      const grouped = data.reduce((acc, curr) => {
-        const key = curr.marketplace_name || 'Unknown'
-        if (!acc[key]) {
-          // Add logo from backend if exists, else fallback to filename based on marketplace name
+        if (!acc[normalizedName]) {
           let logo = curr.logo
-          if (!logo && curr.marketplace_name) {
-            const filename = curr.marketplace_name.toLowerCase().replace(/\s+/g, '')
+          if (!logo && rawName) {
+            const filename = rawName.replace(/\s+/g, '')
             logo = `/logos/${filename}.png`
           }
-          acc[key] = { marketplace: key, orders: 0, logo }
+          acc[normalizedName] = { marketplace: normalizedName, orders: 0, logo }
         }
-        acc[key].orders += 1
+
+        acc[normalizedName].orders += 1
         return acc
       }, {} as Record<string, { marketplace: string; orders: number; logo?: string }>)
+
+      console.log('🟪 Total fetched orders:', allData.length)
+      console.log('🟪 Unique counted:', seen.size)
+      console.log('🟪 Grouped orders by marketplace:', grouped)
 
       const result = Object.values(grouped).sort((a, b) => b.orders - a.orders)
       setData(result)

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { supabase } from '@/lib/supabase-browser'
 import { CalendarDays } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { format, startOfMonth, endOfMonth, subMonths, addDays } from 'date-fns'
 
 interface MonthOption {
   label: string
@@ -46,10 +46,10 @@ export default function OrdersPerDayChart({
 
       while (more) {
         let query = supabase
-          .from('view_all_orders')
+          .from('view_all_orders_v3')
           .select('order_date')
           .gte('order_date', start)
-          .lte('order_date', end)
+          .lt('order_date', addDays(new Date(end), 1).toISOString().split('T')[0])
           .range(from, to)
 
         if (userRole === 'client') {
@@ -88,6 +88,10 @@ export default function OrdersPerDayChart({
         .sort((a, b) => a.date.localeCompare(b.date))
 
       setData(chartData)
+      console.log('🟢 OrdersPerDayChart Debug')
+      console.log('🟢 Total fetched orders:', allOrders.length)
+      console.log('🟢 Unique counted:', chartData.length)
+      console.log('🟢 Daily grouped orders:', chartData)
     }
 
     fetchOrders()
