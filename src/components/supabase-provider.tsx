@@ -4,7 +4,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { Session } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, createContext, useContext } from 'react'
-import { Database } from '@/types/supabase'
+import { Database } from '@/types/supabase2'
 
 type SupabaseContextType = {
   supabase: ReturnType<typeof createBrowserClient<Database>>

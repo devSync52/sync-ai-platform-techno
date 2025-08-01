@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ProductList } from '@/types/supabase'
+import { ProductList } from '@/types/supabase2'
 import FilterBar from '@/components/FilterBar'
 import { Button } from '@/components/ui/button'
 

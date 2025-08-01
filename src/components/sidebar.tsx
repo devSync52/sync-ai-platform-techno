@@ -38,6 +38,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const session = useSession()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [ordersOpen, setOrdersOpen] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
 
   // Buscar role do usuário
@@ -46,7 +47,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       const { data, error } = await supabase
         .from('users')
         .select('role')
-        .eq('id', session?.user.id)
+        .eq('id', session?.user?.id ?? '')
         .single()
 
       if (error) {
@@ -64,6 +65,9 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   useEffect(() => {
     if (pathname.startsWith('/settings')) setSettingsOpen(true)
     else setSettingsOpen(false)
+
+    if (pathname.startsWith('/orders')) setOrdersOpen(true)
+    else setOrdersOpen(false)
   }, [pathname])
 
   async function handleLogout() {
@@ -73,7 +77,15 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/orders', label: 'Orders', icon: ShoppingBag },
+    {
+      label: 'Orders',
+      icon: ShoppingBag,
+      items: [
+        { href: '/orders', label: 'All Orders' },
+        { href: '/orders/quotes', label: 'Quotations' },
+      ],
+    },
+    
     { href: '/channels', label: 'Customers', icon: Building2 },
     { href: '/bot-training', label: 'Bot training', icon: BotIcon },
     { href: '/ai-settings', label: 'AI Settings', icon: Cog },
@@ -84,8 +96,15 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const filteredNavItems = navItems.filter((item) => {
     if (
       (userRole === 'client' || userRole === 'staff-user') &&
-      (item.href === '/bot-training' || item.href === '/ai-settings' || item.href === '/staff' || item.href === '/channels')
+      (
+        (item.href && (item.href === '/bot-training' || item.href === '/ai-settings' || item.href === '/staff' || item.href === '/channels')) ||
+        (item.label === 'Orders' && item.items && item.items.some(subItem => ['/bot-training','/ai-settings','/staff','/channels'].includes(subItem.href || '')))
+      )
     ) {
+      // Since Orders group subitems are only orders and quotations, no need to exclude it here
+      if (item.label === 'Orders') {
+        return true
+      }
       return false
     }
     return true
@@ -120,23 +139,72 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
       {/* NAVIGATION */}
       <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
-        {filteredNavItems.map(({ href, label, icon: Icon }) => {
-          const isActive = pathname === href
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onLinkClick}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
-                isActive
-                  ? 'bg-white text-[#3f2d90] font-semibold'
-                  : 'text-white hover:bg-[#352682]'
-              }`}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-            </Link>
-          )
+        {filteredNavItems.map((item) => {
+          if (item.items) {
+            const isGroupOpen = item.label === 'Orders' ? ordersOpen : false
+            const isActiveGroup = item.items.some(subItem => pathname === subItem.href)
+            return (
+              <div key={item.label}>
+                <button
+                  onClick={() => {
+                    if (item.label === 'Orders') setOrdersOpen(prev => !prev)
+                  }}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#352682] transition text-white"
+                >
+                  <span className="flex items-center gap-3">
+                    <item.icon size={18} />
+                    <span>{item.label}</span>
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    className={`transition-transform duration-200 ${
+                      isGroupOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+                <div
+                  className={`pl-8 mt-1 space-y-1 overflow-hidden transition-all duration-200 ease-in-out ${
+                    isGroupOpen ? 'max-h-40' : 'max-h-0'
+                  }`}
+                >
+                  {item.items.map(({ href, label }) => {
+                    const isActive = pathname === href
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={onLinkClick}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
+                          isActive
+                            ? 'bg-white text-[#3f2d90] font-semibold'
+                            : 'text-white hover:bg-[#352682]'
+                        }`}
+                      >
+                        <span>{label}</span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          } else {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                href={item.href!}
+                onClick={onLinkClick}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
+                  isActive
+                    ? 'bg-white text-[#3f2d90] font-semibold'
+                    : 'text-white hover:bg-[#352682]'
+                }`}
+              >
+                <item.icon size={18} />
+                <span>{item.label}</span>
+              </Link>
+            )
+          }
         })}
 
         {/* SETTINGS DROPDOWN */}

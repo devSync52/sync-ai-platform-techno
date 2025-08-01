@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Channel, ChannelMarketplace } from '@/types/supabase'
+import { Channel, ChannelMarketplace } from '@/types/supabase2'
 import { sendInviteAction } from '@/actions/sendInvite'
 import { resendInviteAction } from '@/actions/resendInvite'
 import { toast } from 'sonner'

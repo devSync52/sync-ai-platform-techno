@@ -1,6 +1,6 @@
 "use client";
 
-import { Channel, ChannelMarketplace } from "@/types/supabase";
+import { Channel, ChannelMarketplace } from "@/types/supabase2";
 import Image from "next/image";
 
 interface ChannelDetailsModalProps {
