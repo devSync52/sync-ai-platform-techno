@@ -2,6 +2,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FileText, Calendar } from 'lucide-react'
+import { useState, useRef } from 'react'
 
 interface Props {
   open: boolean
@@ -13,6 +14,8 @@ interface Props {
 }
 
 export default function QuotePdfModal({ open, onCloseAction, quote, items = [], shipFrom = {}, shipTo = {} }: Props) {
+  const [isEmailModalOpen, setEmailModalOpen] = useState(false)
+  const emailInputRef = useRef<HTMLInputElement>(null)
   return (
     <Dialog open={open} onOpenChange={onCloseAction}>
       <DialogContent className="max-w-3xl w-full bg-white font-sans text-sm print:bg-white print:text-black">
@@ -92,7 +95,30 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
               </tr>
             )}
           </tbody>
+
         </table>
+
+        {items.length > 0 && (
+          <div className=" rounded-md border border-primary/10 px-6 py-4 text-sm text-gray-700 w-full max-w-md ml-auto">
+            <div className="flex justify-between mb-1">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="font-medium">${items.reduce((sum, item) => sum + (item.subtotal || 0), 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span className="text-gray-500">Shipping cost</span>
+              <span className="font-medium">${Number(quote?.selected_service?.total || 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between border-t border-primary/10 pt-2 mt-2">
+              <span className="text-gray-700 font-semibold">Total</span>
+              <span className="font-bold text-primary">
+                ${(
+                  items.reduce((sum, item) => sum + (item.subtotal || 0), 0) +
+                  Number(quote?.selected_service?.total || 0)
+                ).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="border border-primary rounded-lg px-4 py-4 mt-4 bg-primary/5 text-primary">
           <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
@@ -114,11 +140,75 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
           </div>
         </div>
 
-        <div className="flex justify-end mt-4">
-          <button onClick={() => window.print()} className="border border-primary text-primary hover:bg-primary/10 px-4 py-2 rounded">
+        <div className="flex justify-end mt-4 gap-2">
+          {/* 
+          <button
+            onClick={() => setEmailModalOpen(true)}
+            className="border border-primary text-primary hover:bg-primary/10 px-4 py-2 rounded"
+          >
+            Send Quote by Email
+          </button>
+          */}
+          <button
+            onClick={() => window.print()}
+            className="border border-primary text-primary hover:bg-primary/10 px-4 py-2 rounded"
+          >
             Print Quote
           </button>
         </div>
+
+        {isEmailModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-6 w-full max-w-sm shadow-lg">
+              <h2 className="text-lg font-semibold mb-4">Send Quote</h2>
+              <input
+                type="email"
+                placeholder="Enter recipient email"
+                ref={emailInputRef}
+                className="w-full border border-gray-300 px-3 py-2 rounded mb-4"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setEmailModalOpen(false)}
+                  className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const email = emailInputRef.current?.value
+                    if (!email) return alert('Please enter an email.')
+                    console.log('📨 Sending quote email to:', email)
+                    console.log('🧾 Quote:', quote)
+                    console.log('📦 Items:', items)
+                    // 🔧 Trigger send email logic here
+                    fetch('/api/send-quote', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        email,
+                        quote,
+                        items,
+                      }),
+                    })
+                      .then((res) => {
+                        if (!res.ok) throw new Error('Failed to send email.')
+                        alert('Quote sent successfully!')
+                      })
+                      .catch((err) => {
+                        console.error(err)
+                        alert('Error sending quote.')
+                      })
+                      .finally(() => setEmailModalOpen(false))
+                  }}
+                  className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

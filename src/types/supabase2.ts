@@ -87,6 +87,9 @@ export interface Channel {
     created_at: string
     updated_at?: string
     name?: string
+    length?: number
+    width?: number
+    height?: number
   }
   
   export type CurrentUser = {

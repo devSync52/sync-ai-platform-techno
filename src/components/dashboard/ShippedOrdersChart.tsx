@@ -22,7 +22,7 @@ export default function ShippedOrdersChart({
 }) {
   const [data, setData] = useState<{ hour: string; shipped: number; total_items: number }[]>([])
   const [showItems, setShowItems] = useState(false)
-  const [period, setPeriod] = useState<'24h' | '7d' | '31d' | '3m'>(userRole === 'client' ? '7d' : '24h')
+  const [period, setPeriod] = useState<'24h' | '7d' | '31d' | '3m'>('7d')
 
   useEffect(() => {
     async function fetchData() {

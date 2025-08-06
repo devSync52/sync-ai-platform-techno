@@ -20,7 +20,7 @@ export default function NewOrdersChart({
 }) {
   const [data, setData] = useState<{ hour: string; value: number; amount: number }[]>([])
   const [showOrderCount, setShowOrderCount] = useState(false)
-  const [period, setPeriod] = useState<'24h' | '7d' | '31d' | '3m'>(userRole === 'client' ? '7d' : '24h')
+  const [period, setPeriod] = useState<'7d' | '24h' | '31d' | '3m'>('7d')
 
   useEffect(() => {
     async function fetchData() {

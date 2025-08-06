@@ -194,7 +194,11 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
                   )}
                 </td>
                 <td className="py-3 px-4 text-gray-600">{product.name || '-'}</td>
-                <td className="py-3 px-4 text-gray-600">{product.dimensions || '-'}</td>
+                <td className="py-3 px-4 text-gray-600">
+                  {product.length && product.width && product.height
+                    ? `${product.length} x ${product.width} x ${product.height}`
+                    : '-'}
+                </td>
                 <td className="py-3 px-4 text-gray-600">{product.quantity_available ?? '-'}</td>
                 <td className="py-3 px-4 text-gray-600">{product.quantity_physical ?? '-'}</td>
                 <td className="py-3 px-4 text-gray-600">{product.warehouse_name || '-'}</td>
