@@ -39,6 +39,7 @@ export default function AIExpertChat({
 
   const chatRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const langMap = {
     en: 'en-US',
@@ -95,6 +96,7 @@ export default function AIExpertChat({
 
       const blob = await response.blob()
       const audio = new Audio(URL.createObjectURL(blob))
+      audioRef.current = audio
       audio.onended = () => setIsSpeaking(false)
       audio.onerror = () => setIsSpeaking(false)
       audio.play()
@@ -105,7 +107,10 @@ export default function AIExpertChat({
   }
 
   const stopSpeaking = () => {
-    speechSynthesis.cancel()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
     setIsSpeaking(false)
   }
 
@@ -184,9 +189,10 @@ export default function AIExpertChat({
         <div className="flex justify-center mb-2">
           <button
             onClick={stopSpeaking}
-            className="px-6 py-2 border rounded-full text-sm text-primary border-primary"
+            className="p-2 bg-red-100 border border-red-300 rounded-full text-red-500 hover:bg-red-200 transition"
+            title="Stop voice"
           >
-            ⏹ Stop Response
+            <VolumeX className="w-5 h-5" />
           </button>
         </div>
       )}
