@@ -17,9 +17,8 @@ export function QuotesList() {
   const [quotes, setQuotes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null)
+  const [selectedQuoteWithAccount, setSelectedQuoteWithAccount] = useState<any | null>(null)
   const [isOpen, setIsOpen] = useState(false)
-
-  const selectedQuote = quotes.find((q) => q.id === selectedQuoteId)
 
   const statusLabels: Record<string, string> = {
     draft: 'Draft',
@@ -49,6 +48,26 @@ export function QuotesList() {
 
     fetchQuotes()
   }, [supabase, user?.account_id])
+
+  const handleOpenQuoteModal = async (quoteId: string) => {
+    const quote = quotes.find((q) => q.id === quoteId)
+    if (!quote) return
+
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('id, name, logo')
+      .eq('id', quote.account_id)
+      .single()
+
+    const quoteWithAccount = {
+      ...quote,
+      account,
+    }
+
+    setSelectedQuoteId(quoteId)
+    setSelectedQuoteWithAccount(quoteWithAccount)
+    setIsOpen(true)
+  }
 
   if (loading) return <p>Loading quotes...</p>
 
@@ -109,10 +128,7 @@ export function QuotesList() {
                   className="bg-white"
                   size="sm"
                   title="Export this quote as PDF"
-                  onClick={() => {
-                    setSelectedQuoteId(quote.id)
-                    setIsOpen(true)
-                  }}
+                  onClick={() => handleOpenQuoteModal(quote.id)}
                 >
                   View PDF
                 </Button>
@@ -138,14 +154,14 @@ export function QuotesList() {
           ))}
         </ul>
       )}
-      {selectedQuote && (
+      {selectedQuoteWithAccount && (
        <QuotePdfModal
          open={isOpen}
          onCloseAction={() => setIsOpen(false)}
-         quote={selectedQuote}
-         items={selectedQuote.items || []}
-         shipFrom={selectedQuote.ship_from || {}}
-         shipTo={selectedQuote.ship_to || {}}
+         quote={selectedQuoteWithAccount}
+         items={selectedQuoteWithAccount.items || []}
+         shipFrom={selectedQuoteWithAccount.ship_from || {}}
+         shipTo={selectedQuoteWithAccount.ship_to || {}}
        />
       )}
     </div>

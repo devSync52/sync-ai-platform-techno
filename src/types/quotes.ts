@@ -58,6 +58,15 @@ export type QuoteDraft = {
       confirmation?: string;
       package_type?: string;
       service_class?: string;
+      optimized_packages?: {
+        sku: string;
+        width: number;
+        height: number;
+        length: number;
+        weight: number;
+        quantity: number;
+        package_type: string | boolean;
+      }[];
     };
     summary?: any;
     notes?: string;

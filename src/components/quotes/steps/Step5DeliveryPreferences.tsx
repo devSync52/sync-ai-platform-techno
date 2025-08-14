@@ -183,6 +183,9 @@ export default function Step5DeliveryPreferences({
   const quote = draft;
   const shouldShowResults = quote.status !== 'quoted' && quoteResults.length > 0;
 
+  // Get optimized package if available
+  const optimizedPackage = draft.preferences?.optimized_packages?.[0];
+
   return (
     <div className="flex flex-col lg:flex-row gap-4 w-full">
       <div className="w-full lg:w-2/4 p-6 rounded shadow bg-white">
@@ -247,7 +250,7 @@ export default function Step5DeliveryPreferences({
           <label className="block text-sm font-medium">Weight (lb)</label>
           <Input
             placeholder="Total weight"
-            value={draft.preferences?.weight || ''}
+            value={optimizedPackage?.weight || draft.preferences?.weight || ''}
             onChange={(e) =>
               updateDraft('preferences', {
                 ...draft.preferences,
@@ -276,7 +279,7 @@ export default function Step5DeliveryPreferences({
           <div className="flex gap-2">
             <Input
               placeholder="Length"
-              value={draft.preferences?.length || ''}
+              value={optimizedPackage?.length || draft.preferences?.length || ''}
               onChange={(e) =>
                 updateDraft('preferences', {
                   ...draft.preferences,
@@ -286,7 +289,7 @@ export default function Step5DeliveryPreferences({
             />
             <Input
               placeholder="Width"
-              value={draft.preferences?.width || ''}
+              value={optimizedPackage?.width || draft.preferences?.width || ''}
               onChange={(e) =>
                 updateDraft('preferences', {
                   ...draft.preferences,
@@ -296,7 +299,7 @@ export default function Step5DeliveryPreferences({
             />
             <Input
               placeholder="Height"
-              value={draft.preferences?.height || ''}
+              value={optimizedPackage?.height || draft.preferences?.height || ''}
               onChange={(e) =>
                 updateDraft('preferences', {
                   ...draft.preferences,
@@ -405,6 +408,18 @@ export default function Step5DeliveryPreferences({
                 if (!res.ok) {
                   console.error('❌ API error response:', data);
                   throw new Error(data?.error || 'Quote failed');
+                }
+
+                // If AI returned package optimization, update preferences with first package
+                const pkg = data.optimized_packages?.[0];
+                if (pkg) {
+                  await updateDraft('preferences', {
+                    ...draft.preferences,
+                    length: pkg.length,
+                    width: pkg.width,
+                    height: pkg.height,
+                    weight: pkg.weight,
+                  });
                 }
 
                 // Certifique-se de que a variável quoteResults está definida anteriormente

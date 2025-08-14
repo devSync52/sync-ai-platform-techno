@@ -79,13 +79,29 @@ export default function AIExpertChat({
   }
 
   // Text-to-Speech
-  const speak = (text: string) => {
-    if (!speechEnabled) return
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = langMap[language] || navigator.language
+  const speak = async (text: string) => {
+    if (!speechEnabled || !text) return
     setIsSpeaking(true)
-    utterance.onend = () => setIsSpeaking(false)
-    speechSynthesis.speak(utterance)
+    try {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      })
+
+      if (!response.ok) throw new Error('Failed to fetch audio.')
+
+      const blob = await response.blob()
+      const audio = new Audio(URL.createObjectURL(blob))
+      audio.onended = () => setIsSpeaking(false)
+      audio.onerror = () => setIsSpeaking(false)
+      audio.play()
+    } catch (err) {
+      console.error('🛑 ElevenLabs error:', err)
+      setIsSpeaking(false)
+    }
   }
 
   const stopSpeaking = () => {
