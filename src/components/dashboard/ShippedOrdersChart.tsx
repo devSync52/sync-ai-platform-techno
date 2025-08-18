@@ -55,7 +55,7 @@ export default function ShippedOrdersChart({
         .lte('order_date', nowUTC.toISOString())
         .eq('shipping_status', 3)
 
-      if (userRole === 'client') {
+      if (userRole === 'client' || userRole === 'staff-client') {
         query = query.eq('channel_account_id', userAccountId)
       } else {
         query = query.eq('account_id', userAccountId)

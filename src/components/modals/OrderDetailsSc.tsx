@@ -56,7 +56,7 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onCloseAction}>
-      <DialogContent className="max-w-3xl w-full bg-white font-sans text-sm print:bg-white print:text-black">
+      <DialogContent className="w-[calc(100%-1.5rem)] sm:w-full md:max-w-3xl bg-white font-sans text-sm print:bg-white print:text-black rounded-md sm:rounded-xl max-h-[85vh] overflow-y-auto print:w-[95%] print:max-w-none print:mx-auto print:h-auto print:max-h-none print:overflow-visible print:rounded-none print:shadow-none">
         <div className="flex justify-center pt-4">
           <img src="/logo_SynC_purple_red.png" alt="Sync Logo" className="h-30" />
         </div>
@@ -65,7 +65,7 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
         </DialogHeader>
 
         {/* Order Header */}
-        <div className="bg-primary text-white p-4 flex justify-between gap-4">
+        <div className="bg-primary text-white p-4 flex justify-between gap-4 print:bg-white print:text-black print:border-b print:border-black/10 print:pt-0">
           <div className="flex flex-col">
             <div className="flex items-center gap-1 text-xs uppercase opacity-80">
               <FileText className="w-3 h-3" /> Order No #
@@ -96,7 +96,7 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
           </section>
 
           {/* Order Summary */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 print:grid print:grid-cols-2 print:gap-8 print:break-inside-avoid">
             <div className="space-y-1">
               <p className="font-semibold text-lg">Order Info</p>
               <p className="text-xs"><strong>Status:</strong> {order?.order_status || '—'}</p>
@@ -117,7 +117,7 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
           </section>
 
           {/* Shipping & Delivery */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 print:grid print:grid-cols-2 print:gap-8 print:break-inside-avoid">
           <div className="space-y-1">
             <p className="font-semibold text-lg">Shipping & Delivery</p>
             <p className="text-xs"><strong>Carrier:</strong> {fullOrder?.metadata?.ShippingCarrier || '—'}</p>
@@ -153,33 +153,35 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
           ) : items.length === 0 ? (
             <p>No items found for this order.</p>
           ) : (
-            <table className="w-full text-xs border mb-6">
-              <thead className="bg-primary/10 text-primary font-semibold text-left">
-                <tr>
-                  <th className="px-3 py-2 border">Item Description</th>
-                  <th className="px-3 py-2 border">Quantity</th>
-                  <th className="px-3 py-2 border">Unit Price</th>
-                  <th className="px-3 py-2 border">Total Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => (
-                  <tr key={index} className="border-t">
-                    <td className="px-3 py-2 border">
-                      <div>{item.sku}</div>
-                      <div className="text-xs text-muted-foreground">{item?.metadata?.ProductName || '—'}</div>
-                    </td>
-                    <td className="px-3 py-2 border">{item.quantity}</td>
-                    <td className="px-3 py-2 border">$ {item.unit_price?.toFixed(2)}</td>
-                    <td className="px-3 py-2 border">$ {item.total_price?.toFixed(2)}</td>
+            <div className="mb-6 -mx-4 px-4 overflow-x-auto print:overflow-visible print:mx-0 print:px-0 print:break-inside-avoid">
+              <table className="min-w-full text-xs border">
+                <thead className="bg-primary/10 text-primary font-semibold text-left">
+                  <tr>
+                    <th className="px-3 py-2 border">Item Description</th>
+                    <th className="px-3 py-2 border">Quantity</th>
+                    <th className="px-3 py-2 border">Unit Price</th>
+                    <th className="px-3 py-2 border">Total Price</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={index} className="border-t">
+                      <td className="px-3 py-2 border">
+                        <div>{item.sku}</div>
+                        <div className="text-xs text-muted-foreground">{item?.metadata?.ProductName || '—'}</div>
+                      </td>
+                      <td className="px-3 py-2 border">{item.quantity}</td>
+                      <td className="px-3 py-2 border">$ {item.unit_price?.toFixed(2)}</td>
+                      <td className="px-3 py-2 border">$ {item.total_price?.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {/* Totals */}
-          <div className="bg-primary text-white text-right font-bold p-2 rounded space-y-1">
+          <div className="bg-primary text-white text-right font-bold p-2 rounded space-y-1 print:bg-white print:text-black print:border print:border-black/10 print:break-inside-avoid">
             <p>
               Subtotal: $ {items.reduce((sum, i) => sum + (i.total_price || 0), 0).toFixed(2)}
             </p>

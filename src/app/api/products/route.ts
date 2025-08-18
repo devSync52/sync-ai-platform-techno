@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     return new Response(JSON.stringify({ error: 'Missing account_id' }), { status: 400 })
   }
 
-  if (role === 'client') {
+  if (role === 'client' || role === 'staff-client') {
     query = query.eq('channel_id', accountId)
   } else {
     query = query.eq('account_id', accountId)

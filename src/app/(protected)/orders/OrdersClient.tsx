@@ -75,7 +75,12 @@ export default function OrdersClient({ userId }: { userId: string }) {
       const { data: statusRows, error: statusError } = await supabase
         .from('ai_orders_unified_4')
         .select('order_status')
-        .eq(userRole === 'client' ? 'channel_account_id' : 'account_id', userAccountId)
+        .eq(
+          userRole === 'client' || userRole === 'staff-client'
+            ? 'channel_account_id'
+            : 'account_id',
+          userAccountId
+        )
 
       if (statusError) {
         console.error('❌ Error fetching status options:', statusError.message)
@@ -92,7 +97,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
         )
 
 // ✅ Filtrar corretamente dependendo da role
-if (userRole === 'client') {
+if (userRole === 'client' || userRole === 'staff-client') {
   query = query.eq('channel_account_id', userAccountId)
 } else {
   query = query.eq('account_id', userAccountId)
@@ -183,7 +188,7 @@ const { data, count, error } = await query.range(start, end)
       <FilterBar
         title="Unified Orders"
         placeholder={
-          userRole === 'client'
+          userRole === 'client' || userRole === 'staff-client'
             ? 'Search by Order ID or Marketplace'
             : 'Search by Order ID, Client, or Marketplace'
         }

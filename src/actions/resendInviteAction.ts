@@ -7,7 +7,7 @@ export async function resendInviteAction({
   invitedBy
 }: {
   email: string
-  role: 'staff-user' | 'staff-admin' | 'admin'
+  role: 'staff-user' | 'staff-admin' | 'staff-client' | 'admin'
   accountId: string
   invitedBy: string
 }) {

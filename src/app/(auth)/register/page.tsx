@@ -17,6 +17,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [imageError, setImageError] = useState(false)
 
   const hasMinLength = password.length >= 8
   const hasUppercase = /[A-Z]/.test(password)
@@ -59,7 +60,20 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary to-primary text-gray-900">
       <div className="mb-6">
-        <Image src="/sync-ai-plataform-logo.svg" alt="Logo" width={250} height={80} priority />
+        {imageError ? (
+          <div className="text-primary text-xl font-semibold text-center">SynC AI Platform</div>
+        ) : (
+          <Image
+            src="/sync-ai-platform-logo.svg"
+            alt="SynC AI Platform"
+            width={250}
+            height={80}
+            className="h-auto w-auto max-w-[90%]"
+            priority
+            sizes="(max-width: 768px) 70vw, 250px"
+            onError={() => setImageError(true)}
+          />
+        )}
       </div>
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">

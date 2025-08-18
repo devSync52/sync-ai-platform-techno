@@ -39,7 +39,7 @@ export default function NewOrdersChart({
         .gte('order_date', from.toISOString())
         .lte('order_date', now.toISOString())
 
-      if (userRole === 'client') {
+      if (userRole === 'client' || userRole === 'staff-client') {
         query = query.eq('channel_account_id', userAccountId)
       } else {
         query = query.eq('account_id', userAccountId)

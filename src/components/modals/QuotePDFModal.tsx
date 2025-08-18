@@ -20,9 +20,9 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
   const emailInputRef = useRef<HTMLInputElement>(null)
   return (
     <Dialog open={open} onOpenChange={onCloseAction}>
-      <DialogContent className="max-w-3xl w-full bg-white font-sans text-sm print:bg-white print:text-black">
-        <div className="flex justify-center pt-4">
-          <h1 className="text-3xl font-bold text-primary text-center">
+      <DialogContent className="w-[calc(100%-1.5rem)] sm:w-full md:max-w-3xl bg-white font-sans text-sm print:bg-white print:text-black rounded-md sm:rounded-xl max-h-[85vh] overflow-y-auto print:w-[95%] print:max-w-none print:mx-auto print:h-auto print:max-h-none print:overflow-visible print:rounded-none print:shadow-none">
+        <div className="flex justify-center pt-3 sm:pt-4">
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary text-center">
             {quote?.account?.name || quote?.account_id || 'SynC'}
           </h1>
         </div>
@@ -30,28 +30,28 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
           <DialogTitle className="sr-only">Quote Details</DialogTitle>
         </DialogHeader>
 
-        <div className="bg-primary text-white p-4 flex justify-between gap-4">
+        <div className="bg-primary text-white p-4 flex justify-between gap-4 print:bg-white print:text-black print:border-b print:border-black/10 print:pt-0 print:text-base">
           <div className="flex flex-col">
             <div className="flex items-center gap-1 text-xs uppercase opacity-80">
-              <FileText className="w-3 h-3" /> Quote ID
+              <FileText className="w-3 h-3 print:text-sm" /> Quote ID
             </div>
-            <span className="text-lg font-semibold">{quote?.id}</span>
+            <span className="text-lg font-semibold print:text-xs">{quote?.id}</span>
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-1 text-xs uppercase opacity-80">
-              <FileText className="w-3 h-3" /> Status
+              <FileText className="w-3 h-3 print:text-sm" /> Status
             </div>
-            <span className="text-lg font-semibold capitalize">{quote?.status}</span>
+            <span className="text-lg font-semibold capitalize print:text-xs">{quote?.status}</span>
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-1 text-xs uppercase opacity-80">
-              <Calendar className="w-3 h-3" /> Created At
+              <Calendar className="w-3 h-3 print:text-sm" /> Created At
             </div>
-            <span className="text-lg font-semibold">{quote?.created_at?.split('T')[0]}</span>
+            <span className="text-lg font-semibold print:text-xs">{quote?.created_at?.split('T')[0]}</span>
           </div>
         </div>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 px-4">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 px-4 print:grid print:grid-cols-2 print:gap-8 print:break-inside-avoid">
           <div>
             <p className="font-semibold text-lg">Ship From</p>
             <p className="text-xs">{shipFrom?.name}</p>
@@ -72,38 +72,39 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
           </div>
         </section>
 
-        <table className="w-full text-xs border mt-6 mb-4">
-          <thead className="bg-primary/10 text-primary font-semibold text-left">
-            <tr>
-              <th className="px-3 py-2 border">SKU</th>
-              <th className="px-3 py-2 border">Product</th>
-              <th className="px-3 py-2 border">Qty</th>
-              <th className="px-3 py-2 border">Dimensions (L×W×H)</th>
-              <th className="px-3 py-2 border">Weight (lbs)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Array.isArray(items) && items.length > 0 ? (
-              items.map((item, i) => (
-                <tr key={i} className="border-t">
-                  <td className="px-3 py-2 border">{item.sku}</td>
-                  <td className="px-3 py-2 border">{item.product_name}</td>
-                  <td className="px-3 py-2 border">{item.quantity}</td>
-                  <td className="px-3 py-2 border">{item.length}×{item.width}×{item.height}</td>
-                  <td className="px-3 py-2 border">{item.weight_lbs}</td>
-                </tr>
-              ))
-            ) : (
+        <div className="mt-6 mb-4 -mx-4 px-4 overflow-x-auto print:overflow-visible print:mx-0 print:px-0 print:break-inside-avoid">
+          <table className="min-w-full text-xs border">
+            <thead className="bg-primary/10 text-primary font-semibold text-left">
               <tr>
-                <td colSpan={5} className="text-center py-2">No items available.</td>
+                <th className="px-3 py-2 border">SKU</th>
+                <th className="px-3 py-2 border">Product</th>
+                <th className="px-3 py-2 border">Qty</th>
+                <th className="px-3 py-2 border">Dimensions (L×W×H)</th>
+                <th className="px-3 py-2 border">Weight (lbs)</th>
               </tr>
-            )}
-          </tbody>
-
-        </table>
+            </thead>
+            <tbody>
+              {Array.isArray(items) && items.length > 0 ? (
+                items.map((item, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="px-3 py-2 border">{item.sku}</td>
+                    <td className="px-3 py-2 border">{item.product_name}</td>
+                    <td className="px-3 py-2 border">{item.quantity}</td>
+                    <td className="px-3 py-2 border">{item.length}×{item.width}×{item.height}</td>
+                    <td className="px-3 py-2 border">{item.weight_lbs}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="text-center py-2">No items available.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {items.length > 0 && (
-          <div className=" rounded-md border border-primary/10 px-6 py-4 text-sm text-gray-700 w-full max-w-md ml-auto">
+          <div className=" rounded-md border border-primary/10 px-6 py-4 text-sm text-gray-700 w-full max-w-md ml-auto print:break-inside-avoid">
             <div className="flex justify-between mb-1">
               <span className="text-gray-500">Subtotal</span>
               <span className="font-medium">${items.reduce((sum, item) => sum + (item.subtotal || 0), 0).toFixed(2)}</span>
@@ -124,7 +125,7 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
           </div>
         )}
 
-        <div className="border border-primary rounded-lg px-4 py-4 mt-4 bg-primary/5 text-primary">
+        <div className="border border-primary rounded-lg px-4 py-4 mt-4 bg-primary/5 text-primary print:bg-white print:text-black print:border-black/10 print:break-inside-avoid">
           <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
             <FileText className="w-4 h-4" /> Selected Shipping Service
           </h3>
@@ -144,7 +145,7 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
           </div>
         </div>
 
-        <div className="flex justify-end mt-4 gap-2">
+        <div className="flex justify-end mt-4 gap-2 print:hidden">
           {/* 
           <button
             onClick={() => setEmailModalOpen(true)}
@@ -213,7 +214,7 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
             </div>
           </div>
         )}
-        <div className="mt-8 text-xs text-center text-gray-400 print:text-black/40">
+        <div className="mt-6 sm:mt-8 text-xs text-center text-gray-400 print:text-black/40 print:mt-4">
           Document generated by SynC AI Platform — app.syncplatform.com
         </div>
       </DialogContent>

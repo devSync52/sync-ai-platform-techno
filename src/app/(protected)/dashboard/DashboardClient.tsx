@@ -95,7 +95,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         .gte('order_date', startDate)
         .lte('order_date', endDate)
   
-      if (userRole === 'client') {
+      if (userRole === 'client' || userRole === 'staff-client') {
         query = query.eq('channel_account_id', userAccountId)
       } else {
         query = query.eq('account_id', userAccountId)

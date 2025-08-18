@@ -38,7 +38,7 @@ export default function TopSellingProductsTable({ accountId }: { accountId: stri
       const { data, error } = await supabase
         .from('ai_sellercloud_sku_sales_per_day_v2')
         .select('sku, quantity_sold, total_revenue')
-        .eq(userData.role === 'client' ? 'channel_account_id' : 'account_id', accountId)
+        .eq(userData.role === 'client' || userData.role === 'staff-client' ? 'channel_account_id' : 'account_id', accountId)
         .gte('sales_date', from)
         .lte('sales_date', to)
 

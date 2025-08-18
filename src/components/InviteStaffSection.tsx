@@ -50,6 +50,9 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
         .maybeSingle()
       if (data?.role) {
         setCurrentUserRole(data.role)
+        if (data?.role === 'client') {
+          setRole('staff-client')
+        }
       }
     }
 
@@ -58,7 +61,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
 
   const fetchTeam = async () => {
     const { data, error } = await supabase
-      .from('invited_staff_view_v2')
+      .from('invited_staff_view_v3')
       .select('*', { head: false, count: 'exact' })
       .eq('account_id', accountId)
       .abortSignal(new AbortController().signal)
@@ -79,7 +82,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
     setLoading(true)
     const result = await sendStaffInviteAction({
       email,
-      role: role as 'staff-user' | 'staff-admin' | 'admin',
+      role: role as 'staff-user' | 'staff-admin' | 'staff-client' | 'admin',
       accountId,
       invitedBy: session.user.id,
     })
@@ -87,7 +90,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
     if (result?.success) {
       toast.success('Invitation sent successfully!')
       setEmail('')
-      setRole('staff-user')
+      setRole(currentUserRole === 'client' ? 'staff-client' : 'staff-user')
       fetchTeam()
     } else {
       toast.error(result.message || 'Failed to send invitation')
@@ -109,7 +112,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
   
     const result = await sendStaffInviteAction({
       email,
-      role: member.role as 'staff-user' | 'staff-admin' | 'admin',
+      role: member.role as 'staff-user' | 'staff-admin' | 'staff-client' | 'admin',
       accountId,
       invitedBy: session.user.id,
     })
@@ -137,7 +140,9 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
   }
 
   const renderRole = (role: string) => {
-    return role === 'staff-admin' ? 'Admin' : 'User'
+    if (role === 'staff-admin') return 'Admin'
+    if (role === 'staff-client') return 'Staff - Client'
+    return 'User'
   }
 
   const renderStatus = (status: string | undefined) => {
@@ -180,14 +185,24 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <select
-          className="w-full border px-4 py-2 rounded text-sm"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-        >
-          <option value="staff-user">Staff - User</option>
-          <option value="staff-admin">Staff - Admin</option>
-        </select>
+        {currentUserRole === 'client' ? (
+          <select
+            className="w-full border px-4 py-2 rounded text-sm"
+            value="staff-client"
+            disabled
+          >
+            <option value="staff-client">Staff - Client</option>
+          </select>
+        ) : (
+          <select
+            className="w-full border px-4 py-2 rounded text-sm"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          >
+            <option value="staff-user">Staff - User</option>
+            <option value="staff-admin">Staff - Admin</option>
+          </select>
+        )}
         <button
           onClick={handleInvite}
           disabled={loading}

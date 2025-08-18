@@ -39,7 +39,7 @@ export default function SalesVsPreviousMonthChart({
         .gte('order_date', start.toISOString().slice(0, 10))
         .lte('order_date', end.toISOString().slice(0, 10))
 
-      if (userRole === 'client') {
+      if (userRole === 'client' || userRole === 'staff-client') {
         query = query.eq('channel_account_id', userAccountId)
       } else {
         query = query.eq('account_id', userAccountId)

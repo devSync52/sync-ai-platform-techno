@@ -53,7 +53,7 @@ export default function SalesByMarketplaceChart({
           .lt('order_date', to)
           .range(fromIdx, toIdx)
 
-        if (userRole === 'client') {
+        if (userRole === 'client' || userRole === 'staff-client') {
           query = query.eq('channel_account_id', userAccountId)
         } else {
           query = query.eq('account_id', userAccountId)
@@ -69,7 +69,7 @@ export default function SalesByMarketplaceChart({
         allData = [...allData, ...(data || [])]
 
         allData = allData.filter((item) => {
-          return userRole === 'client'
+          return userRole === 'client' || userRole === 'staff-client'
             ? item.channel_account_id === userAccountId
             : item.account_id === userAccountId
         })

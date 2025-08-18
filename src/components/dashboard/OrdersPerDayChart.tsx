@@ -52,7 +52,7 @@ export default function OrdersPerDayChart({
           .lt('order_date', addDays(new Date(end), 1).toISOString().split('T')[0])
           .range(from, to)
 
-        if (userRole === 'client') {
+        if (userRole === 'client' || userRole === 'staff-client') {
           query = query.eq('channel_account_id', userAccountId)
         } else {
           query = query.eq('account_id', userAccountId)

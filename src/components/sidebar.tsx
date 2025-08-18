@@ -94,18 +94,30 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/support', label: 'Support', icon: TicketPlus }
   ]
   const filteredNavItems = navItems.filter((item) => {
-    if (
-      (userRole === 'client' || userRole === 'staff-user') &&
-      (
-        (item.href && (item.href === '/bot-training' || item.href === '/ai-settings' || item.href === '/staff' || item.href === '/channels')) ||
-        (item.label === 'Orders' && item.items && item.items.some(subItem => ['/bot-training','/ai-settings','/staff','/channels'].includes(subItem.href || '')))
-      )
-    ) {
-      // Since Orders group subitems are only orders and quotations, no need to exclude it here
-      if (item.label === 'Orders') {
-        return true
+    const clientExclusions = ['/bot-training', '/ai-settings', '/channels']
+    const staffExclusions = ['/bot-training', '/ai-settings', '/staff', '/channels']
+
+    if (userRole === 'client') {
+      if (
+        (item.href && clientExclusions.includes(item.href)) ||
+        (item.label === 'Orders' && item.items && item.items.some(subItem => clientExclusions.includes(subItem.href || '')))
+      ) {
+        // Since Orders group subitems are only orders and quotations, no need to exclude it here
+        if (item.label === 'Orders') {
+          return true
+        }
+        return false
       }
-      return false
+    } else if (userRole === 'staff-user' || userRole === 'staff-client') {
+      if (
+        (item.href && staffExclusions.includes(item.href)) ||
+        (item.label === 'Orders' && item.items && item.items.some(subItem => staffExclusions.includes(subItem.href || '')))
+      ) {
+        if (item.label === 'Orders') {
+          return true
+        }
+        return false
+      }
     }
     return true
   })
@@ -118,7 +130,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   
   const filteredSettingsItems = baseSettingsItems.filter((item) => {
     // Esconde "Integrations" se for client ou staff-user
-    if ((userRole === 'client' || userRole === 'staff-user') && item.href === '/settings/integrations') {
+    if ((userRole === 'client' || userRole === 'staff-user' || userRole === 'staff-client') && item.href === '/settings/integrations') {
       return false
     }
     return true

@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary to-primary text-gray-900">
       <div className="mb-6">
-        <Image src="/sync-ai-plataform-logo.svg" alt="Logo" width={250} height={80} priority />
+        <Image src="/sync-ai-platform-logo.svg" alt="Logo" width={250} height={80} priority />
       </div>
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
