@@ -141,7 +141,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       {/* LOGO TOP */}
       <div className="h-20 flex items-center justify-center border-b border-[#352682] px-4">
         <Image
-          src="/sync-ai-plataform-logo.svg"
+          src="/sync-ai-platform-logo.svg"
           alt="Logo"
           width={180}
           height={48}
