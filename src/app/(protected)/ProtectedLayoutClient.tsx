@@ -76,7 +76,7 @@ export default function ProtectedLayoutClient({
           </button>
 
           <Image
-            src="/sync-ai-plataform-logo.svg"
+            src="/sync-ai-platform-logo.svg"
             alt="Logo"
             width={160}
             height={50}
