@@ -15,6 +15,28 @@ import {
 import { QuickPrompts } from './QuickPrompts'
 import { ChatChart } from './charts/chatChart'
 
+// ---- iOS audio unlock helpers ----
+const isIOS = typeof navigator !== 'undefined' && /iP(hone|ad|od)/.test(navigator.userAgent)
+let sharedAC: AudioContext | null = null
+
+async function unlockAudioContext() {
+  try {
+    const AC: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext
+    if (!AC) return
+    if (!sharedAC) {
+      sharedAC = new AC({ latencyHint: 'interactive' })
+    }
+    if (sharedAC.state !== 'running') await sharedAC.resume()
+    // Play a tiny silent buffer to unlock playback
+    const frames = Math.max(1, sharedAC.sampleRate / 20)
+    const buf = sharedAC.createBuffer(1, frames, sharedAC.sampleRate)
+    const src = sharedAC.createBufferSource()
+    src.buffer = buf
+    src.connect(sharedAC.destination)
+    src.start(0)
+  } catch {}
+}
+
 function BotMessageWithCopy({ content }: { content: string }) {
   return (
     <div className="flex items-center">
@@ -215,12 +237,18 @@ export default function AIExpertChat({
 
   // --------- TTS ----------
   const stopSpeaking = () => {
-    if (audioRef.current) {
-      try {
+    const ar: any = audioRef.current
+    try {
+      if (ar && ar._mode === 'webaudio' && ar._node) {
+        try { ar._node.stop(); ar._node.disconnect() } catch {}
+        if (ar._ctx && ar._ctx.state !== 'closed') {
+          // keep context alive for next unlock, just disconnect node
+        }
+      } else if (audioRef.current instanceof HTMLAudioElement) {
         audioRef.current.pause()
         audioRef.current.currentTime = 0
-      } catch {}
-    }
+      }
+    } catch {}
     setIsSpeaking(false)
     setVoicePhase('idle')
   }
@@ -241,20 +269,38 @@ export default function AIExpertChat({
       if (!res.ok) throw new Error('Failed to fetch audio.')
 
       const blob = await res.blob()
+      const mime = res.headers.get('content-type') || blob.type || 'audio/mpeg'
+      const preferWebAudio = isIOS || !/audio\/(mpeg|mp4)/i.test(mime)
+
+      if (preferWebAudio) {
+        // ---- WebAudio path (safe for iOS / WKWebView) ----
+        await unlockAudioContext()
+        const ac = sharedAC!
+        const arr = await blob.arrayBuffer()
+        const audioBuffer = await ac.decodeAudioData(arr)
+        const src = ac.createBufferSource()
+        src.buffer = audioBuffer
+        src.connect(ac.destination)
+        ;(audioRef as any).current = { _mode: 'webaudio', _node: src, _ctx: ac }
+        setVoicePhase('speaking')
+        src.onended = () => {
+          setIsSpeaking(false)
+          setVoicePhase('idle')
+        }
+        src.start(0)
+        return
+      }
+
+      // ---- HTMLAudio path ----
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
+      audio.setAttribute('playsinline', 'true')
+      audio.preload = 'auto'
       audioRef.current = audio
 
       let fired = false
-      const toSpeaking = () => {
-        if (!fired) {
-          fired = true
-          setVoicePhase('speaking')
-        }
-      }
-      const onTimeUpdate = () => {
-        if (audio.currentTime > 0.05) toSpeaking()
-      }
+      const toSpeaking = () => { if (!fired) { fired = true; setVoicePhase('speaking') } }
+      const onTimeUpdate = () => { if (audio.currentTime > 0.05) toSpeaking() }
       const onPlaying = toSpeaking
       const onWaiting = () => setVoicePhase('preparing')
       const onEnded = () => { cleanup(); setIsSpeaking(false); setVoicePhase('idle') }
@@ -505,29 +551,34 @@ export default function AIExpertChat({
       <QuickPrompts onPrompt={handleQuickPrompt} isClient={user_type === 'client'} />
 
       {/* Barra inferior */}
-      <div className="border-t p-4 flex items-center gap-2">
+      <div className="border-t p-4 pb-[calc(env(safe-area-inset-bottom)+12px)] flex items-center gap-3">
         {/* Mic abre overlay e já começa a escutar */}
         <button
-          onClick={() => {
+          onClick={async () => {
             setShowVoiceMode(true)
             setVoicePhase('listening')
+            await unlockAudioContext()
             startRecording()
           }}
-          className="border px-2 py-2 rounded"
+          className="border rounded-full p-3 md:p-2.5 bg-white shadow-sm hover:bg-gray-50"
           title="Open Voice Mode"
         >
-          <Mic className="h-4 w-4" />
+          <Mic className="h-6 w-6 md:h-5 md:w-5" />
         </button>
 
-        {/* Input sempre habilitado */}
-        <input
-          className="flex-1 border px-3 py-2 rounded text-sm"
-          placeholder="Ask your question..."
+        {/* Input multiline */}
+        <textarea
+          className="flex-1 border px-3 py-2 rounded text-sm resize-none leading-5 min-h-[40px] max-h-36"
+          placeholder="Ask your question... (Shift+Enter for new line)"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') sendMessage()
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              sendMessage()
+            }
           }}
+          rows={2}
           disabled={loading}
         />
 
