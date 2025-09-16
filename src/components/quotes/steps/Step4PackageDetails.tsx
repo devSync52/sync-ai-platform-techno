@@ -93,14 +93,14 @@ function ProductSearchModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-md p-6 w-full max-w-3xl max-h-[80vh] overflow-auto">
+      <div className="bg-white md:rounded-md rounded-none p-4 md:p-6 w-full md:w-[90vw] max-w-3xl h-[100dvh] md:h-auto md:max-h-[80vh] overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">Search Products</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700 font-bold text-xl leading-none">
             ×
           </button>
         </div>
-        <div className="mb-4 flex space-x-2">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             type="text"
             placeholder="Search by SKU or Name"
@@ -113,7 +113,7 @@ function ProductSearchModal({
               }
             }}
           />
-          <Button onClick={handleSearch} disabled={loading}>
+          <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={loading}>
             {loading ? 'Searching...' : 'Search'}
           </Button>
         </div>
@@ -126,7 +126,7 @@ function ProductSearchModal({
                   <p className="font-semibold">{product.name || product.sku}</p>
                   <p className="text-sm text-gray-500">SKU: {product.sku}</p>
                 </div>
-                <Button variant="secondary" onClick={() => handleAdd(product)}>
+                <Button variant="secondary" className="w-full sm:w-auto" onClick={() => handleAdd(product)}>
                   Add to package
                 </Button>
               </li>
@@ -325,12 +325,13 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
   }
 
   return (
-    <div className="space-y-6 p-4 bg-white">
-        <div className="flex justify-between">
-      <h2 className="text-xl font-semibold">Package Details</h2>
-      <Button size="sm" onClick={() => setShowProductSearchModal(true)}>
-            + Search Product
-          </Button></div>
+    <div className="space-y-4 p-3 md:p-4 bg-white min-h-[60vh] pb-[env(safe-area-inset-bottom)]">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <h2 className="text-lg font-semibold sm:text-xl">Package Details</h2>
+      <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowProductSearchModal(true)}>
+        + Search Product
+      </Button>
+    </div>
 
       {items.length === 0 && (
         <p className="text-muted-foreground italic">
@@ -339,8 +340,8 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
       )}
 
       {items.map((item, index) => (
-        <div key={index} className="border p-4 rounded-md space-y-4">
-          <div className="grid grid-cols-5 gap-4">
+        <div key={index} className="border rounded-md p-3 md:p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <div>
               <Label>SKU</Label>
               <Input
@@ -383,7 +384,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
                 disabled
               />
             </div></div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
               <div>
                 <Label>Length (in)</Label>
                 <Input
@@ -425,7 +426,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
                 />
               </div>
             </div>
-           <div className="text-right">
+           <div className="flex justify-end">
              <Button variant="destructive" size="sm" onClick={() => handleRemoveItem(index)}>
                Remove
              </Button>
@@ -434,11 +435,12 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
        
       ))}
 
-      <div className="text-right font-semibold text-lg">
+      <div className="text-right font-semibold text-base sm:text-lg">
         Total: {(items.reduce((acc, item) => acc + (item.subtotal || 0), 0)).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
       </div>
 
-      <div className="flex justify-between">
+      {/* Desktop actions */}
+      <div className="hidden md:flex justify-between">
         <Button variant="outline" onClick={onBack}>
           ← Back
         </Button>
@@ -450,6 +452,18 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
             {isCalculating ? 'Calculating package...' : 'Next'}
           </Button>
         </div>
+      </div>
+      {/* Mobile sticky actions */}
+      <div className="md:hidden sticky bottom-[env(safe-area-inset-bottom)] -mx-3 mt-4 border-t bg-background/95 backdrop-blur px-3 py-3 flex gap-2">
+        <Button variant="outline" className="w-1/3" onClick={onBack}>
+          ← Back
+        </Button>
+        <Button variant="secondary" className="w-1/3" onClick={() => setShowProductSearchModal(true)}>
+          + Product
+        </Button>
+        <Button className="w-1/3" onClick={handleSaveAndNext} disabled={items.length === 0 || isCalculating}>
+          {isCalculating ? 'Calculating…' : 'Next'}
+        </Button>
       </div>
 
       <ProductSearchModal

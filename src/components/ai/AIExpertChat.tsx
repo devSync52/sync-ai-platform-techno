@@ -1,6 +1,17 @@
+'use client'
+
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { useSyncAgent, ChatMessage } from '@/hooks/useSyncAgent'
-import { Loader2, Mic, MicOff, Settings2, X, Volume2, VolumeX } from 'lucide-react'
+import {
+  Loader2,
+  Mic,
+  MicOff,
+  Settings2,
+  X,
+  VolumeX,
+  MoreHorizontal,
+} from 'lucide-react'
 import { QuickPrompts } from './QuickPrompts'
 import { ChatChart } from './charts/chatChart'
 
@@ -13,6 +24,155 @@ function BotMessageWithCopy({ content }: { content: string }) {
     </div>
   )
 }
+
+type VoicePhase = 'idle' | 'listening' | 'thinking' | 'preparing' | 'speaking'
+
+/** ---------------- Voice Overlay (animações ricas + fases) ---------------- */
+function VoiceModeOverlay({
+  open,
+  phase,
+  onClose,
+  onToggleMic,
+  listening,
+  isSpeaking,
+  stopSpeaking,
+}: {
+  open: boolean
+  phase: VoicePhase
+  onClose: () => void
+  onToggleMic: () => void
+  listening: boolean
+  isSpeaking: boolean
+  stopSpeaking: () => void
+}) {
+  if (!open) return null
+
+  const isListening = phase === 'listening'
+  const isThinking  = phase === 'thinking'
+  const isPreparing = phase === 'preparing'
+  const isSpeakingP = phase === 'speaking'
+
+  const subtitle =
+    isListening ? 'Listening…'
+    : isThinking ? 'Thinking…'
+    : isPreparing ? 'Preparing voice…'
+    : 'Speaking…'
+
+  const base = isSpeakingP ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8'
+  const soft = isSpeakingP ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1'
+
+  return (
+    <div className="absolute inset-0 z-50 bg-white">
+      {/* Top bar */}
+      <div className="flex items-center justify-end gap-3 p-3">
+        <button
+          onClick={() => {
+            if (isSpeaking) stopSpeaking()
+            onClose()
+          }}
+          className="rounded-full bg-gray-100 p-2 hover:bg-gray-200"
+          title="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Centro */}
+      <div className="flex flex-col items-center justify-center" style={{ minHeight: '62vh' }}>
+        {/* Wrapper MAIOR e com overflow visível (evita corte) */}
+        <div className="relative h-56 w-56 overflow-visible" key={`phase-${phase}`}>
+          {/* Ondas concêntricas — apenas listening/preparing */}
+          {(isListening || isPreparing) && [0, 1, 2].map((i) => (
+            <motion.span
+              key={i}
+              className="absolute inset-0 rounded-full pointer-events-none"
+              style={{ border: `2px solid ${soft}` }}
+              animate={
+                isPreparing
+                  ? { scale: [1, 1.05, 1], opacity: [0.4, 0.9, 0.4] }
+                  : { scale: [1, 1.18, 1.3], opacity: [0.6, 0.25, 0] }
+              }
+              transition={{
+                duration: isPreparing ? 1.1 : 2.1,
+                repeat: Infinity,
+                delay: i * 0.22,
+                ease: 'easeInOut',
+              }}
+            />
+          ))}
+
+          {/* Núcleo com inset (folga) + aceleração GPU (iOS) */}
+          <motion.div
+            className="absolute inset-3 rounded-full will-change-transform"
+            style={{
+              transform: 'translateZ(0)',
+              background: `radial-gradient(circle at 50% 42%, ${soft} 8%, ${base} 75%)`,
+              boxShadow: '0 12px 40px rgba(0,0,0,0.12)',
+            }}
+            animate={
+              isSpeakingP
+                ? { scale: [1, 1.06, 1], filter: ['brightness(1)', 'brightness(1.1)', 'brightness(1)'] }
+                : isListening
+                ? { scale: [1, 1.03, 1] }
+                : { scale: [1, 1.01, 1] }
+            }
+            transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+          />
+
+          {/* Equalizer — apenas speaking */}
+          {isSpeakingP && (
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-end gap-1 pointer-events-none">
+              {[6, 10, 16, 10, 6].map((h, idx) => (
+                <motion.span
+                  key={idx}
+                  className="w-1.5 rounded-sm"
+                  style={{ background: base, height: h }}
+                  animate={{ height: [6, 18, 8, 16, 6] }}
+                  transition={{ duration: 0.9 + idx * 0.06, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8 text-sm text-gray-600 flex items-center gap-2">
+          {(isThinking || isPreparing) && <Loader2 className="h-4 w-4 animate-spin" />}
+          <span>{subtitle}</span>
+        </div>
+      </div>
+
+      {/* Footer actions */}
+      <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center gap-4">
+        <button className="rounded-full bg-gray-100 p-4 hover:bg-gray-200" title="More">
+          <MoreHorizontal className="h-5 w-5" />
+        </button>
+
+        <button
+          onClick={onToggleMic}
+          className={`rounded-full p-4 hover:opacity-90 ${
+            listening ? 'bg-red-500 text-white' : 'bg-gray-100'
+          }`}
+          title={listening ? 'Stop recording' : 'Start recording'}
+        >
+          {listening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+        </button>
+
+        <button
+          onClick={() => {
+            if (isSpeaking) stopSpeaking()
+            onClose()
+          }}
+          className="rounded-full bg-gray-100 p-4 hover:bg-gray-200"
+          title="Close"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** --------------------------------------------------------------------------- */
 
 export default function AIExpertChat({
   user_id,
@@ -30,10 +190,16 @@ export default function AIExpertChat({
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [listening, setListening] = useState(false)
+
   const [speechEnabled, setSpeechEnabled] = useState(true)
+  const [voiceFirstMode, setVoiceFirstMode] = useState(true) // comportamento, não desabilita input
   const [showAudioConfig, setShowAudioConfig] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [language, setLanguage] = useState<'en' | 'pt' | 'es'>('en')
+
+  // Voice overlay + fase
+  const [showVoiceMode, setShowVoiceMode] = useState(false)
+  const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle')
 
   const { askQuestion, loading, thinking, partialResponse, getHistory } = useSyncAgent(apiUrl)
 
@@ -45,73 +211,158 @@ export default function AIExpertChat({
     en: 'en-US',
     pt: 'pt-BR',
     es: 'es-ES',
-  }
+  } as const
 
-  // Speech-to-Text
-  const toggleListening = () => {
-    if (listening) {
-      recognitionRef.current?.stop()
-      setListening(false)
-    } else {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      if (!SpeechRecognition) {
-        alert('Speech recognition is not supported in this browser.')
-        return
-      }
-      const recognition = new SpeechRecognition()
-      recognition.lang = langMap[language] || navigator.language
-      recognition.interimResults = false
-      recognition.maxAlternatives = 1
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript
-        setInput(transcript)
-        setListening(false)
-      }
-
-      recognition.onerror = () => setListening(false)
-      recognition.onend = () => setListening(false)
-
-      recognition.start()
-      recognitionRef.current = recognition
-      setListening(true)
-    }
-  }
-
-  // Text-to-Speech
-  const speak = async (text: string) => {
-    if (!speechEnabled || !text) return
-    setIsSpeaking(true)
-    try {
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text }),
-      })
-
-      if (!response.ok) throw new Error('Failed to fetch audio.')
-
-      const blob = await response.blob()
-      const audio = new Audio(URL.createObjectURL(blob))
-      audioRef.current = audio
-      audio.onended = () => setIsSpeaking(false)
-      audio.onerror = () => setIsSpeaking(false)
-      audio.play()
-    } catch (err) {
-      console.error('🛑 ElevenLabs error:', err)
-      setIsSpeaking(false)
-    }
-  }
-
+  // --------- TTS ----------
   const stopSpeaking = () => {
     if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.currentTime = 0
+      try {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      } catch {}
     }
     setIsSpeaking(false)
+    setVoicePhase('idle')
+  }
+
+  const speak = async (text: string) => {
+    if (!speechEnabled || !text) return
+    // barge-in
+    stopSpeaking()
+    setIsSpeaking(true)
+    setVoicePhase('preparing')
+
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, language }),
+      })
+      if (!res.ok) throw new Error('Failed to fetch audio.')
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+
+      let fired = false
+      const toSpeaking = () => {
+        if (!fired) {
+          fired = true
+          setVoicePhase('speaking')
+        }
+      }
+      const onTimeUpdate = () => {
+        if (audio.currentTime > 0.05) toSpeaking()
+      }
+      const onPlaying = toSpeaking
+      const onWaiting = () => setVoicePhase('preparing')
+      const onEnded = () => { cleanup(); setIsSpeaking(false); setVoicePhase('idle') }
+      const onError = () => { cleanup(); setIsSpeaking(false); setVoicePhase('idle') }
+      const cleanup = () => {
+        audio.removeEventListener('timeupdate', onTimeUpdate)
+        audio.removeEventListener('playing', onPlaying)
+        audio.removeEventListener('waiting', onWaiting)
+        audio.removeEventListener('ended', onEnded)
+        audio.removeEventListener('error', onError)
+        URL.revokeObjectURL(url)
+      }
+
+      audio.addEventListener('timeupdate', onTimeUpdate)
+      audio.addEventListener('playing', onPlaying)
+      audio.addEventListener('waiting', onWaiting)
+      audio.addEventListener('ended', onEnded)
+      audio.addEventListener('error', onError)
+
+      await audio.play()
+    } catch (err) {
+      console.error('🛑 TTS error:', err)
+      setIsSpeaking(false)
+      setVoicePhase('idle')
+    }
+  }
+
+  // --------- LLM ----------
+  const processQuestion = async (question: string, opts?: { speakBack?: boolean }) => {
+    if (!question.trim() || loading) return
+
+    setVoicePhase('thinking')
+
+    const userMsg: ChatMessage = { role: 'user', content: question }
+    setMessages((msgs) => [...msgs, userMsg])
+
+    let aiMessage = ''
+    await askQuestion(
+      question,
+      { userId: user_id, accountId: account_id, sessionId: session_id, userType: user_type },
+      (partial) => { aiMessage = partial }
+    )
+
+    setMessages((msgs) => [...msgs, { role: 'assistant', content: aiMessage }])
+
+    if (opts?.speakBack) {
+      await speak(aiMessage)
+    } else {
+      setVoicePhase('idle')
+    }
+  }
+
+  // --------- ASR (SpeechRecognition) ----------
+  const startRecording = () => {
+    if (isSpeaking) stopSpeaking()
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser.')
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = langMap[language] || navigator.language
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+
+    recognition.onresult = async (event: any) => {
+      const transcript = event.results[0][0].transcript
+      setListening(false)
+      setVoicePhase('thinking')
+      // Origem voz → fala resposta
+      await processQuestion(transcript, { speakBack: true })
+    }
+    recognition.onerror = () => {
+      setListening(false)
+      setVoicePhase('idle')
+    }
+    recognition.onend = () => {
+      setListening(false)
+      if (voicePhase === 'listening') setVoicePhase('idle')
+    }
+
+    recognition.start()
+    recognitionRef.current = recognition
+    setListening(true)
+    setVoicePhase('listening')
+  }
+
+  const stopRecording = () => {
+    try {
+      recognitionRef.current?.stop()
+    } catch {}
+    setListening(false)
+  }
+
+  const toggleMicInOverlay = () => {
+    if (listening) stopRecording()
+    else startRecording()
+  }
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return
+    const toSend = input
+    setInput('')
+    // Origem texto → NÃO fala resposta
+    await processQuestion(toSend, { speakBack: false })
   }
 
   const handleQuickPrompt = (prompt: string) => setInput(prompt)
@@ -120,33 +371,87 @@ export default function AIExpertChat({
     if (session_id) {
       getHistory(session_id).then(setMessages)
     }
-  }, [session_id, getHistory])
+    return () => {
+      try {
+        recognitionRef.current?.stop()
+      } catch {}
+      stopSpeaking()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session_id])
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, partialResponse])
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return
-    const userMsg: ChatMessage = { role: 'user', content: input }
-    setMessages((msgs) => [...msgs, userMsg])
-    setInput('')
-
-    let aiMessage = ''
-    await askQuestion(
-      input,
-      { userId: user_id, accountId: account_id, sessionId: session_id, userType: user_type },
-      (partial) => {
-        aiMessage = partial
-      }
-    )
-    setMessages((msgs) => [...msgs, { role: 'assistant', content: aiMessage }])
-    speak(aiMessage)
-  }
-
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4" ref={chatRef}>
+    <div className="relative flex flex-col h-full">
+      {/* Toolbar de áudio no topo-esquerdo, dentro do painel */}
+      <div className="absolute top-2 left-2 z-40">
+        <button
+          onClick={() => setShowAudioConfig((v) => !v)}
+          className="border px-2 py-2 rounded bg-white shadow-sm hover:bg-gray-50"
+          title="Audio settings"
+        >
+          <Settings2 className="h-4 w-4" />
+        </button>
+
+        {showAudioConfig && (
+          <div className="mt-2 w-64 bg-white border rounded-lg p-3 shadow-md">
+            <div className="text-sm font-semibold mb-2">Audio Settings</div>
+            <div className="space-y-3 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={speechEnabled}
+                  onChange={() => setSpeechEnabled((v) => !v)}
+                />
+                Enable voice response
+              </label>
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={voiceFirstMode}
+                  onChange={() => setVoiceFirstMode((v) => !v)}
+                />
+                Voice-first (send & reply by voice)
+              </label>
+
+              <label className="flex flex-col gap-1">
+                Language
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as 'en' | 'pt' | 'es')}
+                  className="border rounded px-2 py-1"
+                >
+                  <option value="en">English</option>
+                  <option value="pt">Portuguese</option>
+                  <option value="es">Spanish</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Overlay do Voice Mode */}
+      <VoiceModeOverlay
+        open={showVoiceMode}
+        phase={voicePhase}
+        onClose={() => {
+          if (listening) stopRecording()
+          setShowVoiceMode(false)
+          setVoicePhase('idle')
+        }}
+        onToggleMic={toggleMicInOverlay}
+        listening={listening}
+        isSpeaking={isSpeaking}
+        stopSpeaking={stopSpeaking}
+      />
+
+      {/* Histórico */}
+      <div className="flex-1 overflow-y-auto px-6 py-8 space-y-4" ref={chatRef}>
         {messages.map((msg, i) => (
           <div
             key={i}
@@ -185,7 +490,7 @@ export default function AIExpertChat({
         )}
       </div>
 
-      {isSpeaking && (
+      {isSpeaking && !showVoiceMode && (
         <div className="flex justify-center mb-2">
           <button
             onClick={stopSpeaking}
@@ -199,22 +504,22 @@ export default function AIExpertChat({
 
       <QuickPrompts onPrompt={handleQuickPrompt} isClient={user_type === 'client'} />
 
+      {/* Barra inferior */}
       <div className="border-t p-4 flex items-center gap-2">
+        {/* Mic abre overlay e já começa a escutar */}
         <button
-          onClick={toggleListening}
-          className={`border px-2 py-2 rounded ${listening ? 'bg-red-500 text-white' : ''}`}
-          title={listening ? 'Stop voice input' : 'Start voice input'}
-        >
-          {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-        </button>
-        <button
-          onClick={() => setShowAudioConfig(true)}
+          onClick={() => {
+            setShowVoiceMode(true)
+            setVoicePhase('listening')
+            startRecording()
+          }}
           className="border px-2 py-2 rounded"
-          title="Audio settings"
+          title="Open Voice Mode"
         >
-          <Settings2 className="h-4 w-4"/>
-          
+          <Mic className="h-4 w-4" />
         </button>
+
+        {/* Input sempre habilitado */}
         <input
           className="flex-1 border px-3 py-2 rounded text-sm"
           placeholder="Ask your question..."
@@ -228,45 +533,12 @@ export default function AIExpertChat({
 
         <button
           onClick={sendMessage}
-          className="bg-primary text-white px-4 py-2 rounded text-sm"
+          className="bg-primary text-white px-4 py-2 rounded text-sm disabled:opacity-60"
           disabled={loading}
         >
           {loading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Ask'}
         </button>
       </div>
-
-      {showAudioConfig && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white border rounded-lg p-4 shadow-md z-50">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-sm font-semibold">Audio Settings</h2>
-            <button onClick={() => setShowAudioConfig(false)}>
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={speechEnabled}
-                onChange={() => setSpeechEnabled(!speechEnabled)}
-              />
-              Enable voice response
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              Language
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as 'en' | 'pt' | 'es')}
-                className="border rounded px-2 py-1"
-              >
-                <option value="en">English</option>
-                <option value="pt">Portuguese</option>
-                <option value="es">Spanish</option>
-              </select>
-            </label>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

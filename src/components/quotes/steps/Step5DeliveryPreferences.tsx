@@ -187,8 +187,8 @@ export default function Step5DeliveryPreferences({
   const optimizedPackage = draft.preferences?.optimized_packages?.[0];
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 w-full">
-      <div className="w-full lg:w-2/4 p-6 rounded shadow bg-white">
+    <div className="flex flex-col lg:flex-row gap-3 md:gap-4 w-full px-3 md:px-0 pb-[env(safe-area-inset-bottom)]">
+      <div className="w-full lg:w-2/4 p-3 md:p-6 rounded shadow bg-white">
         <h2 className="text-xl font-bold mb-4">Configure Rates</h2>
 
         {/* Ship From */}
@@ -455,8 +455,10 @@ export default function Step5DeliveryPreferences({
       </div>
 
       
-        <div id="quote-results" className="w-1/2 bg-muted/50 p-6 rounded-lg">
-          <h2 className="text-xl font-bold mb-4">Quote Results</h2>
+        <div id="quote-results" className="w-full lg:w-2/4 bg-muted/50 p-2 md:p-6 rounded-none md:rounded-lg -mx-3 md:mx-0">
+          <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-3 mb-3 bg-muted/80 backdrop-blur px-3 py-2 md:static md:mx-0 md:bg-transparent md:px-0 md:py-0 md:mb-4">
+            <h2 className="text-lg md:text-xl font-bold">Quote Results</h2>
+          </div>
           {isSimulating ? (
             <p className="text-muted-foreground text-sm italic">Fetching quotes, please wait...</p>
           ) : (
@@ -494,7 +496,7 @@ export default function Step5DeliveryPreferences({
                           });
                         }}
                         className={cn(
-                          'relative cursor-pointer p-4 border rounded-lg shadow-sm flex items-center justify-between gap-4 bg-white transition-colors',
+                          'relative cursor-pointer p-3 md:p-4 border rounded-lg shadow-sm flex items-center justify-between gap-3 md:gap-4 bg-white transition-colors',
                           isSelected
                             ? 'border-primary ring-1 ring-primary bg-primary/20'
                             : 'border-muted hover:border-primary/40'
@@ -509,7 +511,7 @@ export default function Step5DeliveryPreferences({
                                 : 'https://euzjrgnyzfgldubqglba.supabase.co/storage/v1/object/public/img//ups.png'
                             }
                             alt="Carrier"
-                            className="w-10 h-10 object-contain"
+                            className="w-9 h-9 md:w-10 md:h-10 object-contain"
                           />
                           <div>
                             <p className="font-semibold">{service.description}</p>

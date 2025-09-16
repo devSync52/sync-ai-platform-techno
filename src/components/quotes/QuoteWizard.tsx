@@ -56,14 +56,31 @@ export default function QuoteWizard() {
     }
   }, [currentStep, quoteData])
 
-  if (loading) return <div>Loading...</div>
+  if (loading)
+    return (
+      <div className="flex h-[60vh] items-center justify-center px-3 text-sm text-muted-foreground">
+        Loading...
+      </div>
+    )
 
-  if (error) return <div>Error loading quote</div>
+  if (error)
+    return (
+      <div className="px-3 py-4 text-sm text-destructive">
+        Error loading quote: {error.message}
+      </div>
+    )
 
   return (
-    <div>
-      <QuoteStepsHeader currentStep={currentStep} onStepClick={setCurrentStep} />
-      <div className="mt-4">
+    <div className="min-h-screen px-3 py-3 md:px-6 md:py-6 pb-[env(safe-area-inset-bottom)]">
+      {/* Sticky / scrollable steps header on mobile */}
+      <div className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 border-b bg-background/90 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:backdrop-blur-0">
+        <div className="overflow-x-auto px-3 md:overflow-visible md:px-0">
+          <QuoteStepsHeader currentStep={currentStep} onStepClick={setCurrentStep} />
+        </div>
+      </div>
+
+      {/* Content area */}
+      <div className="mx-auto mt-3 max-w-5xl md:mt-4">
         {currentStep === 0 && (
           <Step1ClientSelection
             draftId={quoteData!.id}
@@ -77,7 +94,7 @@ export default function QuoteWizard() {
             draftId={quoteData!.id}
             initialWarehouse={quoteData!.ship_from as string | null}
             onWarehouseChange={(warehouseId) => {
-              setQuoteData(prev => prev ? { ...prev, warehouse_id: warehouseId } : prev)
+              setQuoteData((prev) => (prev ? { ...prev, warehouse_id: warehouseId } : prev))
             }}
             onNext={() => setCurrentStep(2)}
             onBack={() => setCurrentStep(0)}
@@ -101,13 +118,13 @@ export default function QuoteWizard() {
           />
         )}
         {currentStep === 4 && (
-  <Step5DeliveryPreferences
-    draftId={quoteData!.id}
-    initialPreferences={quoteData!.preferences || {}}
-    onNext={() => setCurrentStep(5)}
-    onBack={() => setCurrentStep(3)}
-  />
-)}
+          <Step5DeliveryPreferences
+            draftId={quoteData!.id}
+            initialPreferences={quoteData!.preferences || {}}
+            onNext={() => setCurrentStep(5)}
+            onBack={() => setCurrentStep(3)}
+          />
+        )}
       </div>
     </div>
   )

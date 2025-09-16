@@ -61,11 +61,15 @@ export function DateRangePicker({ date, setDate }: DateRangePickerProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-auto justify-start text-left font-normal text-sm"><p>Selected period</p>
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          <span>{formatLabel(date)}</span>
-        </Button>
-      </PopoverTrigger>
+  <Button
+    variant="outline"
+    className="w-full md:w-auto  text-center font-normal text-sm"
+  >
+    <p className="hidden md:block">Selected period</p>
+    <CalendarIcon className="mr-2 h-4 w-4" />
+    <span>{formatLabel(date)}</span>
+  </Button>
+</PopoverTrigger>
       <PopoverContent className="w-[95vw] md:w-full max-w-[700px] flex flex-col md:flex-row md:space-x-6 space-y-4 md:space-y-0 px-2 py-4 md:p-4 rounded-xl shadow-xl border bg-white z-[9999] mr-4 overflow-x-auto max-h-[90vh] overflow-y-auto">
         {/* Botões laterais */}
         <div className="w-full md:w-44 border-r md:pr-4">
