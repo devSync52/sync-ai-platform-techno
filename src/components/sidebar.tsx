@@ -118,6 +118,11 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     const clientExclusions = ['/bot-training', '/ai-settings', '/channels']
     const staffExclusions = ['/bot-training', '/ai-settings', '/staff', '/channels']
 
+    // Hide Billing from clients only
+    if (item.label === 'Billing' && userRole === 'client') {
+      return false;
+    }
+
     if (userRole === 'client') {
       if (
         (item.href && clientExclusions.includes(item.href)) ||
