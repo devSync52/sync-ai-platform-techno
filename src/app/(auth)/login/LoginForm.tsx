@@ -8,6 +8,7 @@ import InputIcon from '@/components/ui/inputIcon'
 import Link from 'next/link'
 import Image from 'next/image'
 
+
 export default function LoginForm() {
   const supabase = useSupabase()
   const router = useRouter()

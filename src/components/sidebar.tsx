@@ -22,7 +22,10 @@ import {
   UserCircle2,
   ShoppingBag,
   TicketIcon,
-  TicketPlus
+  TicketPlus,
+  Wallet,
+  FileText,
+  BarChart3,
 } from 'lucide-react'
 
 import { useEffect, useState } from 'react'
@@ -39,6 +42,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [ordersOpen, setOrdersOpen] = useState(false)
+  const [billingOpen, setBillingOpen] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
 
   // Buscar role do usuário
@@ -68,6 +72,9 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
     if (pathname.startsWith('/orders')) setOrdersOpen(true)
     else setOrdersOpen(false)
+
+    if (pathname.startsWith('/billing')) setBillingOpen(true)
+    else setBillingOpen(false)
   }, [pathname])
 
   async function handleLogout() {
@@ -85,7 +92,21 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         { href: '/orders/quotes', label: 'Quotations' },
       ],
     },
-    
+
+    // Billing group
+    {
+      label: 'Billing',
+      icon: Wallet,
+      items: [
+        { href: '/billing', label: 'Dashboard' },
+        { href: '/billing/warehouses', label: 'Warehouses' },
+        { href: '/billing/clients', label: 'Clients' },
+        { href: '/billing/invoices', label: 'Invoices' },
+        { href: '/billing/plans', label: 'Plans & Tiers' },
+        
+      ],
+    },
+
     { href: '/channels', label: 'Customers', icon: Building2 },
     { href: '/bot-training', label: 'Bot training', icon: BotIcon },
     { href: '/ai-settings', label: 'AI Settings', icon: Cog },
@@ -153,13 +174,14 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
         {filteredNavItems.map((item) => {
           if (item.items) {
-            const isGroupOpen = item.label === 'Orders' ? ordersOpen : false
+            const isGroupOpen = item.label === 'Orders' ? ordersOpen : item.label === 'Billing' ? billingOpen : false
             const isActiveGroup = item.items.some(subItem => pathname === subItem.href)
             return (
               <div key={item.label}>
                 <button
                   onClick={() => {
                     if (item.label === 'Orders') setOrdersOpen(prev => !prev)
+                    else if (item.label === 'Billing') setBillingOpen(prev => !prev)
                   }}
                   className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#352682] transition text-white"
                 >
@@ -176,7 +198,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
                 </button>
                 <div
                   className={`pl-8 mt-1 space-y-1 overflow-hidden transition-all duration-200 ease-in-out ${
-                    isGroupOpen ? 'max-h-40' : 'max-h-0'
+                    isGroupOpen ? 'max-h-72' : 'max-h-0'
                   }`}
                 >
                   {item.items.map(({ href, label }) => {

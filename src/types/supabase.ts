@@ -103,6 +103,129 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_configs: {
+        Row: {
+          id: string
+          client_id: string
+          assigned_warehouse: string | null
+          billing_frequency: string | null
+          monthly_billing_day: number | null
+          rate_card_id: string | null
+          enabled_services: string[] | null
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          assigned_warehouse?: string | null
+          billing_frequency?: string | null
+          monthly_billing_day?: number | null
+          rate_card_id?: string | null
+          enabled_services?: string[] | null
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          assigned_warehouse?: string | null
+          billing_frequency?: string | null
+          monthly_billing_day?: number | null
+          rate_card_id?: string | null
+          enabled_services?: string[] | null
+        }
+        Relationships: []
+      }
+      billing_clients: {
+        Row: {
+          id: string
+          parent_account_id: string | null
+          client_account_id: string | null
+          name: string | null
+          source: string | null
+          wms_customer_id: string | null
+          is_active: boolean | null
+          warehouse_id: string | null
+          warehouse_id_norm: string | null
+        }
+        Insert: {
+          id?: string
+          parent_account_id?: string | null
+          client_account_id?: string | null
+          name?: string | null
+          source?: string | null
+          wms_customer_id?: string | null
+          is_active?: boolean | null
+          warehouse_id?: string | null
+          warehouse_id_norm?: string | null
+        }
+        Update: {
+          id?: string
+          parent_account_id?: string | null
+          client_account_id?: string | null
+          name?: string | null
+          source?: string | null
+          wms_customer_id?: string | null
+          is_active?: boolean | null
+          warehouse_id?: string | null
+          warehouse_id_norm?: string | null
+        }
+        Relationships: []
+      }
+      billing_invoices: {
+        Row: {
+          id: string
+          client_id: string
+          period_start: string
+          period_end: string
+          status: string
+          currency: string
+          subtotal: number | null
+          tax: number | null
+          total: number | null
+          generated_at: string | null
+          delivered_at: string | null
+          pdf_url: string | null
+          meta: Json | null
+          created_at: string | null
+          updated_at: string | null
+          warehouse_account_id: string | null
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          period_start: string
+          period_end: string
+          status: string
+          currency: string
+          subtotal?: number | null
+          tax?: number | null
+          total?: number | null
+          generated_at?: string | null
+          delivered_at?: string | null
+          pdf_url?: string | null
+          meta?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+          warehouse_account_id?: string | null
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          period_start?: string
+          period_end?: string
+          status?: string
+          currency?: string
+          subtotal?: number | null
+          tax?: number | null
+          total?: number | null
+          generated_at?: string | null
+          delivered_at?: string | null
+          pdf_url?: string | null
+          meta?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+          warehouse_account_id?: string | null
+        }
+        Relationships: []
+      }
       accounts: {
         Row: {
           address_line_1: string | null
