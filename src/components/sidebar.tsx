@@ -45,7 +45,6 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const [billingOpen, setBillingOpen] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
 
-  // Buscar role do usuário
   useEffect(() => {
     const fetchUserRole = async () => {
       const { data, error } = await supabase
