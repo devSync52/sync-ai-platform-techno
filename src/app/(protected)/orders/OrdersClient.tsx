@@ -73,7 +73,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
       setAccountId(userAccountId)
 
       const { data: statusRows, error: statusError } = await supabase
-        .from('ai_orders_unified_4')
+        .from('ai_orders_unified_6')
         .select('order_status')
         .eq(
           userRole === 'client' || userRole === 'staff-client'

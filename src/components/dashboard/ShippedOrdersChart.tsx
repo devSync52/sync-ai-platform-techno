@@ -23,6 +23,7 @@ export default function ShippedOrdersChart({
   const [data, setData] = useState<{ hour: string; shipped: number; total_items: number }[]>([])
   const [showItems, setShowItems] = useState(false)
   const [period, setPeriod] = useState<'24h' | '7d' | '31d' | '3m'>('7d')
+  const [totals, setTotals] = useState<{ orders: number; items: number }>({ orders: 0, items: 0 })
 
   useEffect(() => {
     async function fetchData() {
@@ -48,32 +49,68 @@ export default function ShippedOrdersChart({
           startDate = new Date(nowUTC.getTime() - 24 * 60 * 60 * 1000)
       }
 
-      let query = supabase
-        .from('ai_shipping_info_sc_v2')
-        .select('order_date, shipping_status, items_count')
-        .gte('order_date', startDate.toISOString())
-        .lte('order_date', nowUTC.toISOString())
-        .eq('shipping_status', 3)
-
-      if (userRole === 'client' || userRole === 'staff-client') {
-        query = query.eq('channel_account_id', userAccountId)
-      } else {
-        query = query.eq('account_id', userAccountId)
+      // Build filters once
+      const baseFilters = (qb: any) => {
+        qb = qb
+          .gte('order_date', startDate.toISOString())
+          .lte('order_date', nowUTC.toISOString())
+          .eq('shipping_status', 3)
+        if (userRole === 'client' || userRole === 'staff-client') {
+          qb = qb.eq('channel_account_id', userAccountId)
+        } else {
+          qb = qb.eq('account_id', userAccountId)
+        }
+        return qb
       }
 
-      const { data, error } = await query
+      // Base select for series
+      let query = baseFilters(
+        supabase
+          .from('ai_shipping_info_sc_v2')
+          .select('order_date, shipping_status, items_count')
+      )
 
-      if (error) {
-        console.error('❌ Error fetching shipped orders:', {
-          message: error?.message,
-          details: error?.details,
-          hint: error?.hint,
-          code: error?.code,
-        })
-        return
+      // ---- Pagination to bypass PostgREST 1k page cap ----
+      const pageSize = 1000
+      let from = 0
+      let allRows: { order_date: string; shipping_status: number; items_count: number }[] = []
+
+      while (true) {
+        const { data: page, error } = await query
+          .order('order_date', { ascending: true })
+          .range(from, from + pageSize - 1)
+
+        if (error) {
+          console.error('❌ Error fetching shipped orders (page):', {
+            message: error?.message,
+            details: error?.details,
+            hint: error?.hint,
+            code: error?.code,
+          })
+          break
+        }
+
+        if (!page || page.length === 0) break
+
+        allRows = allRows.concat(page as any)
+
+        if (page.length < pageSize) break
+        from += pageSize
       }
+      // ----------------------------------------------------
 
-      const byHour = (data || []).reduce((acc: { hour: string; shipped: number; total_items: number }[], order) => {
+      // Accurate totals (orders via count head:true; items via sum of all pages)
+      const itemsSum = (allRows || []).reduce((sum, r) => sum + (Number(r.items_count) || 0), 0)
+      const { count: ordersCount, error: countError } = await baseFilters(
+        supabase.from('ai_shipping_info_sc_v2').select('*', { count: 'exact', head: true })
+      )
+      if (countError) {
+        console.warn('⚠️ Count fallback to client length due to error:', countError)
+      }
+      setTotals({ orders: ordersCount ?? allRows.length, items: itemsSum })
+
+      // Group per hour for chart
+      const byHour = (allRows || []).reduce((acc: { hour: string; shipped: number; total_items: number }[], order) => {
         const date = new Date(order.order_date)
         let hour = date.getHours()
         const ampm = hour >= 12 ? 'PM' : 'AM'
@@ -100,7 +137,6 @@ export default function ShippedOrdersChart({
 
       // Sort by hour in 24-hour format for correct ordering
       byHour.sort((a, b) => {
-        // Parse hour and AM/PM for sorting
         const parseHour = (h: string) => {
           const [num, ampm] = h.split(' ')
           let n = parseInt(num)
@@ -113,7 +149,7 @@ export default function ShippedOrdersChart({
         return parseHour(a.hour) - parseHour(b.hour)
       })
 
-      console.log('📦 Raw data from Supabase:', data)
+      console.log('📦 Raw data from Supabase (allRows):', allRows)
       console.log('📦 Grouped by hour:', byHour)
 
       setData(byHour)
@@ -122,8 +158,8 @@ export default function ShippedOrdersChart({
     fetchData()
   }, [userRole, userAccountId, period])
 
-  const totalShipped = data.reduce((sum, d) => sum + d.shipped, 0)
-  const totalItems = data.reduce((sum, d) => sum + d.total_items, 0)
+  const totalShipped = totals.orders
+  const totalItems = totals.items
 
   const periodLabel = {
     '24h': 'Last 24 hours',
