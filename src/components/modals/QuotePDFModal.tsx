@@ -46,6 +46,19 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
     return 'SynC OMS status: Not yet sent to SynC OMS.'
   }
 
+  const selectedService = quote?.selected_service || {}
+  const serviceName =
+    selectedService.description ||
+    selectedService.carrier_service_name ||
+    selectedService.service_type ||
+    selectedService.code ||
+    '—'
+
+  const carrierName =
+    selectedService.carrier ||
+    selectedService.carrier_code ||
+    ''
+
   return (
     <Dialog open={open} onOpenChange={onCloseAction}>
       <DialogContent className="w-[calc(100%-1.5rem)] sm:w-full md:max-w-3xl bg-white font-sans text-sm print:bg-white print:text-black rounded-md sm:rounded-xl max-h-[85vh] overflow-y-auto print:w-[95%] print:max-w-none print:mx-auto print:h-auto print:max-h-none print:overflow-visible print:rounded-none print:shadow-none">
@@ -55,7 +68,7 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
               <img
                 src={accountLogo}
                 alt={accountName}
-                className="h-10 sm:h-12 object-contain print:h-10"
+                className="h-12 sm:h-16 object-contain print:h-12"
               />
             ) : (
               <h1
@@ -206,7 +219,7 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="font-semibold">Service</p>
-              <p>{quote?.selected_service?.code || '—'} ({quote?.selected_service?.description || '—'})</p>
+              <p>{carrierName ? `${carrierName} — ${serviceName}` : serviceName}</p>
             </div>
             <div>
               <p className="font-semibold">Estimated Cost</p>
