@@ -14,6 +14,58 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation';
+import { useCarrierRates } from '@/hooks/useCarrierRates';
+
+function dedupeServicesByCarrierAndCode(services: any[]): any[] {
+  const map = new Map<string, any>();
+
+  for (const svc of services || []) {
+    const carrier = (svc.carrier || '').toUpperCase();
+    const code = svc.carrier_service_code ?? svc.code ?? svc.serviceCode;
+    const key = `${carrier}|${code || ''}`;
+
+    if (!key.trim()) {
+      // if we don't have a clear key, just push as-is later
+      const fallbackKey = `__fallback__${map.size}`;
+      if (!map.has(fallbackKey)) {
+        map.set(fallbackKey, svc);
+      }
+      continue;
+    }
+
+    const existing = map.get(key);
+    const currentTotal = Number(svc.total ?? 0);
+    const existingTotal = existing ? Number(existing.total ?? 0) : Number.POSITIVE_INFINITY;
+
+    if (!existing || currentTotal < existingTotal) {
+      map.set(key, svc);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function normalizeCountryCode(country?: string | null): string {
+  const raw = (country || '').trim();
+  if (!raw) return 'US';
+
+  // If already looks like an ISO 2-letter code, just uppercase it
+  if (raw.length === 2) {
+    return raw.toUpperCase();
+  }
+
+  const upper = raw.toUpperCase();
+  if (
+    upper === 'UNITED STATES' ||
+    upper === 'UNITED STATES OF AMERICA' ||
+    upper === 'USA'
+  ) {
+    return 'US';
+  }
+
+  // Default fallback to US for now
+  return 'US';
+}
 
 export default function Step5DeliveryPreferences({
   draftId,
@@ -25,23 +77,18 @@ export default function Step5DeliveryPreferences({
   const router = useRouter();
   const [loading, setLoading] = useState(true)
   const [isSimulating, setIsSimulating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<QuoteDraft | null>(null)
   const [items, setItems] = useState<any[]>([])
   const [quoteResults, setQuoteResults] = useState<any[]>([])
   const [selectedService, setSelectedService] = useState<any>(null)
+  const { rates, loading: isLoadingRates, error: carrierError, fetchRates } = useCarrierRates();
   // After loading draft, set selectedService from previously saved service if exists
   useEffect(() => {
     if (draft?.selected_service) {
-      const match = draft.quote_results?.find(
-        (service: any) =>
-          (service.serviceCode ?? service.code) ===
-          (draft.selected_service?.code)
-      );
-      if (match) {
-        setSelectedService(match);
-      }
+      setSelectedService(draft.selected_service as any);
     }
-  }, [draft?.selected_service, draft?.quote_results]);
+  }, [draft?.selected_service]);
 
   type ServiceClass = 'URGENT' | 'RAPID' | 'STANDARD' | ''
 
@@ -61,11 +108,18 @@ export default function Step5DeliveryPreferences({
   const classFilter: ServiceClass = ['URGENT', 'RAPID', 'STANDARD'].includes(classFilterRaw || '')
   ? (classFilterRaw as ServiceClass)
   : '';
-  const filteredQuoteResults = quoteResults.filter((service) => {
-    if (!classFilter) return true
-    const codes = serviceClassMap[classFilter]
-    return codes?.includes(service.code)
+  const filteredQuoteResults = [...quoteResults]
+  .filter((service) => {
+    if (!classFilter) return true;
+    const codes = serviceClassMap[classFilter];
+    const serviceCode = service.carrier_service_code ?? service.code ?? service.serviceCode;
+    return codes?.includes(serviceCode);
   })
+  .sort((a, b) => {
+    const aTotal = Number(a.total ?? 0);
+    const bTotal = Number(b.total ?? 0);
+    return aTotal - bTotal;
+  });
 
   // Pega o draft atual pelo draftId
   useEffect(() => {
@@ -116,7 +170,8 @@ export default function Step5DeliveryPreferences({
 
       setDraft(filledDraft)
       if (data.quote_results) {
-        setQuoteResults(data.quote_results);
+        const deduped = dedupeServicesByCarrierAndCode(data.quote_results as any[]);
+        setQuoteResults(deduped);
       }
       setLoading(false)
     }
@@ -176,6 +231,45 @@ export default function Step5DeliveryPreferences({
     }
   }, [items, draft]);
 
+  // Quando chegarem novas rates normalizadas da edge get_carrier_rates,
+  // convertemos para o formato unificado usado hoje em quote_results
+  useEffect(() => {
+    if (!rates || rates.length === 0) return;
+
+    const unifiedServices = rates.map((r: any) => ({
+      carrier: r.carrier, // "UPS", "FedEx", "USPS"
+      carrier_service_code: r.service_code,
+      carrier_service_name: r.display_name || r.service_name || 'Service',
+      total: Number(r.total ?? 0),
+      currency: r.currency ?? 'USD',
+      deliveryDays: r.delivery_days ?? null,
+      deliveryTime: null,
+      metadata: { raw: r },
+    }));
+
+    const dedupedServices = dedupeServicesByCarrierAndCode(unifiedServices);
+
+    setQuoteResults(dedupedServices);
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        quote_results: dedupedServices as any,
+      } as QuoteDraft;
+    });
+
+    // persiste no banco sem depender do draft no array de dependências
+    supabase
+      .from('saip_quote_drafts')
+      .update({ quote_results: dedupedServices })
+      .eq('id', draftId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('❌ Error updating quote_results from carrier rates:', error);
+        }
+      });
+  }, [rates, supabase, draftId]);
+
   if (loading) return <div>Loading...</div>
   if (!draft) return <div>No draft found.</div>
 
@@ -187,9 +281,16 @@ export default function Step5DeliveryPreferences({
   const optimizedPackage = draft.preferences?.optimized_packages?.[0];
 
   return (
-    <div className="flex flex-col lg:flex-row gap-3 md:gap-4 w-full px-3 md:px-0 pb-[env(safe-area-inset-bottom)]">
-      <div className="w-full lg:w-2/4 p-3 md:p-6 rounded shadow bg-white">
-        <h2 className="text-xl font-bold mb-4">Configure Rates</h2>
+    <div className="flex flex-col lg:flex-row items-start gap-4 md:gap-6 xl:gap-2 w-full px-3 md:px-4 xl:px-0 pb-[env(safe-area-inset-bottom)]">
+      <div className="w-full lg:w-2/5 p-3 md:p-5 xl:p-6 rounded shadow bg-white">
+        <h2 className="text-xl font-bold mb-1">
+          {quoteResults.length > 0 ? 'Compare & select a service' : 'Configure Rates'}
+        </h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          {quoteResults.length > 0
+            ? 'Review the options on the right and choose the best service for this shipment.'
+            : 'Set origin, destination and package details to simulate shipping services.'}
+        </p>
 
         {/* Ship From */}
         <div className="border-b pb-4 mb-4">
@@ -377,72 +478,54 @@ export default function Step5DeliveryPreferences({
 
               await updateDraft('preferences', updatedPreferences);
 
+              // Prepara origem/destino para ShipEngine
+              const from = {
+                country_code: normalizeCountryCode(draft.ship_from?.address?.country),
+                postal_code: (draft.ship_from?.address?.zip_code || '').trim(),
+                city_locality: draft.ship_from?.address?.city || '',
+                state_province: draft.ship_from?.address?.state || '',
+              };
+
+              const to = {
+                country_code: normalizeCountryCode(draft.ship_to?.country),
+                postal_code: (draft.ship_to?.zip_code || '').trim(),
+                city_locality: draft.ship_to?.city || '',
+                state_province: draft.ship_to?.state || '',
+              };
+
+              const totalWeight = Number(weight || '1.0');
+
               setIsSimulating(true);
               const resultSection = document.getElementById('quote-results');
               if (resultSection) {
                 resultSection.scrollIntoView({ behavior: 'smooth' });
               }
+
               try {
-                const {
-                  data: { session },
-                } = await supabase.auth.getSession();
-                const res = await fetch('/api/quotes/ups', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${session?.access_token}`,
+                await fetchRates({
+                  accountId: draft.account_id,
+                  from,
+                  to,
+                  weight: {
+                    value: totalWeight,
+                    unit: 'pound',
                   },
-                  credentials: 'include',
-                  body: JSON.stringify({ draft_id: draft.id }),
+                  dimensions: {
+                    unit: 'inch',
+                    length: Number(length || '10.0'),
+                    width: Number(width || '10.0'),
+                    height: Number(height || '10.0'),
+                  },
+                  ship_date: new Date().toISOString(),
                 });
 
-                let data;
-                const text = await res.text();
-                try {
-                  data = JSON.parse(text);
-                } catch (jsonError) {
-                  console.error('❌ Invalid JSON from API:', text);
-                  throw new Error('Invalid response from server.');
+                if (carrierError) {
+                  console.error('❌ Error from carrier rates:', carrierError);
+                  toast.error(carrierError);
                 }
-
-                if (!res.ok) {
-                  console.error('❌ API error response:', data);
-                  throw new Error(data?.error || 'Quote failed');
-                }
-
-                // If AI returned package optimization, update preferences with first package
-                const pkg = data.optimized_packages?.[0];
-                if (pkg) {
-                  await updateDraft('preferences', {
-                    ...draft.preferences,
-                    length: pkg.length,
-                    width: pkg.width,
-                    height: pkg.height,
-                    weight: pkg.weight,
-                  });
-                }
-
-                // Certifique-se de que a variável quoteResults está definida anteriormente
-                const quoteResults = data.services || [];
-                // Atualiza o draft local com as novas cotações
-                setDraft((prev) => {
-                  if (!prev) return null;
-                  return {
-                    ...prev,
-                    quote_results: quoteResults,
-                  };
-                });
-
-                // Atualiza a lista de resultados de cotação
-                setQuoteResults(quoteResults);
-
-                await supabase
-                  .from('saip_quote_drafts')
-                  .update({ quote_results: data.services })
-                  .eq('id', draft.id);
               } catch (err) {
-                console.error('❌ Error fetching quote:', err);
-                toast.error('Failed to fetch quote.');
+                console.error('❌ Error fetching carrier rates:', err);
+                toast.error('Failed to fetch carrier rates.');
               } finally {
                 setIsSimulating(false);
               }
@@ -455,7 +538,10 @@ export default function Step5DeliveryPreferences({
       </div>
 
       
-        <div id="quote-results" className="w-full lg:w-2/4 bg-muted/50 p-2 md:p-6 rounded-none md:rounded-lg -mx-3 md:mx-0">
+        <div
+          id="quote-results"
+          className="w-full lg:w-2/5 bg-muted/50 p-2 md:p-5 xl:p-6 rounded-none md:rounded-lg -mx-3 md:mx-0"
+        >
           <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-3 mb-3 bg-muted/80 backdrop-blur px-3 py-2 md:static md:mx-0 md:bg-transparent md:px-0 md:py-0 md:mb-4">
             <h2 className="text-lg md:text-xl font-bold">Quote Results</h2>
           </div>
@@ -473,9 +559,29 @@ export default function Step5DeliveryPreferences({
               return (
                 <div className="space-y-3">
                   {filteredQuoteResults.map((service, idx) => {
+                    const serviceCode = service.carrier_service_code ?? service.code ?? service.serviceCode;
+                    const serviceName =
+                      service.carrier_service_name ||
+                      service.description ||
+                      service.serviceName ||
+                      service.name ||
+                      'Unnamed service';
+                    const carrier = (service.carrier || '').toUpperCase();
                     const isSelected =
-                      (selectedService?.serviceCode ?? selectedService?.code) ===
-                      (service.serviceCode ?? service.code);
+                      !!selectedService &&
+                      (selectedService.carrier_service_code ?? selectedService.code ?? selectedService.serviceCode) ===
+                        serviceCode &&
+                      (selectedService.carrier || '').toUpperCase() === carrier;
+                    const isCheapest = idx === 0;
+                    const logoUrl =
+                      carrier === 'FEDEX'
+                        ? 'https://euzjrgnyzfgldubqglba.supabase.co/storage/v1/object/public/img/fedex.png'
+                        : carrier === 'UPS'
+                        ? 'https://euzjrgnyzfgldubqglba.supabase.co/storage/v1/object/public/img/ups.png'
+                        : carrier === 'USPS'
+                        ? 'https://euzjrgnyzfgldubqglba.supabase.co/storage/v1/object/public/img/usps.png'
+                        : 'https://euzjrgnyzfgldubqglba.supabase.co/storage/v1/object/public/img/ups.png';
+
                     return (
                       <div
                         key={idx}
@@ -485,13 +591,7 @@ export default function Step5DeliveryPreferences({
                             if (!prev) return prev;
                             return {
                               ...prev,
-                              selected_service: {
-                                code: service.code,
-                                name: service.description || 'N/A',
-                                cost: service.total || '0.00',
-                                delivery_days: service.deliveryDays,
-                                delivery_time: service.deliveryTime,
-                              },
+                              selected_service: service,
                             };
                           });
                         }}
@@ -502,30 +602,36 @@ export default function Step5DeliveryPreferences({
                             : 'border-muted hover:border-primary/40'
                         )}
                       >
+                        {isSelected && (
+                          <span className="absolute -top-2 -right-2 bg-emerald-500 text-[10px] text-white px-2 py-0.5 rounded-full shadow">
+                            Selected
+                          </span>
+                        )}
                         <div className="flex items-center gap-4">
                           <img
-                            src={
-                              (service.code ?? service.serviceCode).startsWith('FEDEX') ||
-                              (service.code ?? service.serviceCode) === 'GROUND_HOME_DELIVERY'
-                                ? 'https://euzjrgnyzfgldubqglba.supabase.co/storage/v1/object/public/img//fedex.png'
-                                : 'https://euzjrgnyzfgldubqglba.supabase.co/storage/v1/object/public/img//ups.png'
-                            }
-                            alt="Carrier"
+                            src={logoUrl}
+                            alt={carrier || 'Carrier'}
                             className="w-9 h-9 md:w-10 md:h-10 object-contain"
                           />
                           <div>
-                            <p className="font-semibold">{service.description}</p>
+                            <p className="font-semibold">{serviceName}</p>
                             <p className="text-sm text-muted-foreground">
                               {service.deliveryDays
                                 ? `${service.deliveryDays} business day(s)`
                                 : 'Estimated delivery'}
                               {service.deliveryTime ? ` by ${service.deliveryTime}` : ''}
                             </p>
+                            {isCheapest && !isSelected && (
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-medium px-2 py-0.5 mt-1">
+                                Recommended • Lowest cost
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="text-right flex flex-col items-end gap-2">
-                          <p className="text-green-600 font-bold text-lg">
+                          <p className="text-green-600 font-bold text-lg flex items-center gap-1">
                             {service.total ? `$${Number(service.total).toFixed(2)}` : 'N/A'}
+                            {isSelected && <span className="text-xs text-emerald-600">✓</span>}
                           </p>
                         </div>
                       </div>
@@ -538,13 +644,17 @@ export default function Step5DeliveryPreferences({
         </div>
 
       {selectedService && (
-        <div className="w-full lg:w-1/4 bg-white p-6 rounded shadow border">
+        <div className="w-full lg:w-1/5 bg-white p-4 md:p-5 xl:p-6 rounded shadow border">
           <h2 className="text-xl font-bold mb-4">Actions</h2>
 
           <p className="text-sm mb-4">
             Selected:{' '}
             <strong>
-              {selectedService.description || selectedService.serviceName || selectedService.name || 'Unnamed service'}
+              {selectedService.carrier_service_name ||
+                selectedService.description ||
+                selectedService.serviceName ||
+                selectedService.name ||
+                'Unnamed service'}
             </strong>
             <br />
             Delivery:{' '}
@@ -563,41 +673,48 @@ export default function Step5DeliveryPreferences({
           </p>
 
           <Button
-  className="w-full mb-2"
-  onClick={async () => {
-    if (!selectedService) {
-      toast.error('Please select a service first.');
-      return;
-    }
-
-    const { error } = await supabase
-      .from('saip_quote_drafts')
-      .update({
-        selected_service: selectedService, // salva tudo
-        status: 'quoted',
-        updated_at: new Date(),
-      })
-      .eq('id', draft.id);
-
-    if (error) {
-      toast.error('Failed to save selection.');
-    } else {
-      toast.success('Selection saved successfully!');
-      router.push('/orders/quotes');
-    }
-  }}
->
-  Save quote
-</Button>
-
-          <Button
             className="w-full mb-2"
-            onClick={() => {
-              alert('Sending to SynC...')
+            disabled={saving}
+            onClick={async () => {
+              if (!selectedService) {
+                toast.error('Please select a service first.');
+                return;
+              }
+
+              try {
+                setSaving(true);
+
+                const { error } = await supabase
+                  .from('saip_quote_drafts')
+                  .update({
+                    selected_service: selectedService, // salva tudo
+                    status: 'quoted',
+                    updated_at: new Date(),
+                  })
+                  .eq('id', draft.id);
+
+                if (error) {
+                  console.error('❌ Failed to save selection:', error);
+                  toast.error('Failed to save selection.');
+                } else {
+                  toast.success('Selection saved successfully!');
+                  router.push('/orders/quotes');
+                }
+              } catch (err) {
+                console.error('❌ Unexpected error saving quote:', err);
+                toast.error('Unexpected error saving quote.');
+              } finally {
+                setSaving(false);
+              }
             }}
           >
-            Send to SynC Outbound
+            {saving ? 'Saving...' : 'Save quote'}
           </Button>
+          <p className="text-[11px] text-muted-foreground text-center">
+            This will lock this service for this quote and return to the quotes list.
+          </p>
+
+
 
 
         </div>

@@ -94,19 +94,18 @@ useEffect(() => {
   return (
     <div className="hidden lg:flex items-center justify-between h-20 px-6 bg-white border-b shadow-sm relative">
       <div className="flex items-center gap-4">
-      {user.role === 'client' ? (
-        logoUrlWithVersion ? (
-          <img
-            src={logoUrlWithVersion}
-            alt="Company Logo"
-            className="w-50 h-10 object-contain rounded-md"
-          />
-        ) : (
-          <div className="text-xl font-semibold text-gray-400">Your Logo</div>
-        )
-      ) : null}
-
-</div>
+        {(user.role === 'client' || user.role === 'staff-client') && (
+          logoUrlWithVersion ? (
+            <img
+              src={logoUrlWithVersion}
+              alt="Company Logo"
+              className="h-10 object-contain rounded-md"
+            />
+          ) : (
+            <div className="text-xl font-semibold text-gray-400">Your Logo</div>
+          )
+        )}
+      </div>
 
       {/* Ações */}
       <div className="flex items-center gap-4 relative" ref={dropdownRef}>

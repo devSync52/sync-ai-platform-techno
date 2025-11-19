@@ -24,6 +24,7 @@ export function Step1ClientSelection({
 }) {
   const supabase = useSupabase()
   const currentUser = useCurrentUser()
+  console.log("🔎 Step1 - CURRENT USER:", JSON.stringify(currentUser, null, 2))
   const [clients, setClients] = useState<Account[]>([])
   const [selectedClientId, setSelectedClientId] = useState('')
   const [isLoadingDraft, setIsLoadingDraft] = useState(true)
@@ -32,8 +33,8 @@ export function Step1ClientSelection({
     const fetchClients = async () => {
       if (!currentUser?.account_id || !currentUser?.role) return;
 
-      // Se for client, define ele mesmo como client
-      if (currentUser.role === 'client') {
+      // Se for client ou staff-client, define a própria account como client
+      if (currentUser.role === 'client' || currentUser.role === 'staff-client') {
         const { data, error } = await supabase
           .from('accounts')
           .select('*')
@@ -41,7 +42,7 @@ export function Step1ClientSelection({
           .single();
 
         if (error) {
-          console.error('❌ Error loading self client (client role):', error);
+          console.error('❌ Error loading self client (client/staff-client role):', error);
         } else if (data) {
           setClients([data]);
         }
@@ -95,6 +96,17 @@ export function Step1ClientSelection({
 
     fetchInitialClient()
   }, [initialClient, draftId])
+
+  useEffect(() => {
+    // Auto-select client when there is only one option and no selection yet
+    if (!isLoadingDraft && !selectedClientId && clients.length === 1) {
+      const onlyClient = clients[0]
+      setSelectedClientId(onlyClient.id)
+      if (onClientChange) {
+        onClientChange(onlyClient.id)
+      }
+    }
+  }, [isLoadingDraft, selectedClientId, clients, onClientChange])
 
   return (
     <Card className="bg-white">

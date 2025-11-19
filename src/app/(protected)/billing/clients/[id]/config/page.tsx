@@ -22,6 +22,201 @@ import {
   type ClientServiceEffective,
 } from '@/lib/supabase/billing'
 
+type BillingFormState = {
+  billingActive: boolean
+  method: 'prepaid' | 'postpaid'
+  minMonthlyFee: number
+  discountPct: number
+  taxExempt: boolean
+  taxId: string
+  invoiceCycle: 'monthly' | 'biweekly' | 'weekly'
+  cutDay: number
+  templatePrimary: string
+  // Storage
+  storageModel: 'CUFT' | 'LB' | 'UNIT' | 'PALLET_DAY'
+  storagePricePerCuft: number
+  storagePricePerLb: number
+  storagePricePerUnit: number
+  storagePricePerPalletDay: number
+  freeStorageDays: number
+  snapshotHourUtc: number
+  defaultVolumeCuft: number
+  defaultWeightLb: number
+  // Outbound
+  outboundPricePerPack: number
+  outboundPricePerLine: number
+  outboundPricePerUnit: number
+  outboundPricePerLabel: number
+  outboundPricePerLb: number
+  outboundMinOrder: number
+}
+
+type ServiceCatalogRow = {
+  id: string
+  name: string
+  category: string
+  unit: string
+  defaultRate?: number
+  active?: boolean
+}
+
+type ServiceOverrideRow = {
+  clientId: string
+  planServiceId: string
+  overrideRate?: number
+  activeOverride?: boolean
+}
+
+function useClientBillingConfigActions({
+  parentAccountId,
+  clientId,
+}: {
+  parentAccountId: string
+  clientId: string
+}) {
+  const supabase = useSupabase()
+  const [savingConfig, setSavingConfig] = useState(false)
+  const [savingOverrides, setSavingOverrides] = useState(false)
+  const [lastError, setLastError] = useState<string | null>(null)
+
+  const saveConfig = async (form: BillingFormState): Promise<BillingConfig | null> => {
+    try {
+      setSavingConfig(true)
+      setLastError(null)
+
+      const payload = {
+        billing_active: form.billingActive,
+        billing_method: form.method,
+        min_monthly_fee_cents: toCents(form.minMonthlyFee),
+        discount_pct: form.discountPct,
+        tax_exempt: form.taxExempt,
+        tax_id: form.taxId,
+        invoice_cycle: form.invoiceCycle,
+        cut_off_day: form.cutDay,
+        template_primary_color: form.templatePrimary,
+        // Storage
+        storage_rate_model: form.storageModel,
+        storage_price_per_cuft_cents: toCents(form.storagePricePerCuft),
+        storage_price_per_lb_cents: toCents(form.storagePricePerLb),
+        storage_price_per_unit_cents: toCents(form.storagePricePerUnit),
+        storage_price_per_pallet_day_cents: toCents(form.storagePricePerPalletDay),
+        free_storage_days: form.freeStorageDays,
+        snapshot_hour_utc: form.snapshotHourUtc,
+        default_volume_cuft: form.defaultVolumeCuft,
+        default_weight_lb: form.defaultWeightLb,
+        // Outbound
+        outbound_price_per_pack_cents: toCents(form.outboundPricePerPack),
+        outbound_price_per_line_cents: toCents(form.outboundPricePerLine),
+        outbound_price_per_unit_cents: toCents(form.outboundPricePerUnit),
+        outbound_price_per_label_cents: toCents(form.outboundPricePerLabel),
+        outbound_price_per_lb_cents: toCents(form.outboundPricePerLb),
+        outbound_min_order_cents: toCents(form.outboundMinOrder),
+      }
+
+      const res = await fetch(`/api/billing/configs/${clientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        let msg = 'Failed to save config.'
+        try {
+          const errJson = await res.json()
+          if (errJson?.error) msg = errJson.error
+        } catch {
+          // ignore
+        }
+        setLastError(msg)
+        throw new Error(msg)
+      }
+
+      let updated: BillingConfig | null = null
+      try {
+        const json = await res.json()
+        updated = (json?.data ?? null) as BillingConfig | null
+      } catch {
+        // ignore
+      }
+
+      return updated
+    } catch (e) {
+      console.error('[billing] saveConfig failed:', e)
+      if (!lastError) setLastError('Failed to save config.')
+      return null
+    } finally {
+      setSavingConfig(false)
+    }
+  }
+
+  const saveOverrides = async (args: {
+    selectedWarehouseId: string
+    servicesCatalog: ServiceCatalogRow[]
+    overrides: ServiceOverrideRow[]
+  }): Promise<ClientServiceEffective[] | null> => {
+    const { selectedWarehouseId, servicesCatalog, overrides } = args
+    if (!selectedWarehouseId) return null
+
+    try {
+      setSavingOverrides(true)
+      setLastError(null)
+
+      for (const srv of servicesCatalog) {
+        const ov = overrides.find(o => o.planServiceId === srv.id)
+        const desiredVisible = !(ov?.activeOverride === false)
+
+        await setClientServiceVisibility(supabase, {
+          parentAccountId,
+          clientAccountId: clientId,
+          warehouseId: selectedWarehouseId,
+          serviceId: srv.id,
+          visible: desiredVisible,
+        })
+
+        if (ov && typeof ov.overrideRate === 'number') {
+          await setClientServiceOverride(supabase, {
+            parentAccountId,
+            clientAccountId: clientId,
+            warehouseId: selectedWarehouseId,
+            serviceId: srv.id,
+            rateCents: Math.round(ov.overrideRate * 100),
+          })
+        } else {
+          await unsetClientServiceOverride(supabase, {
+            parentAccountId,
+            clientAccountId: clientId,
+            warehouseId: selectedWarehouseId,
+            serviceId: srv.id,
+          })
+        }
+      }
+
+      const list = await fetchClientServicesEffective(
+        supabase,
+        parentAccountId,
+        clientId,
+        selectedWarehouseId
+      )
+
+      return list ?? []
+    } catch (e) {
+      console.error('[billing] saveOverrides failed:', e)
+      setLastError('Failed to save overrides.')
+      return null
+    } finally {
+      setSavingOverrides(false)
+    }
+  }
+
+  return {
+    saveConfig,
+    saveOverrides,
+    savingConfig,
+    savingOverrides,
+    lastError,
+  }
+}
+
 
 const FALLBACK_WAREHOUSE_LABEL = 'Unassigned'
 
@@ -60,16 +255,70 @@ function resolveServiceRate(
 }
 
 // Mocked initial values (swap with real fetch later)
-const initialMock = {
+const initialMock: BillingFormState = {
   billingActive: true,
-  method: 'postpaid' as 'prepaid' | 'postpaid',
+  method: 'postpaid',
   minMonthlyFee: 150,
   discountPct: 5,
   taxExempt: false,
   taxId: '12-3456789',
-  invoiceCycle: 'monthly' as 'monthly' | 'biweekly' | 'weekly',
+  invoiceCycle: 'monthly',
   cutDay: 31,
   templatePrimary: '#3f2d90',
+  // Storage
+  storageModel: 'CUFT',
+  storagePricePerCuft: 0,
+  storagePricePerLb: 0,
+  storagePricePerUnit: 0,
+  storagePricePerPalletDay: 0,
+  freeStorageDays: 0,
+  snapshotHourUtc: 3,
+  defaultVolumeCuft: 0,
+  defaultWeightLb: 0,
+  // Outbound
+  outboundPricePerPack: 0,
+  outboundPricePerLine: 0,
+  outboundPricePerUnit: 0,
+  outboundPricePerLabel: 0,
+  outboundPricePerLb: 0,
+  outboundMinOrder: 0,
+}
+
+// Derive local form state from loaded BillingConfig
+const deriveFormFromConfig = (cfg: BillingConfig | null): BillingFormState => {
+  if (!cfg) return initialMock
+  const anyCfg = cfg as any
+  return {
+    billingActive: anyCfg.billing_active ?? true,
+    method: anyCfg.billing_method ?? 'postpaid',
+    minMonthlyFee:
+      typeof anyCfg.min_monthly_fee_cents === 'number'
+        ? anyCfg.min_monthly_fee_cents / 100
+        : 0,
+    discountPct: anyCfg.discount_pct ?? 0,
+    taxExempt: anyCfg.tax_exempt ?? false,
+    taxId: anyCfg.tax_id ?? '',
+    invoiceCycle: anyCfg.invoice_cycle ?? 'monthly',
+    cutDay: anyCfg.cut_off_day ?? 31,
+    templatePrimary: anyCfg.template_primary_color ?? '#3f2d90',
+    // Storage
+    storageModel: anyCfg.storage_rate_model ?? 'CUFT',
+    storagePricePerCuft: toUSD(anyCfg.storage_price_per_cuft_cents),
+    storagePricePerLb: toUSD(anyCfg.storage_price_per_lb_cents),
+    storagePricePerUnit: toUSD(anyCfg.storage_price_per_unit_cents),
+    storagePricePerPalletDay: toUSD(anyCfg.storage_price_per_pallet_day_cents),
+    freeStorageDays: anyCfg.free_storage_days ?? 0,
+    snapshotHourUtc: anyCfg.snapshot_hour_utc ?? 3,
+    defaultVolumeCuft: anyCfg.default_volume_cuft ?? 0,
+    defaultWeightLb: anyCfg.default_weight_lb ?? 0,
+    // Outbound
+    outboundPricePerPack: toUSD(anyCfg.outbound_price_per_pack_cents),
+    outboundPricePerLine: toUSD(anyCfg.outbound_price_per_line_cents),
+    outboundPricePerUnit: toUSD(anyCfg.outbound_price_per_unit_cents),
+    outboundPricePerLabel: toUSD(anyCfg.outbound_price_per_label_cents),
+    outboundPricePerLb: toUSD(anyCfg.outbound_price_per_lb_cents),
+    outboundMinOrder: toUSD(anyCfg.outbound_min_order_cents),
+  }
 }
 
 export default function ClientConfigPage() {
@@ -81,6 +330,15 @@ export default function ClientConfigPage() {
   const [config, setConfig] = useState<BillingConfig | null>(null)
   const [configLoading, setConfigLoading] = useState<boolean>(false)
   const [configError, setConfigError] = useState<string | null>(null)
+
+  const clientLabel =
+    (config as any)?.client_name ??
+    (config as any)?.client_code ??
+    String(id)
+  const clientLogo =
+    (config as any)?.client_logo_url
+      ? String((config as any).client_logo_url)
+      : null
 
   // Services visibility & override helpers
   const enabledServices = useMemo(() => new Set(config?.enabled_services ?? []), [config])
@@ -131,8 +389,22 @@ export default function ClientConfigPage() {
 
   const [form, setForm] = useState(initialMock)
 
+  useEffect(() => {
+    setForm(deriveFormFromConfig(config))
+  }, [config])
+
   // Pricing plan + overrides (mocked)
   const clientId = String(id)
+  const {
+    saveConfig,
+    saveOverrides,
+    savingConfig,
+    savingOverrides,
+    lastError,
+  } = useClientBillingConfigActions({
+    parentAccountId: PARENT_ID,
+    clientId,
+  })
   const [selectedPlanId, setSelectedPlanId] = useState<string>('default')
   const [overrides, setOverrides] = useState<Array<{ clientId: string; planServiceId: string; overrideRate?: number; activeOverride?: boolean }>>([])
 
@@ -265,7 +537,7 @@ const adapterPlanServices = useMemo(
         if (!active) return
         setEffectiveServices(list ?? [])
       } catch (e) {
-        console.error('[billing] fetchClientServicesEffective failed:', e)
+        console.warn('[billing] fetchClientServicesEffective wrapper error:', e)
         if (active) setEffectiveServices([])
       }
     }
@@ -284,7 +556,6 @@ const adapterPlanServices = useMemo(
     active: boolean
   }
  
-    const [saving, setSaving] = useState(false)
     const [customServices, setCustomServices] = useState<ClientCustomService[]>([
       { id: 'cs_unld_20', category: 'UNLOADING', name: "CNTR 20' / TRUCK 26' - LOOSE SHIPMENT", event: 'ONCE', unit: 'container', rate: 850, active: true },
       { id: 'cs_unld_40', category: 'UNLOADING', name: 'CNTR 40/40 HC LOOSE', event: 'ONCE', unit: 'container', rate: 1250, active: true },
@@ -352,27 +623,47 @@ const adapterPlanServices = useMemo(
   // Helper: group categories
   const categories = useMemo(() => Array.from(new Set(customServices.map(s => s.category))), [customServices])
 
-  const onSave = () => {
-    // Replace with real mutation later
-    console.log('Saving (mock):', { clientId: id, ...form })
-    // eslint-disable-next-line no-alert
-    alert('Saved client config (mock).')
+  const handleSaveConfig = async () => {
+    const updated = await saveConfig(form)
+    if (updated) {
+      setConfig(updated as BillingConfig)
+      // eslint-disable-next-line no-alert
+      alert('Client billing config saved.')
+    } else if (lastError) {
+      // eslint-disable-next-line no-alert
+      alert(lastError)
+    }
   }
 
-  const onReset = () => setForm(initialMock)
+  const onReset = () => {
+    setForm(deriveFormFromConfig(config))
+  }
 
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Client Config</h1>
-          <p className="text-sm text-muted-foreground">Manage billing settings for <span className="font-medium">{String(id)}</span>.</p>
+        <div className="flex items-center gap-3">
+          {clientLogo && (
+            <img
+              src={clientLogo}
+              alt={clientLabel}
+              className="h-10 w-10 rounded-md object-contain bg-white border"
+            />
+          )}
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Client Config</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage billing settings for <span className="font-medium">{clientLabel}</span>.
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Link href="/billing/clients"><Button variant="outline">Back to Clients</Button></Link>
           <Button variant="outline" onClick={() => router.push(`/billing/simulator?clientId=${id}`)}>Test Rules (Simulator)</Button>
-          <Button onClick={onSave}>Save</Button>
+          <Button onClick={handleSaveConfig} disabled={savingConfig}>
+            {savingConfig ? 'Saving…' : 'Save'}
+          </Button>
         </div>
       </div>
 
@@ -383,6 +674,8 @@ const adapterPlanServices = useMemo(
           <TabsTrigger value="taxes">Taxes</TabsTrigger>
           <TabsTrigger value="cycle">Invoice Cycle</TabsTrigger>
           <TabsTrigger value="template">Template</TabsTrigger>
+          <TabsTrigger value="storage">Storage</TabsTrigger>
+          <TabsTrigger value="outbound">Outbound</TabsTrigger>
           <TabsTrigger value="pricing_overrides">Pricing Overrides</TabsTrigger>
         </TabsList>
 
@@ -435,7 +728,9 @@ const adapterPlanServices = useMemo(
           </Card>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={onReset}>Reset</Button>
-            <Button onClick={onSave}>Save changes</Button>
+            <Button onClick={handleSaveConfig} disabled={savingConfig}>
+              {savingConfig ? 'Saving…' : 'Save changes'}
+            </Button>
           </div>
         </TabsContent>
 
@@ -461,7 +756,9 @@ const adapterPlanServices = useMemo(
           </Card>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={onReset}>Reset</Button>
-            <Button onClick={onSave}>Save changes</Button>
+            <Button onClick={handleSaveConfig} disabled={savingConfig}>
+              {savingConfig ? 'Saving…' : 'Save changes'}
+            </Button>
           </div>
         </TabsContent>
 
@@ -484,7 +781,9 @@ const adapterPlanServices = useMemo(
           </Card>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={onReset}>Reset</Button>
-            <Button onClick={onSave}>Save changes</Button>
+            <Button onClick={handleSaveConfig} disabled={savingConfig}>
+              {savingConfig ? 'Saving…' : 'Save changes'}
+            </Button>
           </div>
         </TabsContent>
 
@@ -527,7 +826,9 @@ const adapterPlanServices = useMemo(
           </Card>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={onReset}>Reset</Button>
-            <Button onClick={onSave}>Save changes</Button>
+            <Button onClick={handleSaveConfig} disabled={savingConfig}>
+              {savingConfig ? 'Saving…' : 'Save changes'}
+            </Button>
           </div>
         </TabsContent>
 
@@ -549,12 +850,12 @@ const adapterPlanServices = useMemo(
                 Used in invoice header and accents.
               </div>
             </div>
-          </Card>
-          <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={onReset}>Reset</Button>
-            <Button onClick={onSave}>Save changes</Button>
-          </div>
-        </TabsContent>
+            </Card>
+  <div className="flex gap-2 justify-end">
+    <Button variant="outline" onClick={onReset}>Reset</Button>
+    <Button onClick={handleSaveConfig}>Save changes</Button>
+  </div>
+</TabsContent>
 
         {/* Pricing Overrides */}
         <TabsContent value="pricing_overrides" className="space-y-4 bg-white">
@@ -704,42 +1005,25 @@ const adapterPlanServices = useMemo(
           </Card>
           <div className="flex gap-2 justify-end">
             <Button
-              disabled={saving}
+              disabled={savingOverrides}
               onClick={async () => {
-                try {
-                  setSaving(true)
-                  if (!selectedWh) return
-                  for (const srv of servicesCatalog) {
-                    const ov = overrides.find(o => o.planServiceId === srv.id)
-                    const desiredVisible = !(ov?.activeOverride === false)
-                    await setClientServiceVisibility(supabase, {
-                      parentAccountId: PARENT_ID, clientAccountId: clientId, warehouseId: selectedWh,
-                      serviceId: srv.id, visible: desiredVisible,
-                    })
-                    if (ov && typeof ov.overrideRate === 'number') {
-                      await setClientServiceOverride(supabase, {
-                        parentAccountId: PARENT_ID, clientAccountId: clientId, warehouseId: selectedWh,
-                        serviceId: srv.id, rateCents: Math.round(ov.overrideRate * 100),
-                      })
-                    } else {
-                      await unsetClientServiceOverride(supabase, {
-                        parentAccountId: PARENT_ID, clientAccountId: clientId, warehouseId: selectedWh,
-                        serviceId: srv.id,
-                      })
-                    }
-                  }
-                  const list = await fetchClientServicesEffective(supabase, PARENT_ID, clientId, selectedWh)
-                  setEffectiveServices(list ?? [])
+                if (!selectedWh) return
+                const list = await saveOverrides({
+                  selectedWarehouseId: selectedWh,
+                  servicesCatalog,
+                  overrides,
+                })
+                if (list) {
+                  setEffectiveServices(list)
+                  // eslint-disable-next-line no-alert
                   alert('Overrides saved.')
-                } catch (e) {
-                  console.error('[billing] save overrides failed:', e)
-                  alert('Failed to save overrides.')
-                } finally {
-                  setSaving(false)
+                } else if (lastError) {
+                  // eslint-disable-next-line no-alert
+                  alert(lastError)
                 }
               }}
             >
-              {saving ? 'Saving…' : 'Save overrides'}
+              {savingOverrides ? 'Saving…' : 'Save overrides'}
             </Button>
           </div>
           <Dialog open={openAddCustom} onOpenChange={setOpenAddCustom}>
@@ -810,3 +1094,5 @@ const adapterPlanServices = useMemo(
     </div>
   )
 }
+
+        

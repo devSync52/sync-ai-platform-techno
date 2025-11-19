@@ -21,32 +21,32 @@ export default function QuotesPage() {
     let step_data_1 = null
     let step_data_2 = null
 
-    if (user.role === 'client') {
+    if (user.role === 'client' || user.role === 'staff-client') {
       // Buscar warehouse (parent account)
       const { data: accountData } = await supabase
         .from('accounts')
         .select('parent_account_id')
         .eq('id', user.account_id)
         .single()
-
+    
       const parent_account_id = accountData?.parent_account_id
-
+    
       if (!parent_account_id) {
         console.error('❌ parent_account_id not found on user.account')
         setCreating(false)
         return
       }
-
+    
       const { data: parent, error: parentError } = await supabase
         .from('accounts')
         .select('id, name, email, phone, address_line1, address_line2, city, state, zip_code, country')
         .eq('id', parent_account_id)
         .single()
-
+    
       if (parent) {
         step_data_1 = user.account_id
       }
-
+    
       step_data_2 = {
         full_name: 'Miami Warehouse',
         email: null,

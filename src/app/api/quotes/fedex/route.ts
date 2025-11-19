@@ -28,15 +28,11 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      console.error('❌ Erro ao autenticar:', authError)
+      console.error('❌ FedEx - Unauthorized:', authError)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // const {
-    //   data: { user },
-    // } = await supabase.auth.getUser()
-
-    console.log('✅ Supabase user:', user)
+    console.log('✅ FedEx - Supabase user:', user)
 
     const accountId = user?.user_metadata?.account_id
     const userId = user?.id
@@ -47,32 +43,34 @@ export async function POST(req: Request) {
 
     const body = await req.json()
 
-    console.log('📦 Request body enviado para UPS:', body)
+    console.log('📦 FedEx - Request body:', body)
 
-    const response = await fetch('https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/get_ups_services', {
+    const response = await fetch(
+      'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/get_fedex_quotes',
+      {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
         },
         body: JSON.stringify(body),
-      });
+      }
+    )
 
     const text = await response.text()
 
-    console.log('📬 Resposta bruta da UPS:', text)
+    console.log('📬 FedEx - Raw response:', text)
 
     try {
       const data = JSON.parse(text)
       return NextResponse.json(data)
     } catch (err) {
-      console.error('❌ Falha ao parsear JSON da UPS:', err)
-      console.error('❌ Invalid JSON from UPS function:', text)
-      return NextResponse.json({ error: 'Invalid UPS response' }, { status: 500 })
+      console.error('❌ FedEx - Failed to parse JSON:', err)
+      console.error('❌ FedEx - Invalid JSON from function:', text)
+      return NextResponse.json({ error: 'Invalid FedEx response' }, { status: 500 })
     }
   } catch (err) {
-    console.error('[quote/ups] Erro inesperado:', err)
-    console.error('[quote/ups] Unexpected error:', err)
+    console.error('[quote/fedex] Unexpected error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

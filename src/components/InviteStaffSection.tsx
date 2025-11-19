@@ -50,8 +50,9 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
         .maybeSingle()
       if (data?.role) {
         setCurrentUserRole(data.role)
-        if (data?.role === 'client') {
-          setRole('staff-client')
+        if (data.role === 'client') {
+          // Client inviting another user: temporarily create another client
+          setRole('client')
         }
       }
     }
@@ -82,7 +83,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
     setLoading(true)
     const result = await sendStaffInviteAction({
       email,
-      role: role as 'staff-user' | 'staff-admin' | 'staff-client' | 'admin',
+      role: role as 'staff-user' | 'staff-admin' | 'staff-client' | 'admin' | 'client',
       accountId,
       invitedBy: session.user.id,
     })
@@ -90,7 +91,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
     if (result?.success) {
       toast.success('Invitation sent successfully!')
       setEmail('')
-      setRole(currentUserRole === 'client' ? 'staff-client' : 'staff-user')
+      setRole(currentUserRole === 'client' ? 'client' : 'staff-user')
       fetchTeam()
     } else {
       toast.error(result.message || 'Failed to send invitation')
@@ -112,7 +113,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
   
     const result = await sendStaffInviteAction({
       email,
-      role: member.role as 'staff-user' | 'staff-admin' | 'staff-client' | 'admin',
+      role: member.role as 'staff-user' | 'staff-admin' | 'staff-client' | 'admin' | 'client',
       accountId,
       invitedBy: session.user.id,
     })
@@ -142,6 +143,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
   const renderRole = (role: string) => {
     if (role === 'staff-admin') return 'Admin'
     if (role === 'staff-client') return 'Staff - Client'
+    if (role === 'client') return 'Client'
     return 'User'
   }
 
@@ -188,10 +190,10 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
         {currentUserRole === 'client' ? (
           <select
             className="w-full border px-4 py-2 rounded text-sm"
-            value="staff-client"
+            value="client"
             disabled
           >
-            <option value="staff-client">Staff - Client</option>
+            <option value="client">Staff</option>
           </select>
         ) : (
           <select

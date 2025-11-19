@@ -8372,3 +8372,28 @@ export const Constants = {
     },
   },
 } as const
+
+export type ShipStationRate = {
+  carrierCode: string;        // 'usps'
+  serviceCode: string;        // 'usps_ground_advantage'
+  serviceName: string;        // 'USPS Ground Advantage'
+  shipmentCost: number;       // 8.44
+  otherCost: number;          // 0.0
+  deliveryDays?: number | null;
+  guaranteedDeliveryDate?: string | null;
+  currency?: string;          // 'USD'
+};
+
+export interface NormalizedRate {
+  carrier: string;         // 'USPS', 'UPS', 'FedEx'
+  carrier_code: string;    // 'usps', 'ups', 'fedex'
+  service_code: string;    // 'usps_ground_advantage'
+  service_name: string;    // 'USPS Ground Advantage'
+  display_name: string;    // o que sai na UI (pode vir da tabela)
+  total: number;           // shipmentCost + otherCost
+  currency: string;        // 'USD'
+  delivery_days: number | null;
+  delivery_date: string | null;
+  source: 'shipstation';
+  raw: any;                // resposta inteira pra debug/auditoria
+}

@@ -9,6 +9,7 @@ interface CurrentUser {
   role?: string
   avatarUrl?: string
   account_id?: string
+  created_by_user_id?: string
 }
 
 interface CurrentUserStore {
@@ -23,7 +24,7 @@ export const useCurrentUserStore = create<CurrentUserStore>((set) => ({
   fetchUser: async (supabase, userId) => {
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, name, email, role, account_id')
+      .select('id, name, email, role, account_id, created_by_user_id')
       .eq('id', userId)
       .single()
 
@@ -41,13 +42,14 @@ export const useCurrentUserStore = create<CurrentUserStore>((set) => ({
           email: userData.email,
           role: userData.role,
           avatarUrl: detailsData?.avatar_url ?? null,
-          account_id: userData.account_id
+          account_id: userData.account_id,
+          created_by_user_id: userData.created_by_user_id ?? null
         }
       })
     }
 
     if (userError) console.error('User fetch error:', userError.message)
-    if (detailsError) console.error('Details fetch error:', detailsError.message)
+
   }
 }))
 

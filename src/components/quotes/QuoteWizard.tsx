@@ -11,6 +11,7 @@ import { Step2WarehouseSelection } from './steps/Step2WarehouseSelection'
 import Step3ShippingDetails from './steps/Step3ShippingDetails'
 import Step4PackageDetails from './steps/Step4PackageDetails'
 import Step5DeliveryPreferences from './steps/Step5DeliveryPreferences'
+import { StepSelectService } from './steps/StepSelectService'
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
@@ -123,6 +124,12 @@ export default function QuoteWizard() {
             initialPreferences={quoteData!.preferences || {}}
             onNext={() => setCurrentStep(5)}
             onBack={() => setCurrentStep(3)}
+          />
+        )}
+        {currentStep === 5 && (
+          <StepSelectService
+            draftId={quoteData!.id}
+            onBack={() => setCurrentStep(4)}
           />
         )}
       </div>

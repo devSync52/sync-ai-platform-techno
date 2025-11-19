@@ -35,7 +35,7 @@ export default function ClientsPage() {
   const [rows, setRows] = useState<BillingClientSummary[]>([])
 
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const [methodFilter, setMethodFilter] = useState<'all' | string>('all')
   const [warehouseFilter, setWarehouseFilter] = useState<'all' | string>('all')
 
@@ -158,7 +158,7 @@ const resolveMethodLabel = (value: string | null | undefined) => {
         </Card>
       )}
 
-      <Card className="p-4">
+      <Card className="p-4 bg-white">
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
           <div className="w-full sm:w-64">
             <Input
@@ -176,7 +176,6 @@ const resolveMethodLabel = (value: string | null | undefined) => {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
@@ -221,8 +220,8 @@ const resolveMethodLabel = (value: string | null | undefined) => {
         </div>
       </Card>
 
-      <Card className="p-4">
-        <div className="mb-3 text-sm font-medium">Client List</div>
+      <Card className="p-4 bg-white">
+        <div className="mb-3 text-lg font-medium">Client List</div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-muted-foreground">
@@ -266,7 +265,7 @@ const resolveMethodLabel = (value: string | null | undefined) => {
                       <td className="py-2 text-right space-x-2">
                         <Link href={`/billing/clients/${linkId}/config`}>
                           <Button size="sm" variant="outline">
-                            View Config
+                            Configs
                           </Button>
                         </Link>
                         <Link href={`/billing/clients/${linkId}/usage`}>

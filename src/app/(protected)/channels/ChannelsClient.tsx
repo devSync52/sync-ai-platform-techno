@@ -6,6 +6,7 @@ import { sendInviteAction } from '@/actions/sendInvite'
 import { resendInviteAction } from '@/actions/resendInvite'
 import { toast } from 'sonner'
 import Table from '@/components/ui/table'
+import { useSupabase } from '@/components/supabase-provider'
 
 interface InvitationSimple {
   id: string
@@ -46,8 +47,17 @@ export default function ChannelsClient({
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [invitations, setInvitations] = useState<InvitationSimple[]>(initialInvitations || [])
+
+  const [markupModalOpen, setMarkupModalOpen] = useState(false)
+  const [selectedChannelForMarkup, setSelectedChannelForMarkup] = useState<Channel | null>(null)
+  const [markupValue, setMarkupValue] = useState('')
+  const [savingMarkup, setSavingMarkup] = useState(false)
+  const [markupAccountId, setMarkupAccountId] = useState<string | null>(null)
+
   const itemsPerPage = 10
   const [currentPage, setCurrentPage] = useState(1)
+
+  const supabase = useSupabase()
 
   useEffect(() => {
     setLoading(true)
@@ -111,6 +121,98 @@ export default function ChannelsClient({
     setInviteEmail(channel.email || '')
     setInviteChannelId(channel.id)
     setInviteModalOpen(true)
+  }
+
+  const openMarkupModal = async (channel: Channel) => {
+    setSelectedChannelForMarkup(channel)
+    setMarkupValue('')
+    setMarkupAccountId(null)
+    setMarkupModalOpen(true)
+
+    // Resolve the account for this channel:
+    // we look for a child account whose parent_account_id = current accountId
+    // and whose name matches the channel name.
+    try {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id, shipping_markup_percent')
+        .eq('parent_account_id', accountId)
+        .eq('name', channel.name)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (error) {
+        console.error('Error fetching account for channel markup:', error)
+        return
+      }
+
+      if (!data || data.length === 0) {
+        console.warn(
+          'No child account found for channel. Expected accounts.parent_account_id = accountId and accounts.name = channel.name',
+          { accountId, channelName: channel.name },
+        )
+        return
+      }
+
+      const acc = data[0]
+      console.log('Resolved account for channel markup:', {
+        accountId: acc.id,
+        shipping_markup_percent: acc.shipping_markup_percent,
+      })
+      setMarkupAccountId(acc.id)
+
+      if (acc.shipping_markup_percent != null) {
+        setMarkupValue(String(acc.shipping_markup_percent))
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching account for channel markup:', err)
+    }
+  }
+
+  const handleSaveMarkup = async () => {
+    if (!selectedChannelForMarkup) return
+
+    const accountIdForMarkup = markupAccountId
+
+    if (!accountIdForMarkup) {
+      toast.error('This channel is not linked to a child account for markup.')
+      console.warn(
+        'No markupAccountId resolved for selected channel. Not updating any account for markup:',
+        selectedChannelForMarkup,
+      )
+      return
+    }
+
+    const raw = markupValue.replace(',', '.')
+    const percent = Number(raw)
+    if (Number.isNaN(percent) || percent < 0) {
+      toast.error('Please enter a valid percentage (0 or greater).')
+      return
+    }
+
+    try {
+      setSavingMarkup(true)
+      const { error } = await supabase
+        .from('accounts')
+        .update({ shipping_markup_percent: percent })
+        .eq('id', accountIdForMarkup)
+
+      if (error) {
+        console.error('Error updating shipping markup:', error)
+        toast.error('Failed to update shipping markup.')
+      } else {
+        toast.success('Shipping markup updated successfully.')
+        setMarkupModalOpen(false)
+        setSelectedChannelForMarkup(null)
+        setMarkupValue('')
+        setMarkupAccountId(null)
+      }
+    } catch (err) {
+      console.error('Unexpected error updating shipping markup:', err)
+      toast.error('Unexpected error updating shipping markup.')
+    } finally {
+      setSavingMarkup(false)
+    }
   }
 
   const sendInvite = async () => {
@@ -246,6 +348,13 @@ export default function ChannelsClient({
                             </button>
                           )}
 
+                          <button
+                            onClick={() => openMarkupModal(channel)}
+                            className="w-full px-3 py-2 border border-[#3f2d90] text-[#3f2d90] text-xs rounded hover:bg-[#3f2d90]/5"
+                          >
+                            Edit
+                          </button>
+
                           {/* Mostrar email do convite se existir */}
                           {findInvitation(channel.id)?.email && (
                             <div className="mt-2 text-[11px] text-gray-500 italic max-w-[150px] break-words">
@@ -291,6 +400,60 @@ export default function ChannelsClient({
         </>
       )}
 
+      {markupModalOpen && selectedChannelForMarkup && (
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+          aria-modal="true"
+          role="dialog"
+        >
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">
+              Shipping markup for {selectedChannelForMarkup.name}
+            </h2>
+            <label className="block text-sm font-medium mb-1">
+              Markup percentage (%)
+            </label>
+            <input
+              key={selectedChannelForMarkup?.id || 'markup-input'}
+              type="number"
+              min={0}
+              step="0.01"
+              className="w-full border px-4 py-3 rounded mb-2 text-sm"
+              value={markupValue}
+              onChange={(e) => setMarkupValue(e.target.value)}
+              placeholder="e.g. 15 for 15%"
+            />
+            <p className="text-[11px] text-gray-500 mb-4">
+              This percentage will be applied on top of the carrier rate when showing quotes for this customer.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setMarkupModalOpen(false)
+                  setSelectedChannelForMarkup(null)
+                  setMarkupValue('')
+                  setMarkupAccountId(null)
+                }}
+                className="px-4 py-3 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveMarkup}
+                className={`px-4 py-3 rounded text-sm ${
+                  savingMarkup
+                    ? 'bg-[#3f2d90]/60 text-white cursor-not-allowed'
+                    : 'bg-[#3f2d90] text-white hover:bg-[#3f2d90]/90'
+                }`}
+                disabled={savingMarkup}
+              >
+                {savingMarkup ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {inviteModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50" aria-modal="true" role="dialog">
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
@@ -311,7 +474,9 @@ export default function ChannelsClient({
               </button>
               <button
                 onClick={sendInvite}
-                className={`px-4 py-3 rounded text-sm ${sendingId ? 'bg-green-400 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                className={`px-4 py-3 rounded text-sm ${
+                  sendingId ? 'bg-green-400 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
                 disabled={!!sendingId}
               >
                 {sendingId ? 'Sending...' : 'Send'}
