@@ -14,7 +14,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation';
-import { useCarrierRates } from '@/hooks/useCarrierRates';
+import { useCarrierMultiBoxRates } from '@/hooks/useCarrierMultiBoxRates';
+import { computeMultiBoxFromItems } from '@/lib/shipping/multibox'
 
 function dedupeServicesByCarrierAndCode(services: any[]): any[] {
   const map = new Map<string, any>();
@@ -35,10 +36,23 @@ function dedupeServicesByCarrierAndCode(services: any[]): any[] {
 
     const existing = map.get(key);
     const currentTotal = Number(svc.total ?? 0);
-    const existingTotal = existing ? Number(existing.total ?? 0) : Number.POSITIVE_INFINITY;
+    const existingTotal = existing ? Number(existing.total ?? 0) : undefined;
 
-    if (!existing || currentTotal < existingTotal) {
+    if (!existing) {
+      // first occurrence for this carrier+service code
       map.set(key, svc);
+    } else {
+      if (carrier === 'USPS') {
+        // Para USPS, manter a MAIS CARA do grupo
+        if (existingTotal === undefined || currentTotal > existingTotal) {
+          map.set(key, svc);
+        }
+      } else {
+        // Para outros carriers, manter a mais barata (comportamento original)
+        if (existingTotal === undefined || currentTotal < existingTotal) {
+          map.set(key, svc);
+        }
+      }
     }
   }
 
@@ -82,7 +96,12 @@ export default function Step5DeliveryPreferences({
   const [items, setItems] = useState<any[]>([])
   const [quoteResults, setQuoteResults] = useState<any[]>([])
   const [selectedService, setSelectedService] = useState<any>(null)
-  const { rates, loading: isLoadingRates, error: carrierError, fetchRates } = useCarrierRates();
+  const {
+    rates,
+    loading: isLoadingRates,
+    error: carrierError,
+    fetchRates,
+  } = useCarrierMultiBoxRates();
   // After loading draft, set selectedService from previously saved service if exists
   useEffect(() => {
     if (draft?.selected_service) {
@@ -197,6 +216,11 @@ export default function Step5DeliveryPreferences({
   useEffect(() => {
     if (!draft || !items || items.length === 0) return;
 
+    // If we already have a computed box_count (multi-box packing), do not override
+    if ((draft.preferences as any)?.box_count) {
+      return;
+    }
+
     const totalWeight = items.reduce((sum, item) => {
       const qty = Number(item.quantity || 0);
       const weight = Number(item.weight_lbs || 0);
@@ -231,6 +255,66 @@ export default function Step5DeliveryPreferences({
     }
   }, [items, draft]);
 
+  // Precompute multi-box packing so user can see boxes before simulating
+  useEffect(() => {
+    if (!draft || !items || items.length === 0) return;
+
+    const prefs: any = draft.preferences || {};
+    const packingStrategy: 'balanced' | 'min_boxes' = (prefs.packing_strategy as any) || 'balanced';
+
+    const itemsForQuote = (items || []).map((item) => ({
+      length: Number(item.length || 0),
+      width: Number(item.width || 0),
+      height: Number(item.height || 0),
+      weight_lbs: Number(item.weight_lbs || 0),
+      quantity: Number(item.quantity || 0),
+    }));
+
+    // If there are no valid dimensions at all, skip
+    const hasAnyDims = itemsForQuote.some(
+      (it) => it.length > 0 && it.width > 0 && it.height > 0 && it.quantity > 0
+    );
+    if (!hasAnyDims) return;
+
+    try {
+      const { totalWeight, totalVolume, box } = computeMultiBoxFromItems(
+        itemsForQuote as any,
+        {
+          maxWeightPerBox: 145,
+          maxLengthPlusGirth: 165,
+          strategy: packingStrategy,
+        } as any
+      );
+
+      const nextPrefs: any = {
+        ...prefs,
+        packing_strategy: packingStrategy,
+        weight: Number(totalWeight.toFixed(2)),
+        volume: Number(totalVolume.toFixed(2)),
+        length: Number(box.length.toFixed(2)),
+        width: Number(box.width.toFixed(2)),
+        height: Number(box.height.toFixed(2)),
+        box_count: box.boxCount,
+      };
+
+      const current = prefs as any;
+      const unchanged =
+        Number(current.weight ?? 0) === nextPrefs.weight &&
+        Number(current.volume ?? 0) === nextPrefs.volume &&
+        Number(current.length ?? 0) === nextPrefs.length &&
+        Number(current.width ?? 0) === nextPrefs.width &&
+        Number(current.height ?? 0) === nextPrefs.height &&
+        current.box_count === nextPrefs.box_count &&
+        (current.packing_strategy || 'balanced') === nextPrefs.packing_strategy;
+
+      if (!unchanged) {
+        updateDraft('preferences', nextPrefs);
+      }
+    } catch (e) {
+      console.error('[MULTIBOX][Step5][auto] Failed to precompute packing:', e);
+    }
+  }, [draft, items, (draft as any)?.preferences?.packing_strategy]);
+
   // Quando chegarem novas rates normalizadas da edge get_carrier_rates,
   // convertemos para o formato unificado usado hoje em quote_results
   useEffect(() => {
@@ -244,10 +328,16 @@ export default function Step5DeliveryPreferences({
       currency: r.currency ?? 'USD',
       deliveryDays: r.delivery_days ?? null,
       deliveryTime: null,
-      metadata: { raw: r },
+      metadata: {
+        raw: r,
+        box_count: r.box_count,
+        per_box_weight: r.per_box_weight,
+        per_box_dimensions: r.per_box_dimensions,
+      },
     }));
 
     const dedupedServices = dedupeServicesByCarrierAndCode(unifiedServices);
+    
 
     setQuoteResults(dedupedServices);
     setDraft((prev) => {
@@ -279,6 +369,12 @@ export default function Step5DeliveryPreferences({
 
   // Get optimized package if available
   const optimizedPackage = draft.preferences?.optimized_packages?.[0];
+  const boxCount = (draft.preferences as any)?.box_count as number | undefined;
+
+  const selectedBoxCount =
+  (selectedService as any)?.metadata?.box_count ?? null;
+const selectedBoxDims =
+  (selectedService as any)?.metadata?.per_box_dimensions ?? null;
 
   return (
     <div className="flex flex-col lg:flex-row items-start gap-4 md:gap-6 xl:gap-2 w-full px-3 md:px-4 xl:px-0 pb-[env(safe-area-inset-bottom)]">
@@ -348,6 +444,12 @@ export default function Step5DeliveryPreferences({
         <div className="border-b pb-4 mb-4">
           <h3 className="font-semibold text-lg mb-2">Shipment Information</h3>
 
+          {boxCount && (
+            <p className="mt-1 text-[11px] text-muted-foreground text-sm mb-2">
+              Packages qty: <strong>{boxCount}</strong>
+            </p>
+          )}
+
           <label className="block text-sm font-medium">Weight (lb)</label>
           <Input
             placeholder="Total weight"
@@ -360,55 +462,103 @@ export default function Step5DeliveryPreferences({
             }
           />
 
-          <label className="block text-sm font-medium mt-4">Package</label>
-          <select
-            className="w-full border rounded px-3 py-2 mt-1"
-            value={draft.preferences?.package_type || ''}
-            onChange={(e) =>
-              updateDraft('preferences', {
-                ...draft.preferences,
-                package_type: e.target.value,
-              })
-            }
-          >
-            <option value="YOUR_PACKAGING">Your Packaging</option>
-            <option value="FEDEX_BOX">FedEx Box</option>
-            <option value="UPS_BOX">UPS Box</option>
-          </select>
 
-          <label className="block text-sm font-medium mt-4">Size (in)</label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Length"
-              value={optimizedPackage?.length || draft.preferences?.length || ''}
-              onChange={(e) =>
-                updateDraft('preferences', {
-                  ...draft.preferences,
-                  length: e.target.value,
-                })
-              }
-            />
-            <Input
-              placeholder="Width"
-              value={optimizedPackage?.width || draft.preferences?.width || ''}
-              onChange={(e) =>
-                updateDraft('preferences', {
-                  ...draft.preferences,
-                  width: e.target.value,
-                })
-              }
-            />
-            <Input
-              placeholder="Height"
-              value={optimizedPackage?.height || draft.preferences?.height || ''}
-              onChange={(e) =>
-                updateDraft('preferences', {
-                  ...draft.preferences,
-                  height: e.target.value,
-                })
-              }
-            />
-          </div>
+
+<label className="block text-sm font-medium mt-4">Size (in)</label>
+<div className="flex flex-col gap-2">
+  {boxCount && boxCount > 1 && (draft.preferences as any)?.packing_strategy === 'min_boxes' && (
+    <p className="text-[11px] text-amber-600">
+      ⚠️ Using strategy: <strong>Fewer boxes</strong>. Dimensions shown reflect largest-box packing.
+    </p>
+  )}
+  {selectedBoxCount && selectedBoxDims && (
+    <p className="mt-1 text-[11px] text-muted-foreground">
+      Packing result:&nbsp;
+      <strong>{selectedBoxCount}</strong> box
+      {selectedBoxCount > 1 ? 'es' : ''} of{' '}
+      {selectedBoxDims.length} × {selectedBoxDims.width} × {selectedBoxDims.height} in
+    </p>
+  )}
+  <div className="flex gap-2">
+    <Input
+      placeholder="Length"
+      value={
+        (draft.preferences as any)?.packing_strategy === 'min_boxes'
+          ? (draft.preferences as any)?.length
+          : (
+              selectedBoxDims?.length ??
+              optimizedPackage?.length ??
+              (draft.preferences as any)?.length ??
+              ''
+            )
+      }
+      onChange={(e) =>
+        updateDraft('preferences', {
+          ...(draft.preferences as any),
+          length: e.target.value,
+        })
+      }
+    />
+    <Input
+      placeholder="Width"
+      value={
+        (draft.preferences as any)?.packing_strategy === 'min_boxes'
+          ? (draft.preferences as any)?.width
+          : (
+              selectedBoxDims?.width ??
+              optimizedPackage?.width ??
+              (draft.preferences as any)?.width ??
+              ''
+            )
+      }
+      onChange={(e) =>
+        updateDraft('preferences', {
+          ...(draft.preferences as any),
+          width: e.target.value,
+        })
+      }
+    />
+    <Input
+      placeholder="Height"
+      value={
+        (draft.preferences as any)?.packing_strategy === 'min_boxes'
+          ? (draft.preferences as any)?.height
+          : (
+              selectedBoxDims?.height ??
+              optimizedPackage?.height ??
+              (draft.preferences as any)?.height ??
+              ''
+            )
+      }
+      onChange={(e) =>
+        updateDraft('preferences', {
+          ...(draft.preferences as any),
+          height: e.target.value,
+        })
+      }
+    />
+  </div>
+
+  {/* Packing strategy selector - only relevant when there is more than one box */}
+  {boxCount && boxCount > 1 && (
+    <div className="mt-2">
+      <label className="block text-sm font-medium">Packing Strategy</label>
+      <select
+        className="w-full border rounded px-3 py-2 mt-1 text-sm"
+        value={(draft.preferences as any)?.packing_strategy || 'balanced'}
+        onChange={(e) =>
+          updateDraft('preferences', {
+            ...(draft.preferences as any),
+            packing_strategy: e.target.value,
+          })
+        }
+      >
+        <option value="balanced">Balanced (recommended)</option>
+        <option value="min_boxes">Fewer boxes (minimize box count)</option>
+      </select>
+    </div>
+  )}
+</div>
         </div>
 
         {/* Confirmation & Service */}
@@ -428,7 +578,7 @@ export default function Step5DeliveryPreferences({
             <option value="SIGNATURE">Signature Required</option>
           </select>
 
-          <label className="block text-sm font-medium mt-4">Service Class</label>
+         {/* <label className="block text-sm font-medium mt-4">Service Class</label>
           <select
             className="w-full border rounded px-3 py-2 mt-1"
             value={draft.preferences?.service_class || ''}
@@ -443,96 +593,108 @@ export default function Step5DeliveryPreferences({
             <option value="URGENT">Urgent</option>
             <option value="RAPID">Rapid</option>
             <option value="STANDARD">3 Days+</option>
-          </select>
-        </div>
+          </select>*/}
+        </div> 
 
         <div className="mt-6 flex justify-end">
-          <Button
-            disabled={isSimulating}
-            className="bg-[#3B2680] text-white"
-            onClick={async () => {
-              // Pre-validate and apply default dimensions/weight if missing
-              const weight = draft.preferences?.weight || '1.0';
-              const length = draft.preferences?.length || '10.0';
-              const width = draft.preferences?.width || '10.0';
-              const height = draft.preferences?.height || '10.0';
+        <Button
+  disabled={isSimulating}
+  className="bg-[#3B2680] text-white"
+  onClick={async () => {
+    // Continua mantendo o comportamento atual de preencher defaults
+    const weight = (draft.preferences as any)?.weight || '1.0';
+    const length = (draft.preferences as any)?.length || '10.0';
+    const width = (draft.preferences as any)?.width || '10.0';
+    const height = (draft.preferences as any)?.height || '10.0';
 
-              if (
-                !draft.preferences?.weight ||
-                !draft.preferences?.length ||
-                !draft.preferences?.width ||
-                !draft.preferences?.height
-              ) {
-                toast.warning(
-                  'Weight and dimensions were missing. Default values were applied: 10x10x10 inches, 1 lb.'
-                );
-              }
+    if (
+      !(draft.preferences as any)?.weight ||
+      !(draft.preferences as any)?.length ||
+      !(draft.preferences as any)?.width ||
+      !(draft.preferences as any)?.height
+    ) {
+      toast.warning(
+        'Weight and dimensions were missing. Default values were applied: 10x10x10 inches, 1 lb.'
+      );
+    }
 
-              const updatedPreferences = {
-                ...draft.preferences,
-                weight,
-                length,
-                width,
-                height,
-              };
+    const packingStrategy = (draft.preferences as any)?.packing_strategy || 'balanced';
 
-              await updateDraft('preferences', updatedPreferences);
+    const itemsForQuote = (items || []).map((item) => ({
+      length: Number(item.length || 0),
+      width: Number(item.width || 0),
+      height: Number(item.height || 0),
+      weight_lbs: Number(item.weight_lbs || 0),
+      quantity: Number(item.quantity || 0),
+    }));
 
-              // Prepara origem/destino para ShipEngine
-              const from = {
-                country_code: normalizeCountryCode(draft.ship_from?.address?.country),
-                postal_code: (draft.ship_from?.address?.zip_code || '').trim(),
-                city_locality: draft.ship_from?.address?.city || '',
-                state_province: draft.ship_from?.address?.state || '',
-              };
+    // Only update preferences if we had to apply defaults
+    const prefsAny: any = draft.preferences || {};
+    const needsDefaults =
+      !prefsAny.weight || !prefsAny.length || !prefsAny.width || !prefsAny.height;
 
-              const to = {
-                country_code: normalizeCountryCode(draft.ship_to?.country),
-                postal_code: (draft.ship_to?.zip_code || '').trim(),
-                city_locality: draft.ship_to?.city || '',
-                state_province: draft.ship_to?.state || '',
-              };
+    if (needsDefaults) {
+      const updatedPreferences: any = {
+        ...prefsAny,
+        weight,
+        length,
+        width,
+        height,
+        packing_strategy: packingStrategy,
+      };
+      await updateDraft('preferences', updatedPreferences);
+    }
 
-              const totalWeight = Number(weight || '1.0');
+    // Prepara origem/destino para ShipEngine
+    const from = {
+      country_code: normalizeCountryCode(draft.ship_from?.address?.country),
+      postal_code: (draft.ship_from?.address?.zip_code || '').trim(),
+      city_locality: draft.ship_from?.address?.city || '',
+      state_province: draft.ship_from?.address?.state || '',
+    };
 
-              setIsSimulating(true);
-              const resultSection = document.getElementById('quote-results');
-              if (resultSection) {
-                resultSection.scrollIntoView({ behavior: 'smooth' });
-              }
+    const to = {
+      country_code: normalizeCountryCode(draft.ship_to?.country),
+      postal_code: (draft.ship_to?.zip_code || '').trim(),
+      city_locality: draft.ship_to?.city || '',
+      state_province: draft.ship_to?.state || '',
+    };
 
-              try {
-                await fetchRates({
-                  accountId: draft.account_id,
-                  from,
-                  to,
-                  weight: {
-                    value: totalWeight,
-                    unit: 'pound',
-                  },
-                  dimensions: {
-                    unit: 'inch',
-                    length: Number(length || '10.0'),
-                    width: Number(width || '10.0'),
-                    height: Number(height || '10.0'),
-                  },
-                  ship_date: new Date().toISOString(),
-                });
+    if (!itemsForQuote.length) {
+      toast.error('No items found for this quote. Please review the package step.');
+      return;
+    }
 
-                if (carrierError) {
-                  console.error('❌ Error from carrier rates:', carrierError);
-                  toast.error(carrierError);
-                }
-              } catch (err) {
-                console.error('❌ Error fetching carrier rates:', err);
-                toast.error('Failed to fetch carrier rates.');
-              } finally {
-                setIsSimulating(false);
-              }
-            }}
-          >
-            {isSimulating ? 'Simulating...' : 'Simulate'}
-          </Button>
+    setIsSimulating(true);
+    const resultSection = document.getElementById('quote-results');
+    if (resultSection) {
+      resultSection.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    try {
+      await fetchRates({
+        accountId: draft.account_id,
+        from,
+        to,
+        items: itemsForQuote,
+        ship_date: new Date().toISOString(),
+        packing_strategy: packingStrategy,
+      } as any);
+
+      if (carrierError) {
+        console.error('❌ Error from carrier rates:', carrierError);
+        toast.error(carrierError);
+      }
+    } catch (err) {
+      console.error('❌ Error fetching carrier rates:', err);
+      toast.error('Failed to fetch carrier rates.');
+    } finally {
+      setIsSimulating(false);
+    }
+  }}
+>
+  {isSimulating ? 'Simulating...' : 'Simulate'}
+</Button>
         </div>
 
       </div>

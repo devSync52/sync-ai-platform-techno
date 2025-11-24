@@ -114,6 +114,9 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/support', label: 'Support', icon: TicketPlus }
   ]
   const filteredNavItems = navItems.filter((item) => {
+    if (item.label === 'Billing') {
+      return false;
+    }
     const clientExclusions = ['/bot-training', '/ai-settings', '/channels']
     const staffExclusions = ['/bot-training', '/ai-settings', '/staff', '/channels']
 

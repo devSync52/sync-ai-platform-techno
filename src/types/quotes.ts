@@ -89,3 +89,29 @@ export type QuoteDraft = {
     created_at?: string;
     updated_at?: string;
   };
+
+
+// Type definitions for quote items and box info
+export type QuoteItem = {
+  sku: string;
+  product_name: string;
+  price: number;
+  quantity: number;
+  width?: number;
+  height?: number;
+  length?: number;
+  weight_lbs?: number;
+  stackable?: boolean;
+  hazardous?: boolean;
+  freight_class?: string;
+  subtotal?: number;
+};
+
+export type BoxInfo = {
+  boxCount: number;
+  weightPerBox: number;
+  length: number;
+  width: number;
+  height: number;
+  largestDimension: number;
+};

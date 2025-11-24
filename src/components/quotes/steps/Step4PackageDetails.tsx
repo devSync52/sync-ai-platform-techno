@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import axios from 'axios'
+import { computeMultiBoxFromItems } from '@/lib/shipping/multibox'
 
 type PackageItem = {
   sku: string
@@ -211,112 +211,85 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
   }
 
   const handleSaveAndNext = async () => {
-    setIsCalculating(true);
+    setIsCalculating(true)
     try {
-      const totalWeight = items.reduce(
-        (sum, item) => sum + ((item.weight_lbs || 0) * (item.quantity || 1)),
-        0
-      )
-    
-      const totalVolume = items.reduce(
-        (sum, item) =>
-          sum +
-          ((item.length && item.width && item.height
-            ? item.length * item.width * item.height
-            : 0) *
-            (item.quantity || 1)),
-        0
-      )
-    
-      const maxLength = items.length > 0 ? Math.max(...items.map(item => item.length || 0)) : 0
-      const maxWidth = items.length > 0 ? Math.max(...items.map(item => item.width || 0)) : 0
-      const maxHeight = items.length > 0 ? Math.max(...items.map(item => item.height || 0)) : 0
-    
+      const itemsForCalc = items.map((item) => ({
+        length: item.length,
+        width: item.width,
+        height: item.height,
+        weight_lbs: item.weight_lbs,
+        quantity: item.quantity,
+      }))
+  
+      const { totalWeight, totalVolume, box } = computeMultiBoxFromItems(itemsForCalc as any, {
+        maxWeightPerBox: 145,
+        maxLengthPlusGirth: 165,
+      })
+  
+      const maxLength = items.length > 0 ? Math.max(...items.map((i) => i.length || 0)) : 0
+      const maxWidth = items.length > 0 ? Math.max(...items.map((i) => i.width || 0)) : 0
+      const maxHeight = items.length > 0 ? Math.max(...items.map((i) => i.height || 0)) : 0
+  
+      console.log('[MULTIBOX][Step4] Preview box from items:', {
+        totalWeight,
+        totalVolume,
+        box,
+      })
+  
+      const optimizedPackages = [
+        {
+          sku: 'mixed',
+          length: Number(box.length.toFixed(2)),
+          width: Number(box.width.toFixed(2)),
+          height: Number(box.height.toFixed(2)),
+          weight: Number(box.weightPerBox.toFixed(2)),
+          quantity: box.boxCount,
+          package_type: true,
+        },
+      ]
+
       const preferences = {
-        weight: +totalWeight.toFixed(2),
-        volume: +totalVolume.toFixed(2),
-        max_length: +maxLength.toFixed(2),
-        max_width: +maxWidth.toFixed(2),
-        max_height: +maxHeight.toFixed(2),
-        length: +maxLength.toFixed(2),
-        width: +maxWidth.toFixed(2),
-        height: +maxHeight.toFixed(2),
+        // Totais da carga
+        weight: Number(totalWeight.toFixed(2)),
+        volume: Number(totalVolume.toFixed(2)),
+
+        // Dimensões máximas de item (para referência)
+        max_length: Number(maxLength.toFixed(2)),
+        max_width: Number(maxWidth.toFixed(2)),
+        max_height: Number(maxHeight.toFixed(2)),
+
+        // Dimensões da caixa calculada (multi-box)
+        length: Number(box.length.toFixed(2)),
+        width: Number(box.width.toFixed(2)),
+        height: Number(box.height.toFixed(2)),
+        box_count: box.boxCount,
+
+        // Pacote "ótimo" para consumo no passo 5
+        optimized_packages: optimizedPackages,
+
+        // Outros campos existentes
         residential: false,
         confirmation: '',
         package_type: '',
         service_class: '',
       }
-    
+  
       const { error } = await supabase
         .from('saip_quote_drafts')
-        .update({ items, preferences })
+        .update({
+          items,
+          preferences,
+          // Always clear previous quote results when package details change
+          quote_results: null,
+        })
         .eq('id', draftId)
-    
+  
       if (error) {
         console.error('❌ Failed to save quote items:', error)
         return
       }
     
-      try {
-        console.log('📦 Payload para sugestão de embalagem:', items)
-        const response = await fetch('/api/ai/packaging-advisor', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ items }),
-        })
-    
-        const data = await response.json()
-        console.log('🔍 OpenAI Response:', data)
-    
-        const formattedPackages = (data.suggestedPackages ?? []).map((pkg: any) => ({
-          ...pkg,
-          package_type: true,
-        }))
-    
-        // Ensure numeric conversion of length, width, height, weight in formattedPackages
-        const sanitizedOptimizedPackaging = formattedPackages.map((pkg: any) => ({
-          ...pkg,
-          length: Number(pkg.length),
-          width: Number(pkg.width),
-          height: Number(pkg.height),
-          weight: Number(pkg.weight),
-        }))
-    
-        const { data: draftData, error: fetchError } = await supabase
-          .from('saip_quote_drafts')
-          .select('preferences')
-          .eq('id', draftId)
-          .single()
-    
-        if (fetchError) {
-          console.error('❌ Failed to fetch current preferences:', fetchError)
-          return
-        }
-    
-        const existingPreferences = draftData?.preferences || {}
-    
-        const updatedPreferences = {
-          ...existingPreferences,
-          optimized_packages: sanitizedOptimizedPackaging,
-        }
-    
-        const { error: updateError } = await supabase
-          .from('saip_quote_drafts')
-          .update({
-            preferences: updatedPreferences,
-            updated_at: new Date(),
-          })
-          .eq('id', draftId)
-    
-        if (updateError) {
-          console.error('❌ Failed to save optimized packages:', updateError)
-          return
-        }
-      } catch (err) {
-        console.error('❌ Failed to fetch packaging advice:', err)
-      }
+      
     
       onNext()
     } finally {
