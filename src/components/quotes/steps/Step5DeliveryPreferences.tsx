@@ -96,6 +96,7 @@ export default function Step5DeliveryPreferences({
   const [items, setItems] = useState<any[]>([])
   const [quoteResults, setQuoteResults] = useState<any[]>([])
   const [selectedService, setSelectedService] = useState<any>(null)
+  const [shippingMode, setShippingMode] = useState<'parcel' | 'ltl'>('parcel');
   const {
     rates,
     loading: isLoadingRates,
@@ -286,15 +287,22 @@ export default function Step5DeliveryPreferences({
         } as any
       );
 
+      const lengthPlusGirth = box.length + 2 * (box.width + box.height);
+
       const nextPrefs: any = {
         ...prefs,
         packing_strategy: packingStrategy,
+        // totals
         weight: Number(totalWeight.toFixed(2)),
         volume: Number(totalVolume.toFixed(2)),
+        // per-box geometry
         length: Number(box.length.toFixed(2)),
         width: Number(box.width.toFixed(2)),
         height: Number(box.height.toFixed(2)),
         box_count: box.boxCount,
+        per_box_weight: Number(box.weightPerBox.toFixed(2)),
+        length_plus_girth: Number(lengthPlusGirth.toFixed(2)),
+        largest_dimension: box.largestDimension,
       };
 
       const current = prefs as any;
@@ -304,6 +312,9 @@ export default function Step5DeliveryPreferences({
         Number(current.length ?? 0) === nextPrefs.length &&
         Number(current.width ?? 0) === nextPrefs.width &&
         Number(current.height ?? 0) === nextPrefs.height &&
+        Number(current.per_box_weight ?? 0) === nextPrefs.per_box_weight &&
+        Number(current.length_plus_girth ?? 0) === nextPrefs.length_plus_girth &&
+        Number(current.largest_dimension ?? 0) === nextPrefs.largest_dimension &&
         current.box_count === nextPrefs.box_count &&
         (current.packing_strategy || 'balanced') === nextPrefs.packing_strategy;
 
@@ -369,12 +380,40 @@ export default function Step5DeliveryPreferences({
 
   // Get optimized package if available
   const optimizedPackage = draft.preferences?.optimized_packages?.[0];
-  const boxCount = (draft.preferences as any)?.box_count as number | undefined;
+
+  // Derive basic geometry/weight from preferences for LTL candidacy.
+  // Prefer precomputed multi-box data (per_box_* fields) when available.
+  const prefsAny: any = draft.preferences || {};
+  const boxCount = prefsAny.box_count as number | undefined;
+
+  const totalWeightRaw = Number(prefsAny.weight || 0);
+  const perBoxWeight = Number(
+    prefsAny.per_box_weight ||
+      (boxCount && boxCount > 0 ? totalWeightRaw / boxCount : totalWeightRaw),
+  );
+
+  const length = Number(prefsAny.length || 0);
+  const width = Number(prefsAny.width || 0);
+  const height = Number(prefsAny.height || 0);
+
+  const lengthPlusGirth = Number(
+    prefsAny.length_plus_girth || length + 2 * (width + height),
+  );
+
+  const largestDim = Number(
+    prefsAny.largest_dimension || Math.max(length, width, height),
+  );
+
+  // Simple physical triggers for LTL candidacy (hybrid rules will also consider price later)
+  const ltlPhysicalCandidate =
+    perBoxWeight >= 60 || // heavy box
+    lengthPlusGirth >= 130 || // oversize dimensions
+    (boxCount ?? 0) >= 4; // many boxes in one shipment
 
   const selectedBoxCount =
-  (selectedService as any)?.metadata?.box_count ?? null;
-const selectedBoxDims =
-  (selectedService as any)?.metadata?.per_box_dimensions ?? null;
+    (selectedService as any)?.metadata?.box_count ?? null;
+  const selectedBoxDims =
+    (selectedService as any)?.metadata?.per_box_dimensions ?? null;
 
   return (
     <div className="flex flex-col lg:flex-row items-start gap-4 md:gap-6 xl:gap-2 w-full px-3 md:px-4 xl:px-0 pb-[env(safe-area-inset-bottom)]">
@@ -539,26 +578,46 @@ const selectedBoxDims =
     />
   </div>
 
-  {/* Packing strategy selector - only relevant when there is more than one box */}
-  {boxCount && boxCount > 1 && (
-    <div className="mt-2">
-      <label className="block text-sm font-medium">Packing Strategy</label>
-      <select
-        className="w-full border rounded px-3 py-2 mt-1 text-sm"
-        value={(draft.preferences as any)?.packing_strategy || 'balanced'}
-        onChange={(e) =>
-          updateDraft('preferences', {
-            ...(draft.preferences as any),
-            packing_strategy: e.target.value,
-          })
-        }
-      >
-        <option value="balanced">Balanced (recommended)</option>
-        <option value="min_boxes">Fewer boxes (minimize box count)</option>
-      </select>
-    </div>
-  )}
-</div>
+        {/* LTL candidate notice + shipping mode selector */}
+        <div className="mt-4">
+          {ltlPhysicalCandidate && (
+            <div className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+              This shipment looks like a good candidate for <strong>LTL Freight</strong> based on weight,
+              dimensions or number of boxes.
+            </div>
+          )}
+
+          <label className="block text-sm font-medium">Shipping Mode</label>
+          <div className="mt-1 flex gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setShippingMode('parcel')}
+              className={cn(
+                'flex-1 rounded border px-3 py-1 text-center',
+                shippingMode === 'parcel'
+                  ? 'border-primary bg-primary/10 font-semibold text-primary'
+                  : 'border-border bg-white text-muted-foreground',
+              )}
+            >
+              Parcel (Small Package)
+            </button>
+            <button
+              type="button"
+              onClick={() => ltlPhysicalCandidate && setShippingMode('ltl')}
+              disabled={!ltlPhysicalCandidate}
+              className={cn(
+                'flex-1 rounded border px-3 py-1 text-center',
+                shippingMode === 'ltl'
+                  ? 'border-primary bg-primary/10 font-semibold text-primary'
+                  : 'border-border bg-white text-muted-foreground',
+                !ltlPhysicalCandidate && 'opacity-50 cursor-not-allowed',
+              )}
+            >
+              LTL Freight
+            </button>
+          </div>
+        </div>
+        </div>
         </div>
 
         {/* Confirmation & Service */}
@@ -601,7 +660,16 @@ const selectedBoxDims =
   disabled={isSimulating}
   className="bg-[#3B2680] text-white"
   onClick={async () => {
-    // Continua mantendo o comportamento atual de preencher defaults
+    // If user selected LTL mode, simulate a Fairgrounds connection error
+    if (shippingMode === 'ltl') {
+      console.error('[LTL][Fairgrounds] Connection failed: invalid API key (simulated).');
+      toast.error(
+        'Failed to connect to Fairgrounds LTL: invalid API key. Please contact SynC support.',
+      );
+      return;
+    }
+
+    // Continua mantendo o comportamento atual de preencher defaults (Parcel mode)
     const weight = (draft.preferences as any)?.weight || '1.0';
     const length = (draft.preferences as any)?.length || '10.0';
     const width = (draft.preferences as any)?.width || '10.0';
@@ -614,7 +682,7 @@ const selectedBoxDims =
       !(draft.preferences as any)?.height
     ) {
       toast.warning(
-        'Weight and dimensions were missing. Default values were applied: 10x10x10 inches, 1 lb.'
+        'Weight and dimensions were missing. Default values were applied: 10x10x10 inches, 1 lb.',
       );
     }
 
@@ -853,7 +921,7 @@ const selectedBoxDims =
                     status: 'quoted',
                     updated_at: new Date(),
                   })
-                  .eq('id', draft.id);
+                  .eq('id', draft!.id);
 
                 if (error) {
                   console.error('❌ Failed to save selection:', error);

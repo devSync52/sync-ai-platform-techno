@@ -20,12 +20,12 @@ export async function sendQuoteEmail({ quote, items, to }: { quote: any; items: 
     const html = `
       <p>Hello,</p>
       <p>Attached is your shipping quote.</p>
-      <p>You can also <a href="https://app.syncplatform.com/quotes/view/${quote.id}">view it online</a>.</p>
+      <p>You can also <a href="https://app.syncaiplatform.com/quotes/view/${quote.id}">view it online</a>.</p>
       <p>Thank you,<br/>SynC Fulfillment</p>
     `
 
     const { error } = await resend.emails.send({
-      from: 'cotacoes@syncplatform.com',
+      from: 'quotes@syncaiplatform.com',
       to,
       subject,
       html,

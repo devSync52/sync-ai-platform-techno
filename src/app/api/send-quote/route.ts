@@ -11,15 +11,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required data' }, { status: 400 })
     }
 
-    const result = await sendQuoteEmail({ to: email, quote, items })
-
-    if ('error' in result) {
-      return NextResponse.json({ error: 'Failed to send quote' }, { status: 500 })
-    }
+    // We assume sendQuoteEmail will throw if something goes wrong.
+    await sendQuoteEmail({ to: email, quote, items })
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (err) {
     console.error('❌ Error sending quote email:', err)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to send quote email' }, { status: 500 })
   }
 }

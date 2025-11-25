@@ -242,6 +242,19 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
           </button>
           */}
           <button
+            onClick={() => {
+              const element = document.body;
+              const originalTitle = document.title;
+              document.title = `quote_${quote?.id || 'sync'}.pdf`;
+              window.print();
+              document.title = originalTitle;
+            }}
+            className="border px-4 py-2 rounded hover:bg-gray-50"
+            style={{ borderColor: primaryColor, color: primaryColor }}
+          >
+            Download PDF
+          </button>
+          <button
             onClick={() => window.print()}
             className="border px-4 py-2 rounded hover:bg-gray-50"
             style={{ borderColor: primaryColor, color: primaryColor }}
