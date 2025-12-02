@@ -144,10 +144,10 @@ const resolveMethodLabel = (value: string | null | undefined) => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/billing">
+          <Link href="/">
             <Button variant="outline">Back to Billing</Button>
           </Link>
-          <Button disabled>Add Client</Button>
+          
         </div>
       </div>
 

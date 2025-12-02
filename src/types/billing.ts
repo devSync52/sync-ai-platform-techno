@@ -516,3 +516,39 @@ export async function setClientServiceVisibility(
     throw error
   }
 }
+
+type InvoiceStatus = 'draft' | 'issued' | 'void' | 'canceled';
+
+type Invoice = {
+  id: string;
+  parent_account_id: string;
+  client_account_id: string;
+  warehouse_id: string | null;
+  period_start: string;   // 'YYYY-MM-DD'
+  period_end: string;     // 'YYYY-MM-DD'
+  currency_code: string;  // 'USD'
+  subtotal_cents: number;
+  tax_cents: number;
+  total_cents: number;
+  status: InvoiceStatus;
+  created_at: string;     // ISO timestamp
+  created_by: string | null;
+  notes: string | null;
+};
+
+type InvoiceItem = {
+  id: string;
+  invoice_id: string;
+  usage_kind: 'shipping' | 'extra' | 'storage' | string;
+  usage_id_text: string;            // pode ser 'storage_2025-11-01_2025-11-30'
+  occurred_at: string;              // ISO timestamp
+  description: string;
+  qty: string;                      // numeric -> string
+  unit: string;                     // 'order', 'cuft/day', etc.
+  rate_cents: number;
+  amount_cents: number;
+  metadata: Record<string, any>;    // jsonb
+};
+
+type ApiSuccess<T> = { success: true; data: T };
+type ApiError = { success: false; error_code: string; message: string };

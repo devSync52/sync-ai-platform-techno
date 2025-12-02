@@ -223,9 +223,9 @@ export async function fetchClientServicesEffective(
         'unit',
         'effective_rate_cents',
         'override_rate_cents',
-        'warehouse_default_rate_cents',
-        'global_default_rate_cents',
-        'active_override',
+        'warehouse_rate_cents as warehouse_default_rate_cents',
+        'global_rate_cents as global_default_rate_cents',
+        'is_active as active_override',
       ].join(',')
     )
     .eq('parent_account_id', parentAccountId)

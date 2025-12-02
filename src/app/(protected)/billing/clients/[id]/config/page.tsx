@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useSupabase } from '@/components/supabase-provider'
 import type { BillingConfig } from '@/types/billing'
+import { ClientPageHeader } from '@/components/billing/client-page-header'
 import {
   fetchClientServicesEffective,
   setClientServiceOverride,
@@ -642,30 +643,28 @@ const adapterPlanServices = useMemo(
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          {clientLogo && (
-            <img
-              src={clientLogo}
-              alt={clientLabel}
-              className="h-10 w-10 rounded-md object-contain bg-white border"
-            />
-          )}
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Client Config</h1>
-            <p className="text-sm text-muted-foreground">
-              Manage billing settings for <span className="font-medium">{clientLabel}</span>.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/billing/clients"><Button variant="outline">Back to Clients</Button></Link>
-          <Button variant="outline" onClick={() => router.push(`/billing/simulator?clientId=${id}`)}>Test Rules (Simulator)</Button>
-          <Button onClick={handleSaveConfig} disabled={savingConfig}>
-            {savingConfig ? 'Saving…' : 'Save'}
-          </Button>
-        </div>
-      </div>
+      <ClientPageHeader
+  clientLabel={clientLabel}
+  clientLogo={clientLogo}
+  title="Client Config"
+  subtitle={`Manage billing settings for ${clientLabel}.`}
+  actions={
+    <>
+      <Link href="/billing/clients">
+        <Button variant="outline">Back to Clients</Button>
+      </Link>
+      <Button
+        variant="outline"
+        onClick={() => router.push(`/billing/simulator?clientId=${id}`)}
+      >
+        Test Rules (Simulator)
+      </Button>
+      <Button onClick={handleSaveConfig} disabled={savingConfig}>
+        {savingConfig ? 'Saving…' : 'Save'}
+      </Button>
+    </>
+  }
+/>
 
       <Tabs defaultValue="billing" className="w-full">
         <TabsList>

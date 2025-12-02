@@ -199,7 +199,7 @@ export default function WarehousesPage() {
                   <td className="py-2 pr-3">{formatLocation(w.city, w.state)}</td>
                   <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{w.id}</td>
                   <td className="py-2 text-right space-x-2">
-                    <Link href="/billing/plans"><Button size="sm" variant="outline">Open catalog</Button></Link>
+                    
                     {!w.is_default && <Button size="sm" variant="outline" onClick={() => setDefault(w.id)}>Set default</Button>}
                   </td>
                 </tr>

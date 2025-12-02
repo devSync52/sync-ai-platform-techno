@@ -97,11 +97,12 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       label: 'Billing',
       icon: Wallet,
       items: [
-        { href: '/billing', label: 'Dashboard' },
-        { href: '/billing/warehouses', label: 'Warehouses' },
+       
+        
         { href: '/billing/clients', label: 'Clients' },
         { href: '/billing/invoices', label: 'Invoices' },
-        { href: '/billing/plans', label: 'Plans & Tiers' },
+        { href: '/billing/warehouses', label: 'Warehouses' },
+        
         
       ],
     },
@@ -114,15 +115,12 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: '/support', label: 'Support', icon: TicketPlus }
   ]
   const filteredNavItems = navItems.filter((item) => {
-    if (item.label === 'Billing') {
-      return false;
-    }
     const clientExclusions = ['/bot-training', '/ai-settings', '/channels']
     const staffExclusions = ['/bot-training', '/ai-settings', '/staff', '/channels']
 
-    // Hide Billing from clients only
+
     if (item.label === 'Billing' && userRole === 'client') {
-      return false;
+      return false
     }
 
     if (userRole === 'client') {
@@ -130,7 +128,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         (item.href && clientExclusions.includes(item.href)) ||
         (item.label === 'Orders' && item.items && item.items.some(subItem => clientExclusions.includes(subItem.href || '')))
       ) {
-        // Since Orders group subitems are only orders and quotations, no need to exclude it here
+
         if (item.label === 'Orders') {
           return true
         }
