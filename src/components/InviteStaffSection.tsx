@@ -52,7 +52,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
         setCurrentUserRole(data.role)
         if (data.role === 'client') {
           // Client inviting another user: temporarily create another client
-          setRole('client')
+          setRole('staff-client')
         }
       }
     }
@@ -91,7 +91,7 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
     if (result?.success) {
       toast.success('Invitation sent successfully!')
       setEmail('')
-      setRole(currentUserRole === 'client' ? 'client' : 'staff-user')
+      setRole(currentUserRole === 'client' ? 'staff-client' : 'staff-user')
       fetchTeam()
     } else {
       toast.error(result.message || 'Failed to send invitation')
@@ -190,10 +190,10 @@ export function InviteStaffSection({ accountId }: { accountId: string }) {
         {currentUserRole === 'client' ? (
           <select
             className="w-full border px-4 py-2 rounded text-sm"
-            value="client"
+            value="staff-client"
             disabled
           >
-            <option value="client">Staff</option>
+            <option value="staff-client">Staff - Client</option>
           </select>
         ) : (
           <select

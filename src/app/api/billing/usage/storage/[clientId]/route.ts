@@ -28,7 +28,7 @@ export async function GET_storage(req: Request, ctx: any) {
   
     const { data: dataStorage, error, count } = await supabase
       .schema('public')
-      .from('b1_v_storage_billing_daily')
+      .from('b1_v_storage_billing_daily_w_spare')
       .select('*', { count: 'exact' })
       .eq('client_account_id', clientId)
       .gte('snapshot_date', `${startISO} 00:00:00+00`)

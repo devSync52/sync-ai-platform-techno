@@ -118,6 +118,13 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     const clientExclusions = ['/bot-training', '/ai-settings', '/channels']
     const staffExclusions = ['/bot-training', '/ai-settings', '/staff', '/channels']
 
+    if (userRole === 'staff-client') {
+      // staff-client can see only: Orders (Quotations), Inventory, Support
+      if (item.label === 'Orders') return true
+      if (item.href === '/products') return true
+      if (item.href === '/support') return true
+      return false
+    }
 
     if (item.label === 'Billing' && userRole === 'client') {
       return false
@@ -134,7 +141,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         }
         return false
       }
-    } else if (userRole === 'staff-user' || userRole === 'staff-client') {
+    } else if (userRole === 'staff-user') {
       if (
         (item.href && staffExclusions.includes(item.href)) ||
         (item.label === 'Orders' && item.items && item.items.some(subItem => staffExclusions.includes(subItem.href || '')))
@@ -155,10 +162,16 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   ]
   
   const filteredSettingsItems = baseSettingsItems.filter((item) => {
-    // Esconde "Integrations" se for client ou staff-user
-    if ((userRole === 'client' || userRole === 'staff-user' || userRole === 'staff-client') && item.href === '/settings/integrations') {
+    // staff-client: only "My profile"
+    if (userRole === 'staff-client') {
+      return item.href === '/settings/profile'
+    }
+
+    // Hide "Integrations" for client and staff-user
+    if ((userRole === 'client' || userRole === 'staff-user') && item.href === '/settings/integrations') {
       return false
     }
+
     return true
   })
 
@@ -206,23 +219,30 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
                     isGroupOpen ? 'max-h-72' : 'max-h-0'
                   }`}
                 >
-                  {item.items.map(({ href, label }) => {
-                    const isActive = pathname === href
-                    return (
-                      <Link
-                        key={href}
-                        href={href}
-                        onClick={onLinkClick}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
-                          isActive
-                            ? 'bg-white text-[#3f2d90] font-semibold'
-                            : 'text-white hover:bg-[#352682]'
-                        }`}
-                      >
-                        <span>{label}</span>
-                      </Link>
-                    )
-                  })}
+                  {item.items
+                    .filter(({ label }) => {
+                      if (userRole === 'staff-client' && item.label === 'Orders') {
+                        return label === 'Quotations'
+                      }
+                      return true
+                    })
+                    .map(({ href, label }) => {
+                      const isActive = pathname === href
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={onLinkClick}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
+                            isActive
+                              ? 'bg-white text-[#3f2d90] font-semibold'
+                              : 'text-white hover:bg-[#352682]'
+                          }`}
+                        >
+                          <span>{label}</span>
+                        </Link>
+                      )
+                    })}
                 </div>
               </div>
             )

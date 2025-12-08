@@ -21,6 +21,8 @@ export function QuotesList() {
   const [selectedQuoteWithAccount, setSelectedQuoteWithAccount] = useState<any | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [sendingQuoteId, setSendingQuoteId] = useState<string | null>(null)
+  const [creatorEmails, setCreatorEmails] = useState<Record<string, string>>({})
+  const [searchTerm, setSearchTerm] = useState('')
 
   const statusLabels: Record<string, string> = {
     draft: 'Draft',
@@ -53,35 +55,10 @@ export function QuotesList() {
           .eq('account_id', user.account_id)
           .order('created_at', { ascending: false })
   
-        if (user.role === 'client') {
-
-          const { data: clientUsers, error: clientUsersError } = await supabase
-            .from('users')
-            .select('id, created_at')
-            .eq('account_id', user.account_id)
-            .eq('role', 'client')
-            .order('created_at', { ascending: true })
-
-          if (clientUsersError) {
-            console.error('❌ Error fetching client users:', clientUsersError)
-
-            query = query.eq('user_id', user.id)
-          } else if (clientUsers && clientUsers.length > 0) {
-            const ownerId = clientUsers[0].id
-            if (user.id === ownerId) {
-
-              const clientIds = clientUsers.map((u) => u.id)
-              query = query.in('user_id', clientIds)
-            } else {
-
-              query = query.eq('user_id', user.id)
-            }
-          } else {
-
-            query = query.eq('user_id', user.id)
-          }
-        } else {
-
+        // By default, client sees all quotes for the account (no extra filter).
+        // Staff-client can only see quotes they created.
+        if (user.role === 'staff-client') {
+          query = query.eq('user_id', user.id)
         }
   
         const { data, error } = await query
@@ -89,7 +66,36 @@ export function QuotesList() {
         if (error) {
           console.error('❌ Error fetching quotes:', error)
         } else {
-          setQuotes(data || [])
+          const quotesData = data || []
+          setQuotes(quotesData)
+
+          // Fetch creator emails for the quotes
+          const userIds = Array.from(
+            new Set(
+              quotesData
+                .map((q) => q.user_id)
+                .filter((id: string | null | undefined) => !!id)
+            )
+          )
+
+          if (userIds.length > 0) {
+            const { data: usersData, error: usersError } = await supabase
+              .from('users_minimal')
+              .select('id, email')
+              .in('id', userIds)
+
+            if (usersError) {
+              console.error('❌ Error fetching quote creators:', usersError)
+            } else if (usersData) {
+              const map: Record<string, string> = {}
+              usersData.forEach((u: any) => {
+                if (u.id && u.email) {
+                  map[u.id] = u.email
+                }
+              })
+              setCreatorEmails(map)
+            }
+          }
         }
       } finally {
         setLoading(false)
@@ -173,17 +179,43 @@ export function QuotesList() {
     }
   }
 
+  const filteredQuotes = quotes.filter((quote) => {
+    if (!searchTerm.trim()) return true
+    const term = searchTerm.toLowerCase()
+    const pieces: string[] = []
+    pieces.push(dayjs(quote.created_at).format('YYYY-MM-DD'))
+    if (quote.ship_to?.full_name) pieces.push(String(quote.ship_to.full_name))
+    if (quote.ship_to?.email) pieces.push(String(quote.ship_to.email))
+    if (quote.ship_from?.address?.city) pieces.push(String(quote.ship_from.address.city))
+    if (quote.ship_from?.address?.state) pieces.push(String(quote.ship_from.address.state))
+    if (quote.ship_to?.city) pieces.push(String(quote.ship_to.city))
+    if (quote.ship_to?.state) pieces.push(String(quote.ship_to.state))
+    if (creatorEmails[quote.user_id]) pieces.push(String(creatorEmails[quote.user_id]))
+    if (quote.status) pieces.push(String(quote.status))
+    const haystack = pieces.join(' ').toLowerCase()
+    return haystack.includes(term)
+  })
+
   if (loading) return <p>Loading quotes...</p>
 
   return (
     <div className="border rounded-lg p-6 space-y-6 bg-white shadow">
-      <h2 className="text-lg font-semibold">Quotes</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h2 className="text-lg font-semibold">Quotes</h2>
+        <input
+          type="text"
+          placeholder="Search quotes..."
+          className="w-full sm:w-64 border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
 
-      {quotes.length === 0 ? (
+      {filteredQuotes.length === 0 ? (
         <p className="text-sm text-gray-500">No quotes found.</p>
       ) : (
         <ul className="space-y-2">
-          {quotes.map((quote) => (
+          {filteredQuotes.map((quote) => (
             <li
               key={quote.id}
               className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] sm:items-center bg-gray-50 px-4 py-3 rounded gap-y-2 gap-x-4"
@@ -204,6 +236,13 @@ export function QuotesList() {
                         {quote.ship_to?.state || 'N/A'}
                       </span>
                       <span>Items: {quote.items?.length || 0}</span>
+                      {user?.role === 'client' && creatorEmails[quote.user_id] && (
+                        <div className="w-full text-xs mt-1">
+                          <span className="inline-block bg-gray-200 text-gray-700 px-2 py-1 rounded">
+                            Created by {creatorEmails[quote.user_id]}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="text-xs text-white px-2 py-1 rounded-full font-medium whitespace-nowrap"

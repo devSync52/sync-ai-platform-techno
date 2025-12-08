@@ -59,13 +59,13 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
       (!companyFilter || p.company === companyFilter) &&
       (!statusFilter || (statusFilter === 'Active' ? p.is_active : !p.is_active)) &&
       (!typeFilter || p.product_type === typeFilter) &&
-      (p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (((p.sku ?? '').toLowerCase().includes(searchTerm.toLowerCase())) ||
         (p.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()))
     )
   })
 
   const sorted = [...filtered].sort((a, b) => {
-    if (sortBy === 'sku') return a.sku.localeCompare(b.sku)
+    if (sortBy === 'sku') return (a.sku ?? '').localeCompare(b.sku ?? '')
     if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '')
     if (sortBy === 'price') return (b.site_price || 0) - (a.site_price || 0)
     return 0

@@ -61,7 +61,7 @@ export function Step2WarehouseSelection({
 
       let effectiveAccountId = accountId
 
-      if (role === 'client') {
+      if (role === 'client' || role === 'staff-client') {
         const { data: parentData, error: parentError } = await supabase
           .from('accounts')
           .select('parent_account_id')

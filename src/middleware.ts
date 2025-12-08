@@ -43,6 +43,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
+  // Redirect staff-client to orders/quotes instead of dashboard
+  const userRole = (session.user.user_metadata?.role as string) || ''
+  const path = req.nextUrl.pathname
+  if (userRole === 'staff-client' && (path === '/' || path === '/dashboard')) {
+    return NextResponse.redirect(new URL('/orders/quotes', req.url))
+  }
+
   res.headers.set('x-pathname', req.nextUrl.pathname)
 
   return res
