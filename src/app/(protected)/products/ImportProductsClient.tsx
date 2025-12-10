@@ -42,31 +42,47 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
     fetchProducts()
   }, [accountId, userRole])
 
-  const deduplicated = Object.values(
-    products.reduce((acc, product) => {
-      if (
-        !acc[product.sku] ||
-        new Date(product.updated_at ?? 0) > new Date(acc[product.sku].updated_at ?? 0)
-      ) {
-        acc[product.sku] = product
-      }
-      return acc
-    }, {} as Record<string, ProductList>)
-  )
+  const deduplicated =
+    userRole === 'client' || userRole === 'staff-client'
+      ? Object.values(
+          products.reduce((acc, product) => {
+            const key = product.sku ?? product.id
+            if (
+              !acc[key] ||
+              new Date(product.updated_at ?? 0) > new Date(acc[key].updated_at ?? 0)
+            ) {
+              acc[key] = product
+            }
+            return acc
+          }, {} as Record<string, ProductList>)
+        )
+      : products
 
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+  
   const filtered = deduplicated.filter((p) => {
+    const matchesSearch =
+      !normalizedSearch ||
+      (p.sku ?? '').toLowerCase().includes(normalizedSearch) ||
+      (p.description ?? '').toLowerCase().includes(normalizedSearch) ||
+      (p.upc ?? '').toLowerCase().includes(normalizedSearch) ||
+      (p.client_name ?? '').toLowerCase().includes(normalizedSearch) ||
+      (p.account_name ?? '').toLowerCase().includes(normalizedSearch)
+  
     return (
-      (!companyFilter || p.company === companyFilter) &&
-      (!statusFilter || (statusFilter === 'Active' ? p.is_active : !p.is_active)) &&
-      (!typeFilter || p.product_type === typeFilter) &&
-      (((p.sku ?? '').toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (p.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()))
+      (!companyFilter || p.account_name === companyFilter) &&
+      (!statusFilter ||
+        (statusFilter === 'Active'
+          ? p.account_status === 'active'
+          : p.account_status !== 'active')) &&
+      (!typeFilter || p.product_source === typeFilter) &&
+      matchesSearch
     )
   })
 
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'sku') return (a.sku ?? '').localeCompare(b.sku ?? '')
-    if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '')
+    if (sortBy === 'name') return (a.description || '').localeCompare(b.description || '')
     if (sortBy === 'price') return (b.site_price || 0) - (a.site_price || 0)
     return 0
   })
@@ -101,7 +117,7 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
     <div className="bg-gray-50 min-h-screen p-0 sm:p-0 space-y-5">
       <FilterBar
         title="Products"
-        placeholder="Search by SKU or Product Name"
+        placeholder="Search by SKU, UPC, Description, Client or Account"
         totalCount={products.length}
         filteredCount={filtered.length}
         searchTerm={searchTerm}
@@ -120,10 +136,10 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
             //onChange: (v) => setCompanyFilter(v !== 'All' ? v : null)
           //},
           {
-            label: 'Type',
+            label: 'Source',
             value: typeFilter ?? '',
-            options: ['All types', ...Array.from(new Set(products.map(p => p.product_type).filter((v): v is string => !!v)))],
-            onChange: (v) => setTypeFilter(v !== 'All' ? v : null)
+            options: ['All sources', ...Array.from(new Set(products.map(p => p.product_source).filter((v): v is string => !!v)))],
+            onChange: (v) => setTypeFilter(v !== 'All sources' ? v : null)
           }
         ]}
       />
@@ -166,48 +182,37 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
           <thead className="bg-gray-100 text-gray-600">
             <tr>
               <th className="py-3 px-4 text-left font-medium">SKU</th>
-              <th className="py-3 px-4 text-left font-medium">Photo</th>
               <th className="py-3 px-4 text-left font-medium">Product Name</th>
               <th className="py-3 px-4 text-left font-medium">Dimensions</th>
               <th className="py-3 px-4 text-left font-medium">Qty Avail.</th>
-              <th className="py-3 px-4 text-left font-medium">Physical Qty</th>
+              <th className="py-3 px-4 text-left font-medium">On-hold</th>
               <th className="py-3 px-4 text-left font-medium">Warehouse</th>
+              {(userRole !== 'client' && userRole !== 'staff-client') && (
               <th className="py-3 px-4 text-left font-medium">Company</th>
-              <th className="py-3 px-4 text-left font-medium">Price</th>
+            )}
+              
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {paginatedProducts.map((product) => (
-              <tr key={product.id} className="hover:bg-gray-50">
+              <tr
+                key={`${product.id}-${product.account_id ?? product.client_account_id}`}
+                className="hover:bg-gray-50"
+              >
                 <td className="py-3 px-4 text-gray-800 font-medium">{product.sku || '-'}</td>
-                <td className="py-3 px-4">
-                  {product.image_url ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.name || 'Product image'}
-                      width={40}
-                      height={40}
-                      className="rounded object-contain"
-                    />
-                  ) : (
-                    <span className="text-xs text-gray-400">No image</span>
-                  )}
-                </td>
-                <td className="py-3 px-4 text-gray-600">{product.name || '-'}</td>
+               
+                <td className="py-3 px-4 text-gray-600">{product.description || '-'}</td>
                 <td className="py-3 px-4 text-gray-600">
-                  {product.length && product.width && product.height
-                    ? `${product.length} x ${product.width} x ${product.height}`
+                  {product.pkg_length_in && product.pkg_width_in && product.pkg_height_in
+                    ? `${product.pkg_length_in} x ${product.pkg_width_in} x ${product.pkg_height_in}`
                     : '-'}
                 </td>
-                <td className="py-3 px-4 text-gray-600">{product.quantity_available ?? '-'}</td>
-                <td className="py-3 px-4 text-gray-600">{product.quantity_physical ?? '-'}</td>
+                <td className="py-3 px-4 text-gray-600">{product.available ?? '-'}</td>
+                <td className="py-3 px-4 text-gray-600">{product.on_hold ?? '-'}</td>
                 <td className="py-3 px-4 text-gray-600">{product.warehouse_name || '-'}</td>
-                <td className="py-3 px-4 text-gray-600">{product.company || '-'}</td>
-                <td className="py-3 px-4 text-gray-600">
-                  {product.site_price !== null && product.site_price !== undefined
-                    ? `$${product.site_price.toFixed(2)}`
-                    : '-'}
-                </td>
+                {(userRole !== 'client' && userRole !== 'staff-client') && (
+                  <td className="py-3 px-4 text-gray-600">{product.account_name || '-'}</td>
+                )}
               </tr>
             ))}
           </tbody>

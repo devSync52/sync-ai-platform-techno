@@ -55,10 +55,10 @@ function ProductSearchModal({
     if (!clientId) return
     setLoading(true)
     const { data, error } = await supabase
-      .from('sellercloud_products')
-      .select('sku, name, site_price, package_weight_lbs, length, width, height, external_id')
-      .eq('channel_id', clientId)
-      .or(`sku.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`)
+      .from('vw_products_master_enriched')
+      .select('sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in')
+      .eq('account_id', clientId)
+      .or(`sku.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
       .limit(20)
 
     if (error) {
@@ -71,19 +71,25 @@ function ProductSearchModal({
   }
 
   const handleAdd = (product: any) => {
+    const length = Number(product.pkg_length_in ?? 0)
+    const width = Number(product.pkg_width_in ?? 0)
+    const height = Number(product.pkg_height_in ?? 0)
+    const weight = Number(product.pkg_weight_lb ?? 0)
+
     const packageItem: PackageItem = {
       sku: product.sku,
-      product_name: product.name || '',
+      product_name: product.description || '',
       quantity: 1,
-      length: product.length || 0,
-      width: product.width || 0,
-      height: product.height || 0,
-      weight_lbs: product.package_weight_lbs || 0,
+      length,
+      width,
+      height,
+      weight_lbs: weight,
       stackable: false,
       hazardous: false,
       freight_class: '',
-      price: product.site_price || 0,
-      subtotal: product.price || 0,
+      // vw_products_master_enriched não tem preço, então deixamos 0 por padrão
+      price: 0,
+      subtotal: 0,
     }
     onAddProduct(packageItem)
     onClose()
@@ -123,7 +129,7 @@ function ProductSearchModal({
             {results.map((product, idx) => (
               <li key={idx} className="py-2 flex justify-between items-center">
                 <div>
-                  <p className="font-semibold">{product.name || product.sku}</p>
+                  <p className="font-semibold">{product.description || product.sku}</p>
                   <p className="text-sm text-gray-500">SKU: {product.sku}</p>
                 </div>
                 <Button variant="secondary" className="w-full sm:w-auto" onClick={() => handleAdd(product)}>

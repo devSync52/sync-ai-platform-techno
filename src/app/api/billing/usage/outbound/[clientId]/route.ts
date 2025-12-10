@@ -32,12 +32,12 @@ export async function GET(req: Request, ctx: any) {
 
   const { data, error, count } = await supabase
     .schema('public')
-    .from('b1_v_usage_unified')
+    .from('b1_v_invoice_usage_unified')
     .select('*', { count: 'exact' })
     .eq('client_account_id', clientId)
-    .gte('occurred_at', `${startISO} 00:00:00+00`)
-    .lte('occurred_at', `${endISO} 23:59:59+00`)
-    .order('occurred_at', { ascending: false })
+    .gte('snapshot_date', `${startISO} 00:00:00+00`)
+    .lte('snapshot_date', `${endISO} 23:59:59+00`)
+    .order('snapshot_date', { ascending: false })
     .range(from, to)
 
   if (error) return new NextResponse(error.message, { status: 400 })

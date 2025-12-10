@@ -101,14 +101,33 @@ export default function DashboardClient({ userId }: { userId: string }) {
         query = query.eq('account_id', userAccountId)
       }
   
-      const { data: ordersData, error: ordersError } = await query
+      const PAGE_SIZE = 1000
+      let from = 0
+      const allOrders: any[] = []
   
-      if (ordersError) {
-        console.error('❌ Error fetching orders:', ordersError.message)
-        return
+      while (true) {
+        const { data, error } = await query.range(from, from + PAGE_SIZE - 1)
+  
+        if (error) {
+          console.error('❌ Error fetching orders (paginated):', error.message)
+          return
+        }
+  
+        if (!data || data.length === 0) {
+          break
+        }
+  
+        allOrders.push(...data)
+  
+        if (data.length < PAGE_SIZE) {
+          // última página
+          break
+        }
+  
+        from += PAGE_SIZE
       }
   
-      setOrders(ordersData || [])
+      setOrders(allOrders)
     }
   
     fetchData()

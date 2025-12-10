@@ -69,27 +69,46 @@ export interface Channel {
   
   export type ProductList = {
     id: string
-    account_id: string
-    channel_id: string | null
-    source: string
+    parent_account_id: string
+    client_account_id: string
     sku: string
-    product_name: string | null
-    image_url: string | null
-    quantity_available: number | null
-    quantity_physical: number | null
-    warehouse_name: string | null
-    company: string | null
-    site_price: number | null
-    enabled_on_channels: number[] | null
-    dimensions: string | null
-    is_active: boolean
-    product_type: string | null
+    upc: string | null
+    description: string | null
+    uom: string | null
+    pkg_length_in: string | number | null
+    pkg_width_in: string | number | null
+    pkg_height_in: string | number | null
+    pkg_weight_lb: string | number | null
+    volume_cuft: string | number | null
+    track_serial: boolean
+    has_item_storage_rate: boolean
+    product_source: string
+    source_item_id: string | null
     created_at: string
-    updated_at?: string
-    name?: string
-    length?: number
-    width?: number
-    height?: number
+    updated_at: string
+    carton_units: string | number | null
+    is_wrapping: boolean
+    client_id: string
+    client_name: string
+    client_source: string
+    wms_customer_id: string
+    client_is_active: boolean
+    warehouse_id: string
+    billing_method: string | null
+    external_ids: string[] | null
+    account_id: string
+    account_name: string
+    account_external_id: string | null
+    account_source: string
+    account_status: string
+    // Campos opcionais mantidos para compat com telas antigas
+    image_url?: string | null
+    quantity_available?: number | null
+    quantity_physical?: number | null
+    site_price?: number | null
+    available?: number | null
+    on_hold?: number | null
+    warehouse_name?: string
   }
   
   export type CurrentUser = {
