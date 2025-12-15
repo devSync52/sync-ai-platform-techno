@@ -147,27 +147,42 @@ export function QuotesList() {
         const sellercloudOrderId =
           data?.data?.sellercloudOrderId ??
           data?.sellercloudOrderId ??
-          null;
+          null
 
-        // Atualiza a lista local para refletir o retorno da edge
-        setQuotes(prev =>
-          prev.map(q =>
+        // Persiste no banco; sem isso, após refresh o fetch volta com status antigo.
+        const { error: persistError } = await supabase
+          .from('saip_quote_drafts')
+          .update({
+            sellercloud_status: 'success',
+            sellercloud_order_id: sellercloudOrderId,
+          })
+          .eq('id', quoteId)
+
+        if (persistError) {
+          console.error('❌ Error persisting Sellercloud status:', persistError)
+          toast('Sent, but failed to save status', {
+            description: 'The quote was sent, but the status could not be saved. Please refresh and try again.',
+          })
+        }
+
+        // Atualiza a lista local para refletir o retorno da API
+        setQuotes((prev) =>
+          prev.map((q) =>
             q.id === quoteId
               ? {
                   ...q,
                   sellercloud_status: 'success',
                   sellercloud_order_id: sellercloudOrderId,
-                  status: q.status ?? 'sent_to_sellercloud',
                 }
               : q
           )
-        );
+        )
 
         toast('Quote sent to Sellercloud', {
           description: sellercloudOrderId
             ? `Sellercloud ID: ${sellercloudOrderId}`
             : 'The quote was successfully sent.',
-        });
+        })
       }
     } catch (error) {
       console.error('❌ Unexpected error sending quote to Sellercloud:', error)

@@ -230,8 +230,6 @@ const resolveMethodLabel = (value: string | null | undefined) => {
                 <th className="py-2 pr-3">Warehouse</th>
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Method</th>
-                <th className="py-2 pr-3">Next Invoice</th>
-                <th className="py-2 pr-3">MTD Total</th>
                 <th className="py-2 text-right">Actions</th>
               </tr>
             </thead>
@@ -260,19 +258,13 @@ const resolveMethodLabel = (value: string | null | undefined) => {
                       <td className="py-2 pr-3">{warehouseLabel}</td>
                       <td className="py-2 pr-3">{statusBadge(row.isActive)}</td>
                       <td className="py-2 pr-3">{resolveMethodLabel(row.billingMethod)}</td>
-                      <td className="py-2 pr-3">{formatDate(row.nextInvoiceDate)}</td>
-                      <td className="py-2 pr-3">{formatCurrency(row.mtdTotal)}</td>
                       <td className="py-2 text-right space-x-2">
                         <Link href={`/billing/clients/${linkId}/config`}>
                           <Button size="sm" variant="outline">
                             Configs
                           </Button>
                         </Link>
-                        <Link href={`/billing/clients/${linkId}/usage`}>
-                          <Button size="sm" variant="outline">
-                            Usage
-                          </Button>
-                        </Link>
+
                         <Link href={`/billing/clients/${linkId}/invoices`}>
                           <Button size="sm" variant="outline">
                             Invoices

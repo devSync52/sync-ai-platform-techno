@@ -69,20 +69,99 @@ export default function InvoiceDetailPage() {
   const [serviceDate, setServiceDate] = useState<string>('')
 
   const [expandedCategories, setExpandedCategories] = useState<
-    Record<'storage' | 'handling' | 'ecommerce' | 'extra', boolean>
+    Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'return' | 'insurance' | 'extra', boolean>
   >({
+    unloading: true,
+    inbound: true,
     storage: true,
-    handling: true,
-    ecommerce: false,
+    outbound: true,
+    return: false,
+    insurance: false,
     extra: false,
   })
+
+  const [expandedOutboundGroups, setExpandedOutboundGroups] = useState<Record<string, boolean>>({})
+  const [bulkRateUsdByGroup, setBulkRateUsdByGroup] = useState<Record<string, string>>({})
+  const [bulkApplyLoadingByGroup, setBulkApplyLoadingByGroup] = useState<Record<string, boolean>>({})
+  const handleApplyBulkRate = async (label: string, itemsToUpdate: InvoiceItem[]) => {
+    if (!data) return
+
+    const rawUsd = (bulkRateUsdByGroup[label] ?? '').trim()
+    const rateUsd = Number(rawUsd)
+
+    if (!rawUsd || !Number.isFinite(rateUsd) || rateUsd < 0) {
+      alert('Please enter a valid rate in USD (e.g. 0.30).')
+      return
+    }
+
+    const rateCents = Math.round(rateUsd * 100)
+
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        `Apply rate $${rateUsd.toFixed(2)} to all ${itemsToUpdate.length} items in OUTBOUND – ${label}?`
+      )
+      if (!confirmed) return
+    }
+
+    setBulkApplyLoadingByGroup((prev) => ({ ...prev, [label]: true }))
+
+    try {
+      // Patch all items in the subgroup
+      await Promise.all(
+        itemsToUpdate.map((it) =>
+          fetch(`/api/billing/invoice-items/${it.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rate_cents: rateCents }),
+          }).then(async (res) => {
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok || !json?.success) {
+              throw new Error(json?.message || `Failed to update item ${it.id}`)
+            }
+          })
+        )
+      )
+
+      // Recalculate invoice totals after bulk update
+      await fetch('/api/billing/invoice/recalculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId }),
+      })
+
+      // Reload invoice once
+      const reloadRes = await fetch(`/api/billing/invoice/${invoiceId}`)
+      const reloadJson = await reloadRes.json()
+      if (reloadRes.ok && reloadJson.success) {
+        setData(reloadJson.data)
+      } else {
+        alert(reloadJson?.message || 'Updated items, but failed to reload invoice')
+      }
+
+      // Optional: clear input after apply
+      setBulkRateUsdByGroup((prev) => ({ ...prev, [label]: '' }))
+    } catch (err: any) {
+      alert(err?.message || 'Unexpected error while applying bulk rate')
+    } finally {
+      setBulkApplyLoadingByGroup((prev) => ({ ...prev, [label]: false }))
+    }
+  }
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Partial<InvoiceItem>>({})
   const [shareLoading, setShareLoading] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
 
-  function getCategoryKey(item: InvoiceItem): 'storage' | 'handling' | 'ecommerce' | 'extra' {
+  function getCategoryKey(
+    item: InvoiceItem
+  ):
+    | 'unloading'
+    | 'inbound'
+    | 'storage'
+    | 'outbound'
+    | 'return'
+    | 'insurance'
+    | 'extra' {
     const meta = (item.metadata || {}) as any
 
     // Tenta descobrir o "usage" bruto de vários lugares possíveis
@@ -103,32 +182,96 @@ export default function InvoiceDetailPage() {
     const desc = (item.description || '').toLowerCase()
 
 
-    // Função auxiliar para normalizar várias strings em uma das 4 categorias
+    // Função auxiliar para normalizar várias strings em uma das 7 categorias
     const normalize = (
       candidate: string | null | undefined
-    ): 'storage' | 'handling' | 'ecommerce' | 'extra' | null => {
+    ):
+      | 'unloading'
+      | 'inbound'
+      | 'storage'
+      | 'outbound'
+      | 'return'
+      | 'insurance'
+      | 'extra'
+      | null => {
       if (!candidate) return null
       const c = candidate.toLowerCase()
 
-      if (['storage', 'storage_daily', 'storage_fee'].includes(c)) return 'storage'
-
+      // Storage
       if (
         [
-          'handling',
-          'inbound',
-          'crossdock',
-          'cross-dock',
-          'drayage',
-          'labeling',
-          'returns_insurance',
-          'returns',
+          'storage',
+          'storage_daily',
+          'storage_fee',
+          'warehouse_storage',
+          'warehouse storage',
+          'cuft_day',
+          'cuft-day',
         ].includes(c)
       )
-        return 'handling'
+        return 'storage'
 
-      if (['ecommerce', 'e-commerce', 'shipping', 'parcel'].includes(c)) return 'ecommerce'
+      // Unloading (Crossdock + Drayage)
+      if (
+        [
+          'unloading',
+          'crossdock',
+          'cross-dock',
+          'cross dock',
+          'crossdock_transfer',
+          'cross-dock transfer',
+          'crossdock transfer',
+          'drayage',
+        ].includes(c)
+      )
+        return 'unloading'
 
-      if (c === 'extra') return 'extra'
+      // Inbound
+      if (['inbound', 'barcode scanning', 'barcode_scanning', 'barcode', 'scanning'].includes(c))
+        return 'inbound'
+
+      // Outbound
+      if (
+        [
+          'outbound',
+          'ecommerce',
+          'e-commerce',
+          'e commerce',
+          'shipping',
+          'parcel',
+          'fulfillment',
+          'fulfillment unit',
+          'e-commerce transaction',
+          'ecommerce transaction',
+          'retail transaction',
+          'retail transaction (fba)',
+          'labeling',
+          'standard labeling',
+          'wrapping',
+        ].includes(c)
+      )
+        return 'outbound'
+
+      // Return
+      if (['return', 'returns', 'returns processing', 'returns_processing'].includes(c))
+        return 'return'
+
+      // Insurance
+      if (['insurance', 'returns_insurance', 'returns insurance'].includes(c)) return 'insurance'
+
+      // Extras (supplies and anything explicitly marked)
+      if (
+        [
+          'extra',
+          'extras',
+          'supplies',
+          'packaging',
+          'boxes',
+          'mailer',
+          'pallet',
+        ].includes(c)
+      )
+        return 'extra'
 
       return null
     }
@@ -143,25 +286,87 @@ export default function InvoiceDetailPage() {
 
     // 3) Heurísticas pelo type_label (frases mais longas)
     if (typeLabel.includes('storage')) return 'storage'
-    if (typeLabel.includes('e-commerce') || typeLabel.includes('ecommerce') || typeLabel.includes('shipping'))
-      return 'ecommerce'
+    if (typeLabel.includes('drayage') || typeLabel.includes('cross-dock') || typeLabel.includes('crossdock'))
+      return 'unloading'
+    if (typeLabel.includes('inbound') || typeLabel.includes('barcode') || typeLabel.includes('scan'))
+      return 'inbound'
     if (
-      typeLabel.includes('handling') ||
-      typeLabel.includes('inbound') ||
-      typeLabel.includes('label') ||
-      typeLabel.includes('barcode')
+      typeLabel.includes('outbound') ||
+      typeLabel.includes('e-commerce') ||
+      typeLabel.includes('ecommerce') ||
+      typeLabel.includes('shipping') ||
+      typeLabel.includes('fulfillment') ||
+      typeLabel.includes('labeling') ||
+      typeLabel.includes('wrapping')
     )
-      return 'handling'
+      return 'outbound'
+    if (typeLabel.includes('return')) return 'return'
+    if (typeLabel.includes('insurance')) return 'insurance'
 
     // 4) Heurísticas pela descrição
     if (desc.includes('storage')) return 'storage'
-    if (desc.includes('barcode') || desc.includes('scan') || desc.includes('scanning') || desc.includes('label'))
-      return 'handling'
-    if (desc.includes('shipment') || desc.includes('ship') || desc.includes('parcel') || desc.includes('freight'))
-      return 'ecommerce'
+    if (desc.includes('drayage') || desc.includes('cross-dock') || desc.includes('crossdock')) return 'unloading'
+    if (desc.includes('inbound') || desc.includes('barcode') || desc.includes('scan') || desc.includes('scanning'))
+      return 'inbound'
+    if (
+      desc.includes('outbound') ||
+      desc.includes('shipment') ||
+      desc.includes('ship') ||
+      desc.includes('parcel') ||
+      desc.includes('freight') ||
+      desc.includes('fulfillment') ||
+      desc.includes('label') ||
+      desc.includes('wrapping')
+    )
+      return 'outbound'
+    if (desc.includes('return')) return 'return'
+    if (desc.includes('insurance')) return 'insurance'
 
     // 5) Se ainda não classificou, cai em extra
     return 'extra'
+  }
+
+  function getOutboundSubLabel(item: InvoiceItem): string {
+    const meta = (item.metadata || {}) as any
+    const raw = String(
+      meta.type_label ??
+        meta.typeLabel ??
+        meta.service_name ??
+        meta.serviceName ??
+        item.description ??
+        ''
+    ).toLowerCase()
+
+    if (
+      raw.includes('outbound_ecom') ||
+      raw.includes('outbound-ecom') ||
+      raw.includes('outbound ecom')
+    ) {
+      return 'E-commerce Transaction'
+    }
+
+    if (
+      raw.includes('outbound_fulfillment') ||
+      raw.includes('outbound-fulfillment') ||
+      raw.includes('fulfillment unit') ||
+      raw.includes('fulfillment units')
+    ) {
+      return 'Fulfillment Units'
+    }
+
+    if (raw.includes('standard labeling') || (raw.includes('labeling') && !raw.includes('barcode'))) {
+      return 'Standard Labeling'
+    }
+
+    if (raw.includes('wrapping')) {
+      return 'Wrapping'
+    }
+
+    if (raw.includes('retail transaction')) {
+      return 'Retail Transaction (FBA)'
+    }
+
+    return 'Other'
   }
 
   const clientLabel =
@@ -274,10 +479,13 @@ export default function InvoiceDetailPage() {
   }, [invoiceId])
 
   const categoryTotals = useMemo(() => {
-    const totals: Record<'storage' | 'handling' | 'ecommerce' | 'extra', number> = {
+    const totals: Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'return' | 'insurance' | 'extra', number> = {
+      unloading: 0,
+      inbound: 0,
       storage: 0,
-      handling: 0,
-      ecommerce: 0,
+      outbound: 0,
+      return: 0,
+      insurance: 0,
       extra: 0,
     }
     if (!data) return totals
@@ -292,10 +500,13 @@ export default function InvoiceDetailPage() {
   }, [data])
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<'storage' | 'handling' | 'ecommerce' | 'extra', number> = {
+    const counts: Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'return' | 'insurance' | 'extra', number> = {
+      unloading: 0,
+      inbound: 0,
       storage: 0,
-      handling: 0,
-      ecommerce: 0,
+      outbound: 0,
+      return: 0,
+      insurance: 0,
       extra: 0,
     }
 
@@ -322,18 +533,33 @@ export default function InvoiceDetailPage() {
     return groups
   }, [data])
 
-  const categoryOrder: { key: string; label: string }[] = [
-    { key: 'storage', label: 'Storage' },
-    { key: 'handling', label: 'Handling' },
-    { key: 'ecommerce', label: 'E-commerce' },
-    { key: 'extra', label: 'Extras' },
-  ]
+ // Compute subtotal and total from items on the client
+  const computedSubtotalCents = useMemo(() => {
+  if (!data) return 0
+  return data.items.reduce((sum, item) => sum + (Number(item.amount_cents) || 0), 0)
+}, [data])
+
+const computedTotalCents = useMemo(() => {
+  if (!data) return 0
+  const tax = Number(data.invoice.tax_cents) || 0
+  return computedSubtotalCents + tax
+}, [data, computedSubtotalCents])
+
+const categoryOrder: { key: string; label: string }[] = [
+  { key: 'unloading', label: 'Unloading' },
+  { key: 'inbound', label: 'Inbound' },
+  { key: 'storage', label: 'Storage' },
+  { key: 'outbound', label: 'Outbound' },
+  { key: 'return', label: 'Return' },
+  { key: 'insurance', label: 'Insurance' },
+  { key: 'extra', label: 'Extras' },
+]
 
   // Issue Invoice logic
   const handleIssueInvoice = useCallback(async () => {
     if (!data?.invoice?.id) return
     try {
-      const res = await fetch(`/api/billing/invoice/${data.invoice.id}/issue`, {
+      const res = await fetch(`/api/billing/invoices/${data.invoice.id}/issue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId: data.invoice.id })
@@ -678,81 +904,44 @@ export default function InvoiceDetailPage() {
               Invoice total
             </p>
             <p className="text-2xl font-semibold">
-              ${(data.invoice.total_cents / 100).toFixed(2)}
+              ${(computedTotalCents / 100).toFixed(2)}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Subtotal ${(data.invoice.subtotal_cents / 100).toFixed(2)} · Tax{' '}
+              Subtotal ${(computedSubtotalCents / 100).toFixed(2)} · Tax{' '}
               ${(data.invoice.tax_cents / 100).toFixed(2)}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Category summary: 4 cards estilo dashboard */}
-      <div className="grid sm:grid-cols-4 gap-4 text-xs pt-4 border-t mt-4">
-        <div className="rounded-md border bg-muted/40 px-3 py-2">
-          <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-            Storage
-          </p>
-          <p className="text-xl font-semibold">
-            ${(categoryTotals.storage / 100).toFixed(2)}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {categoryCounts.storage} item
-            {categoryCounts.storage === 1 ? '' : 's'}
-          </p>
-        </div>
-
-        <div className="rounded-md border bg-muted/40 px-3 py-2">
-          <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-            Handling
-          </p>
-          <p className="text-xl font-semibold">
-            ${(categoryTotals.handling / 100).toFixed(2)}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {categoryCounts.handling} item
-            {categoryCounts.handling === 1 ? '' : 's'}
-          </p>
-        </div>
-
-        <div className="rounded-md border bg-muted/40 px-3 py-2">
-          <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-            E-commerce
-          </p>
-          <p className="text-xl font-semibold">
-            ${(categoryTotals.ecommerce / 100).toFixed(2)}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {categoryCounts.ecommerce} item
-            {categoryCounts.ecommerce === 1 ? '' : 's'}
-          </p>
-        </div>
-
-        <div className="rounded-md border bg-muted/40 px-3 py-2">
-          <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-            Extras
-          </p>
-          <p className="text-xl font-semibold">
-            ${(categoryTotals.extra / 100).toFixed(2)}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {categoryCounts.extra} item
-            {categoryCounts.extra === 1 ? '' : 's'}
-          </p>
-        </div>
+      {/* Category summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 text-xs pt-4 border-t mt-4">
+        {categoryOrder.map((cat) => {
+          const key = cat.key as
+            | 'unloading'
+            | 'inbound'
+            | 'storage'
+            | 'outbound'
+            | 'return'
+            | 'insurance'
+            | 'extra'
+          return (
+            <div key={cat.key} className="rounded-md border bg-muted/40 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                {cat.label}
+              </p>
+              <p className="text-xl font-semibold">
+                ${(categoryTotals[key] / 100).toFixed(2)}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {categoryCounts[key]} item
+                {categoryCounts[key] === 1 ? '' : 's'}
+              </p>
+            </div>
+          )
+        })}
       </div>
 
-      {/* Issue Invoice Button */}
-      <div className="flex justify-end mt-4">
-        <Button
-          className="bg-primary text-white"
-          onClick={handleIssueInvoice}
-          disabled={loading || !data}
-        >
-          Issue Invoice
-        </Button>
-      </div>
     </>
   )}
 </Card>
@@ -795,7 +984,7 @@ export default function InvoiceDetailPage() {
                   <option value="">Select a service…</option>
                   {services.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.category} – {s.name} ({s.unit}) @ ${s.rateUsd.toFixed(2)}
+                      {s.category} – {s.name} {/*({s.unit}) @ ${s.rateUsd.toFixed(2)*/}
                     </option>
                   ))}
                 </select>
@@ -875,7 +1064,14 @@ export default function InvoiceDetailPage() {
     if (!items.length) return null
 
     const itemCount = items.length
-    const catKey = cat.key as 'storage' | 'handling' | 'ecommerce' | 'extra'
+    const catKey = cat.key as
+      | 'unloading'
+      | 'inbound'
+      | 'storage'
+      | 'outbound'
+      | 'return'
+      | 'insurance'
+      | 'extra'
     const expanded = expandedCategories[catKey]
 
     const totalCents = categoryTotals[catKey] || 0
@@ -907,145 +1103,518 @@ export default function InvoiceDetailPage() {
           <td className="pt-4 pb-2" />
 
           {/* Coluna Subtotal: sempre mostra o total da categoria */}
-          <td className="pt-4 pb-2 text-right">
-            <div className="flex items-center justify-end gap-2">
-              <span className="text-lg font-semibold">
-                ${(totalCents / 100).toFixed(2)}
-              </span>
-              <button
-                type="button"
-                className="text-[11px] px-2 py-1 border bg-white rounded-md text-muted-foreground hover:bg-muted"
-                onClick={() =>
-                  setExpandedCategories((prev) => ({
-                    ...prev,
-                    [catKey]: !expanded,
-                  }))
-                }
-              >
-                {expanded ? 'Hide details' : 'Show details'}
-              </button>
-            </div>
-          </td>
+          {catKey === 'extra' ? (
+            // Bulk Rate para Extras
+            <td className="pt-4 pb-2 text-right">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="text-lg font-semibold">
+                  ${(totalCents / 100).toFixed(2)}
+                </span>
+
+                {expanded && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-muted-foreground">Rate</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="border rounded px-2 py-1 text-xs w-20 bg-background"
+                      placeholder={(() => {
+                        const first = items[0]
+                        if (!first) return ''
+                        const allSame = items.every((it) => it.rate_cents === first.rate_cents)
+                        return allSame ? (first.rate_cents / 100).toFixed(2) : '—'
+                      })()}
+                      value={bulkRateUsdByGroup['__extras__'] ?? ''}
+                      onChange={(e) =>
+                        setBulkRateUsdByGroup((prev) => ({
+                          ...prev,
+                          ['__extras__']: e.target.value,
+                        }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="text-[11px] px-2 py-1 border bg-white rounded-md text-muted-foreground hover:bg-muted disabled:opacity-50"
+                      disabled={!!bulkApplyLoadingByGroup['__extras__'] || items.length === 0}
+                      onClick={() => handleApplyBulkRate('__extras__', items)}
+                    >
+                      {bulkApplyLoadingByGroup['__extras__'] ? 'Applying…' : 'Apply to all'}
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="text-[11px] px-2 py-1 border bg-white rounded-md text-muted-foreground hover:bg-muted"
+                  onClick={() =>
+                    setExpandedCategories((prev) => ({
+                      ...prev,
+                      extra: !expanded,
+                    }))
+                  }
+                >
+                  {expanded ? 'Hide details' : 'Show details'}
+                </button>
+              </div>
+            </td>
+          ) : (
+            <td className="pt-4 pb-2 text-right">
+              <div className="flex items-center justify-end gap-2">
+                <span className="text-lg font-semibold">
+                  ${(totalCents / 100).toFixed(2)}
+                </span>
+                <button
+                  type="button"
+                  className="text-[11px] px-2 py-1 border bg-white rounded-md text-muted-foreground hover:bg-muted"
+                  onClick={() =>
+                    setExpandedCategories((prev) => ({
+                      ...prev,
+                      [catKey]: !expanded,
+                    }))
+                  }
+                >
+                  {expanded ? 'Hide details' : 'Show details'}
+                </button>
+              </div>
+            </td>
+          )}
           <td className="pt-4 pb-2" />
-          
         </tr>
 
           {/* Linhas da categoria (só quando expandida) */}
           {expanded &&
-            items.map((item, index) => {
-              const rowClass =
-                'border-b last:border-0 ' +
-                (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')
-              const catKey = getCategoryKey(item)
-              const isEcomOrExtra = catKey === 'ecommerce' || catKey === 'extra'
-              const orderId =
-                item.metadata?.order_id || item.metadata?.orderId || null
-              const occurredDate = item.occurred_at
-                ? new Date(item.occurred_at).toLocaleDateString('en-US', {
-                    timeZone: 'UTC',
+            (catKey === 'outbound'
+              ? (() => {
+                  // Group OUTBOUND items by sub-service
+                  const groups = new Map<
+                    string,
+                    { items: InvoiceItem[]; totalCents: number }
+                  >()
+
+                  for (const it of items) {
+                    const label = getOutboundSubLabel(it)
+                    const prev = groups.get(label) ?? { items: [], totalCents: 0 }
+                    prev.items.push(it)
+                    prev.totalCents += Number(it.amount_cents || 0)
+                    groups.set(label, prev)
+                  }
+
+                  // Stable order: common ones first, then the rest
+                  const preferredOrder = [
+                    'E-commerce Transaction',
+                    'Fulfillment Units',
+                    'Retail Transaction (FBA)',
+                    'Standard Labeling',
+                    'Wrapping',
+                    'Other',
+                  ]
+
+                  const ordered = Array.from(groups.entries()).sort((a, b) => {
+                    const ai = preferredOrder.indexOf(a[0])
+                    const bi = preferredOrder.indexOf(b[0])
+                    if (ai === -1 && bi === -1) return a[0].localeCompare(b[0])
+                    if (ai === -1) return 1
+                    if (bi === -1) return -1
+                    return ai - bi
                   })
-                : '-'
 
-              return (
-                <tr key={item.id} className={rowClass}>
-                  <td className="py-2 pr-3 text-right">
-                    {isEcomOrExtra && orderId ? orderId : '-'}
-                  </td>
+                  let globalIndex = 0
 
-                  <td className="py-2 pr-3 text-right">
-                    {editingItemId === item.id ? (
-                      <input
-                        type="date"
-                        className="border rounded px-1 text-xs"
-                        value={String(editDraft.occurred_at ?? item.occurred_at).slice(0,10)}
-                        onChange={(e)=> setEditDraft({...editDraft, occurred_at: e.target.value})}
-                      />
-                    ) : occurredDate}
-                  </td>
+                  return ordered.map(([label, payload]) => {
+                    const subExpanded = expandedOutboundGroups[label] ?? false
+                    return (
+                      <React.Fragment key={`outbound-sub-${label}`}>
+                        {/* Subheader row */}
+                        <tr className="bg-white border-b">
+                          <td colSpan={3} className="py-3 pl-6 text-sm font-semibold">
+                            OUTBOUND – {label}
+                            <span className="ml-2 font-normal normal-case text-[11px] text-muted-foreground/80">
+                              ({payload.items.length} item{payload.items.length === 1 ? '' : 's'})
+                            </span>
+                          </td>
+                          <td className="py-3" />
+                          <td className="py-3" />
+                          <td className="py-3 pr-3 text-right">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <span className="text-base font-semibold">
+                                ${(payload.totalCents / 100).toFixed(2)}
+                              </span>
 
-                  <td className="py-2 pr-3 text-right">
-                    {editingItemId === item.id ? (
-                      <input
-                        type="text"
-                        className="border rounded px-1 text-xs w-full"
-                        value={editDraft.description ?? item.description}
-                        onChange={(e)=> setEditDraft({...editDraft, description: e.target.value})}
-                      />
-                    ) : item.description}
-                  </td>
+                              {subExpanded && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[11px] text-muted-foreground">Rate</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    className="border rounded px-2 py-1 text-xs w-20 bg-background"
+                                    placeholder={(() => {
+                                      const first = payload.items[0]
+                                      if (!first) return ''
+                                      const allSame = payload.items.every((it) => it.rate_cents === first.rate_cents)
+                                      return allSame ? (first.rate_cents / 100).toFixed(2) : '—'
+                                    })()}
+                                    value={bulkRateUsdByGroup[label] ?? ''}
+                                    onChange={(e) =>
+                                      setBulkRateUsdByGroup((prev) => ({
+                                        ...prev,
+                                        [label]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="text-[11px] px-2 py-1 border bg-white rounded-md text-muted-foreground hover:bg-muted disabled:opacity-50"
+                                    disabled={
+                                      !!bulkApplyLoadingByGroup[label] ||
+                                      payload.items.length === 0
+                                    }
+                                    onClick={() => handleApplyBulkRate(label, payload.items)}
+                                  >
+                                    {bulkApplyLoadingByGroup[label] ? 'Applying…' : 'Apply to all'}
+                                  </button>
+                                </div>
+                              )}
 
-                  <td className="py-2 pr-3 text-right">
-                    {editingItemId === item.id ? (
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="border rounded px-1 text-xs w-20"
-                        value={editDraft.qty ?? item.qty}
-                        onChange={(e)=> setEditDraft({...editDraft, qty: Number(e.target.value)})}
-                      />
-                    ) : (() => {
-                      const n = Number(item.qty ?? 0)
-                      return Number.isFinite(n) && Math.floor(n) === n ? n.toString() : n.toFixed(2)
-                    })()}
-                  </td>
+                              <button
+                                type="button"
+                                className="text-[11px] px-2 py-1 border bg-white rounded-md text-muted-foreground hover:bg-muted"
+                                onClick={() =>
+                                  setExpandedOutboundGroups((prev) => ({
+                                    ...prev,
+                                    [label]: !subExpanded,
+                                  }))
+                                }
+                              >
+                                {subExpanded ? 'Hide details' : 'Show details'}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-3" />
+                        </tr>
 
-                  <td className="py-2 pr-3 text-right">
-                    {editingItemId === item.id ? (
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="border rounded px-1 text-xs w-20"
-                        value={(editDraft.rate_cents ?? item.rate_cents) / 100}
-                        onChange={(e)=> setEditDraft({...editDraft, rate_cents: Math.round(Number(e.target.value)*100)})}
-                      />
-                    ) : `$${(item.rate_cents / 100).toFixed(2)}`}
-                  </td>
+                        {/* Rows for this subgroup */}
+                        {subExpanded &&
+                          payload.items.map((item) => {
+                            const rowClass =
+                              'border-b last:border-0 ' +
+                              (globalIndex++ % 2 === 0 ? 'bg-white' : 'bg-gray-50')
 
-                  <td className="py-2 pr-3 text-right">
-                    {`$${(item.amount_cents / 100).toFixed(2)}`}
-                  </td>
+                            const itemCatKey = getCategoryKey(item)
+                            const isOutboundOrExtra =
+                              itemCatKey === 'outbound' || itemCatKey === 'extra'
 
-                  <td className="py-2 pr-3 text-right">
-                    {editingItemId === item.id ? (
-                      <>
-<button
-  className="p-2 rounded hover:bg-muted text-green-600 mr-2"
-  onClick={handleSaveEdit}
-  aria-label="Save item"
->
-  <Check className="w-4 h-4" />
-</button>
-<button
-  className="p-2 rounded hover:bg-muted text-muted-foreground"
-  onClick={() => { setEditingItemId(null); setEditDraft({}) }}
-  aria-label="Cancel edit"
->
-  <X className="w-4 h-4" />
-</button>
-                      </>
-                    ) : (
-                      <>
-<button
-  className="p-2 rounded hover:bg-muted text-blue-600 mr-2"
-  onClick={() => { setEditingItemId(item.id); setEditDraft(item) }}
-  aria-label="Edit item"
->
-  <Pencil className="w-4 h-4" />
-</button>
-<button
-  className="p-2 rounded hover:bg-muted text-destructive disabled:opacity-50"
-  onClick={() => handleDeleteItem(item.id)}
-  disabled={!!deletingItemId}
-  aria-label="Delete item"
->
-  {deletingItemId === item.id ? '…' : <Trash className="w-4 h-4" />}
-</button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
+                            const orderId =
+                              item.metadata?.order_id || item.metadata?.orderId || null
+
+                            const occurredDate = item.occurred_at
+                              ? new Date(item.occurred_at).toLocaleDateString('en-US', {
+                                  timeZone: 'UTC',
+                                })
+                              : '-'
+
+                            return (
+                              <tr key={item.id} className={rowClass}>
+                                <td className="py-2 pr-3 text-right">
+                                  {isOutboundOrExtra && orderId ? orderId : '-'}
+                                </td>
+
+                                <td className="py-2 pr-3 text-right">
+                                  {editingItemId === item.id ? (
+                                    <input
+                                      type="date"
+                                      className="border rounded px-1 text-xs"
+                                      value={String(
+                                        editDraft.occurred_at ?? item.occurred_at
+                                      ).slice(0, 10)}
+                                      onChange={(e) =>
+                                        setEditDraft({
+                                          ...editDraft,
+                                          occurred_at: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  ) : (
+                                    occurredDate
+                                  )}
+                                </td>
+
+                                <td className="py-2 pr-3 text-right">
+                                  {editingItemId === item.id ? (
+                                    <input
+                                      type="text"
+                                      className="border rounded px-1 text-xs w-full"
+                                      value={editDraft.description ?? item.description}
+                                      onChange={(e) =>
+                                        setEditDraft({
+                                          ...editDraft,
+                                          description: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  ) : (
+                                    item.metadata?.sellercloud_cs_key ?? item.description
+                                  )}
+                                </td>
+
+                                <td className="py-2 pr-3 text-right">
+                                  {editingItemId === item.id ? (
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      className="border rounded px-1 text-xs w-20"
+                                      value={editDraft.qty ?? item.qty}
+                                      onChange={(e) =>
+                                        setEditDraft({
+                                          ...editDraft,
+                                          qty: Number(e.target.value),
+                                        })
+                                      }
+                                    />
+                                  ) : (
+                                    (() => {
+                                      const n = Number(item.qty ?? 0)
+                                      return Number.isFinite(n) && Math.floor(n) === n
+                                        ? n.toString()
+                                        : n.toFixed(2)
+                                    })()
+                                  )}
+                                </td>
+
+                                <td className="py-2 pr-3 text-right">
+                                  {editingItemId === item.id ? (
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      className="border rounded px-1 text-xs w-20"
+                                      value={(editDraft.rate_cents ?? item.rate_cents) / 100}
+                                      onChange={(e) =>
+                                        setEditDraft({
+                                          ...editDraft,
+                                          rate_cents: Math.round(
+                                            Number(e.target.value) * 100
+                                          ),
+                                        })
+                                      }
+                                    />
+                                  ) : (
+                                    `$${(item.rate_cents / 100).toFixed(2)}`
+                                  )}
+                                </td>
+
+                                <td className="py-2 pr-3 text-right">
+                                  {`$${(item.amount_cents / 100).toFixed(2)}`}
+                                </td>
+
+                                <td className="py-2 pr-3 text-right">
+                                  {editingItemId === item.id ? (
+                                    <>
+                                      <button
+                                        className="p-2 rounded hover:bg-muted text-green-600 mr-2"
+                                        onClick={handleSaveEdit}
+                                        aria-label="Save item"
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        className="p-2 rounded hover:bg-muted text-muted-foreground"
+                                        onClick={() => {
+                                          setEditingItemId(null)
+                                          setEditDraft({})
+                                        }}
+                                        aria-label="Cancel edit"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        className="p-2 rounded hover:bg-muted text-blue-600 mr-2"
+                                        onClick={() => {
+                                          setEditingItemId(item.id)
+                                          setEditDraft(item)
+                                        }}
+                                        aria-label="Edit item"
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        className="p-2 rounded hover:bg-muted text-destructive disabled:opacity-50"
+                                        onClick={() => handleDeleteItem(item.id)}
+                                        disabled={!!deletingItemId}
+                                        aria-label="Delete item"
+                                      >
+                                        {deletingItemId === item.id ? '…' : (
+                                          <Trash className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                    </>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                      </React.Fragment>
+                    )
+                  })
+                })()
+              : items.map((item, index) => {
+                  const rowClass =
+                    'border-b last:border-0 ' +
+                    (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')
+                  const itemCatKey = getCategoryKey(item)
+                  const isOutboundOrExtra =
+                    itemCatKey === 'outbound' || itemCatKey === 'extra'
+                  const orderId =
+                    item.metadata?.order_id || item.metadata?.orderId || null
+                  const occurredDate = item.occurred_at
+                    ? new Date(item.occurred_at).toLocaleDateString('en-US', {
+                        timeZone: 'UTC',
+                      })
+                    : '-'
+
+                  return (
+                    <tr key={item.id} className={rowClass}>
+                      <td className="py-2 pr-3 text-right">
+                        {isOutboundOrExtra && orderId ? orderId : '-'}
+                      </td>
+
+                      <td className="py-2 pr-3 text-right">
+                        {editingItemId === item.id ? (
+                          <input
+                            type="date"
+                            className="border rounded px-1 text-xs"
+                            value={String(
+                              editDraft.occurred_at ?? item.occurred_at
+                            ).slice(0, 10)}
+                            onChange={(e) =>
+                              setEditDraft({
+                                ...editDraft,
+                                occurred_at: e.target.value,
+                              })
+                            }
+                          />
+                        ) : (
+                          occurredDate
+                        )}
+                      </td>
+
+                      <td className="py-2 pr-3 text-right">
+                        {editingItemId === item.id ? (
+                          <input
+                            type="text"
+                            className="border rounded px-1 text-xs w-full"
+                            value={editDraft.description ?? item.description}
+                            onChange={(e) =>
+                              setEditDraft({
+                                ...editDraft,
+                                description: e.target.value,
+                              })
+                            }
+                          />
+                        ) : (
+                          item.description
+                        )}
+                      </td>
+
+                      <td className="py-2 pr-3 text-right">
+                        {editingItemId === item.id ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="border rounded px-1 text-xs w-20"
+                            value={editDraft.qty ?? item.qty}
+                            onChange={(e) =>
+                              setEditDraft({
+                                ...editDraft,
+                                qty: Number(e.target.value),
+                              })
+                            }
+                          />
+                        ) : (
+                          (() => {
+                            const n = Number(item.qty ?? 0)
+                            return Number.isFinite(n) && Math.floor(n) === n
+                              ? n.toString()
+                              : n.toFixed(2)
+                          })()
+                        )}
+                      </td>
+
+                      <td className="py-2 pr-3 text-right">
+                        {editingItemId === item.id ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="border rounded px-1 text-xs w-20"
+                            value={(editDraft.rate_cents ?? item.rate_cents) / 100}
+                            onChange={(e) =>
+                              setEditDraft({
+                                ...editDraft,
+                                rate_cents: Math.round(Number(e.target.value) * 100),
+                              })
+                            }
+                          />
+                        ) : (
+                          `$${(item.rate_cents / 100).toFixed(2)}`
+                        )}
+                      </td>
+
+                      <td className="py-2 pr-3 text-right">
+                        {`$${(item.amount_cents / 100).toFixed(2)}`}
+                      </td>
+
+                      <td className="py-2 pr-3 text-right">
+                        {editingItemId === item.id ? (
+                          <>
+                            <button
+                              className="p-2 rounded hover:bg-muted text-green-600 mr-2"
+                              onClick={handleSaveEdit}
+                              aria-label="Save item"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-2 rounded hover:bg-muted text-muted-foreground"
+                              onClick={() => {
+                                setEditingItemId(null)
+                                setEditDraft({})
+                              }}
+                              aria-label="Cancel edit"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className="p-2 rounded hover:bg-muted text-blue-600 mr-2"
+                              onClick={() => {
+                                setEditingItemId(item.id)
+                                setEditDraft(item)
+                              }}
+                              aria-label="Edit item"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-2 rounded hover:bg-muted text-destructive disabled:opacity-50"
+                              onClick={() => handleDeleteItem(item.id)}
+                              disabled={!!deletingItemId}
+                              aria-label="Delete item"
+                            >
+                              {deletingItemId === item.id ? '…' : (
+                                <Trash className="w-4 h-4" />
+                              )}
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                }))}
         </React.Fragment>
       )
     })}

@@ -12,16 +12,23 @@ export async function GET(
   const supabase = (createRouteHandlerClient as any)({ cookies })
 
   const { data, error } = await supabase
-    .from('b1_v_billing_configs')
+    .from('b1_v_billing_configs_2')
     .select(
       `
         client_account_id,
         parent_account_id,
+        assigned_warehouse,
+        is_default,
+        created_at,
         client_name,
         client_logo_url
       `
     )
     .eq('client_account_id', id)
+    // Some clients have multiple rows (one per warehouse). Pick a deterministic “best” row.
+    .order('is_default', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (error) {

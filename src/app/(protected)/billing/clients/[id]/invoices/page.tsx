@@ -22,10 +22,21 @@ import {
 interface InvoiceRow {
   id: string
   period: string
-  total: number
-  status: 'draft' | 'open' | 'overdue' | 'paid'
+
+  // API may return totals as `total_cents` / `total` (cents) or `total_usd`.
+  total: number // USD dollars (normalized in fetchInvoices)
+  total_cents?: number | null
+  subtotal_cents?: number | null
+
+  // status can be more than the initial set (e.g. issued)
+  status: string
+
   issueDate: string
   dueDate: string | null
+
+  warehouse_id?: string | null
+  warehouse_name?: string | null
+
   client_label?: string | null
   client_name?: string | null
   client_code?: string | null
@@ -37,6 +48,20 @@ interface ClientInfo {
   name?: string | null
   code?: string | null
   logo_url?: string | null
+}
+
+interface WarehouseOption {
+  id: string
+  label: string
+}
+
+function dedupInvoicesById(list: InvoiceRow[]): InvoiceRow[] {
+  const map = new Map<string, InvoiceRow>()
+  for (const row of list || []) {
+    if (!row?.id) continue
+    map.set(String(row.id), row)
+  }
+  return Array.from(map.values())
 }
 
 export default function ClientInvoicesPage() {
@@ -55,7 +80,85 @@ export default function ClientInvoicesPage() {
 
   const [periodStart, setPeriodStart] = useState<string>('')
   const [periodEnd, setPeriodEnd] = useState<string>('')
+  const [warehouseId, setWarehouseId] = useState<string>('')
+  const [warehouseOptions, setWarehouseOptions] = useState<WarehouseOption[]>([])
+  const [isWarehousesLoading, setIsWarehousesLoading] = useState(false)
+  const [warehousesError, setWarehousesError] = useState<string | null>(null)
   const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false)
+  const warehouseMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const w of warehouseOptions || []) {
+      if (!w?.id) continue
+      map.set(String(w.id), String(w.label || w.id))
+    }
+    return map
+  }, [warehouseOptions])
+  const fetchWarehouses = async () => {
+    if (!id) return
+    try {
+      setIsWarehousesLoading(true)
+      setWarehousesError(null)
+
+      // Preferred endpoint: returns warehouses the client is associated with
+      const res = await fetch(`/api/billing/clients/${id}/warehouses`)
+      if (res.ok) {
+        const json = await res.json()
+        const list = (json?.data || json?.warehouses || []) as any[]
+
+        const opts: WarehouseOption[] = (list || [])
+          .filter(Boolean)
+          .map((w) => {
+            const wid = String(w.id || w.warehouse_id)
+            const name = String(w.name || w.label || w.warehouse_name || '')
+
+            // UX: do not include city/state in the dropdown label
+            const pretty = name ? name.trim() : wid
+
+            return {
+              id: wid,
+              label: pretty,
+            }
+          })
+          .filter((w) => w.id && w.id !== 'null' && w.id !== 'undefined')
+
+        // Deduplicate by id
+        const dedup = Array.from(new Map(opts.map((o) => [o.id, o])).values())
+        setWarehouseOptions(dedup)
+
+        // If a default warehouse exists, preselect it (only if nothing chosen yet)
+        const def = (list || []).find((w) => Boolean(w?.is_default))
+        const defId = def ? String(def.id || def.warehouse_id) : ''
+        if (!warehouseId && defId) setWarehouseId(defId)
+
+        // If there's only one warehouse, preselect it (only if nothing chosen yet)
+        if (!warehouseId && dedup.length === 1) setWarehouseId(dedup[0].id)
+
+        return
+      }
+
+      // Fallback: derive options from already-loaded invoices
+      const derived = Array.from(
+        new Set((invoices || []).map((r: any) => r.warehouse_id).filter(Boolean))
+      ).map((wid) => ({ id: String(wid), label: `Warehouse ${String(wid).slice(0, 8)}…` }))
+
+      setWarehouseOptions(derived)
+      if (!res.ok) {
+        setWarehousesError('Warehouses endpoint not available (using fallback).')
+      }
+    } catch (err: any) {
+      console.error('Unexpected error loading warehouses', err)
+      setWarehousesError(err?.message || 'Unexpected error loading warehouses')
+
+      // Fallback: derive options from already-loaded invoices
+      const derived = Array.from(
+        new Set((invoices || []).map((r: any) => r.warehouse_id).filter(Boolean))
+      ).map((wid) => ({ id: String(wid), label: `Warehouse ${String(wid).slice(0, 8)}…` }))
+
+      setWarehouseOptions(derived)
+    } finally {
+      setIsWarehousesLoading(false)
+    }
+  }
 
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -75,7 +178,52 @@ export default function ClientInvoicesPage() {
         return
       }
 
-      setInvoices(json.data as InvoiceRow[])
+      const raw = (json.data || []) as any[]
+
+      // Normalize to the shape the UI expects
+      const normalized: InvoiceRow[] = raw
+        .filter(Boolean)
+        .map((r) => {
+          const cents =
+            r.total_cents ??
+            r.totalCents ??
+            r.total ??
+            r.total_amount_cents ??
+            null
+
+          const totalUsd =
+            typeof r.total_usd === 'string' || typeof r.total_usd === 'number'
+              ? Number(r.total_usd)
+              : null
+
+          const total =
+            totalUsd != null && Number.isFinite(totalUsd)
+              ? totalUsd
+              : typeof cents === 'number'
+                ? cents
+                : typeof cents === 'string' && cents.trim() !== ''
+                  ? Number(cents) / 100
+                  : 0
+
+          return {
+            id: String(r.id),
+            period: String(r.period ?? ''),
+            total,
+            total_cents: cents != null ? Number(cents) : null,
+            subtotal_cents: r.subtotal_cents != null ? Number(r.subtotal_cents) : null,
+            status: String(r.status ?? 'draft'),
+            issueDate: String(r.issue_date ?? r.issueDate ?? r.created_at ?? ''),
+            dueDate: (r.due_date ?? r.dueDate ?? null) as string | null,
+            warehouse_id: (r.warehouse_id ?? r.warehouseId ?? null) as string | null,
+            warehouse_name: (r.warehouse_name ?? r.warehouseName ?? null) as string | null,
+            client_label: (r.client_label ?? null) as string | null,
+            client_name: (r.client_name ?? null) as string | null,
+            client_code: (r.client_code ?? null) as string | null,
+            client_logo_url: (r.client_logo_url ?? null) as string | null,
+          }
+        })
+
+      setInvoices(dedupInvoicesById(normalized))
     } catch (err: any) {
       console.error('Unexpected error loading invoices', err)
       setLoadError(err?.message || 'Unexpected error loading invoices')
@@ -121,7 +269,36 @@ export default function ClientInvoicesPage() {
   useEffect(() => {
     fetchInvoices()
     fetchClientInfo()
+    fetchWarehouses()
   }, [id])
+
+  // Auto-refresh when returning to this tab/page so totals reflect edits
+  useEffect(() => {
+    const onFocus = () => {
+      fetchInvoices()
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchInvoices()
+      }
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  useEffect(() => {
+    if (isPeriodModalOpen) {
+      fetchWarehouses()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPeriodModalOpen])
 
   const handleDeleteInvoice = async (invoiceId: string) => {
     if (!confirm('Are you sure you want to delete this invoice?')) {
@@ -142,7 +319,10 @@ export default function ClientInvoicesPage() {
     }
   }
 
-  const currency = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  const currency = (v: number) =>
+    Number.isFinite(v)
+      ? v.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+      : (0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
   const rows = useMemo(() => {
     let filtered = invoices
@@ -179,6 +359,16 @@ export default function ClientInvoicesPage() {
       alert('Please select a billing period (start and end dates).')
       return
     }
+    if (isWarehousesLoading) {
+      alert('Please wait for warehouses to finish loading.')
+      return
+    }
+
+    // One invoice per warehouse (required)
+    if (!warehouseId?.trim()) {
+      alert('Please select a warehouse.')
+      return
+    }
 
     setIsCreating(true)
     try {
@@ -192,6 +382,7 @@ export default function ClientInvoicesPage() {
         body: JSON.stringify({
           parent_account_id: parentAccountId,
           client_account_id: clientAccountId,
+          warehouse_id: warehouseId.trim(),
           period_start: periodStart,
           period_end: periodEnd,
           currency_code: 'USD',
@@ -216,6 +407,8 @@ export default function ClientInvoicesPage() {
       await fetchInvoices()
       setPeriodStart('')
       setPeriodEnd('')
+      setWarehouseId('')
+      setIsPeriodModalOpen(false)
     } catch (err: any) {
       console.error('Unexpected error creating invoice', err)
       alert(err?.message || 'Unexpected error creating invoice')
@@ -282,6 +475,38 @@ export default function ClientInvoicesPage() {
           </DialogHeader>
           <div className="mt-4 space-y-3">
             <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Warehouse</Label>
+
+              <Select value={warehouseId || undefined} onValueChange={(v) => setWarehouseId(v)}>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      isWarehousesLoading
+                        ? 'Loading warehouses…'
+                        : warehouseOptions.length
+                          ? 'Select a warehouse'
+                          : 'No warehouses found'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouseOptions.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="text-[11px] text-muted-foreground">
+                Select the warehouse you want to invoice (defaults to the client’s primary warehouse when available).
+              </div>
+              {warehousesError && (
+                <div className="text-[11px] text-muted-foreground">{warehousesError}</div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1">
               <Label className="text-xs text-muted-foreground">Period start</Label>
               <Input
                 type="date"
@@ -312,9 +537,14 @@ export default function ClientInvoicesPage() {
       type="button"
       onClick={async () => {
         await handleCreateInvoice()
-        setIsPeriodModalOpen(false)
       }}
-      disabled={isCreating}
+      disabled={
+        isCreating ||
+        isWarehousesLoading ||
+        !warehouseId?.trim() ||
+        !periodStart ||
+        !periodEnd
+      }
     >
       {isCreating ? 'Creating…' : 'Create invoice'}
     </Button>
@@ -397,7 +627,7 @@ export default function ClientInvoicesPage() {
               <tr className="text-left border-b">
                 <th className="py-2 pr-3">Invoice #</th>
                 <th className="py-2 pr-3">Period</th>
-                <th className="py-2 pr-3">Issue Date</th>
+                <th className="py-2 pr-3">Warehouse</th>
                 <th className="py-2 pr-3">Due Date</th>
                 <th className="py-2 pr-3">Amount</th>
                 <th className="py-2 pr-3">Status</th>
@@ -407,9 +637,21 @@ export default function ClientInvoicesPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-b last:border-0">
-                  <td className="py-2 pr-3 font-medium">{row.id}</td>
+                  <td className="py-2 pr-3 font-medium" title={row.id}>
+                    {String(row.id).slice(0, 8)}
+                  </td>
                   <td className="py-2 pr-3">{row.period}</td>
-                  <td className="py-2 pr-3">{row.issueDate}</td>
+                  <td className="py-2 pr-3">
+                    {(() => {
+                      const rawLabel =
+                        row.warehouse_name ||
+                        warehouseMap.get(String(row.warehouse_id || '')) ||
+                        (row.warehouse_id ? `${String(row.warehouse_id).slice(0, 8)}…` : '-')
+
+                      // Strip optional trailing location in parentheses
+                      return String(rawLabel).replace(/\s*\([^)]*\)\s*$/, '')
+                    })()}
+                  </td>
                   <td className="py-2 pr-3">{row.dueDate || '-'}</td>
                   <td className="py-2 pr-3">{currency(row.total)}</td>
                   <td className="py-2 pr-3">{statusBadge(row.status)}</td>

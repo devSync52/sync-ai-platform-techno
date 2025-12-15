@@ -37,58 +37,174 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data, error } = await supabase.rpc("billing_create_invoice_2", {
-      p_parent_account_id: body.parent_account_id,
-      p_client_account_id: body.client_account_id,
-      p_period_start: body.period_start,
-      p_period_end: body.period_end,
-      p_currency_code: body.currency_code,
-      p_warehouse_id: body.warehouse_id ?? null,
-    });
+    // If warehouse_id is provided, create a single invoice.
+    // If not provided, create one invoice per warehouse that has pending usage in the period.
 
-    if (error) {
-      console.error("[billing_create_invoice_2] ERROR:", error);
+    const createOne = async (warehouseId: string | null) => {
+      const { data, error } = await supabase.rpc("billing_create_invoice_3", {
+        p_parent_account_id: body.parent_account_id,
+        p_client_account_id: body.client_account_id,
+        p_period_start: body.period_start,
+        p_period_end: body.period_end,
+        p_currency_code: body.currency_code,
+        p_warehouse_id: warehouseId,
+      });
 
-      if (
-        error.message.includes("Invoice already exists") ||
-        error.message.includes("Invoice já existe")
-      ) {
+      return { data, error };
+    };
+
+    if (body.warehouse_id) {
+      const { data, error } = await createOne(body.warehouse_id);
+
+      if (error) {
+        console.error("[billing_create_invoice_3] ERROR:", error);
+
+        if (
+          error.message.includes("Invoice already exists") ||
+          error.message.includes("Invoice já existe")
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              error_code: "INVOICE_ALREADY_EXISTS",
+              message: error.message,
+            },
+            { status: 409 }
+          );
+        }
+
+        if (error.message.includes("No pending usage rows")) {
+          return NextResponse.json(
+            {
+              success: false,
+              error_code: "NO_PENDING_USAGE",
+              message: error.message,
+            },
+            { status: 422 }
+          );
+        }
+
         return NextResponse.json(
           {
             success: false,
-            error_code: "INVOICE_ALREADY_EXISTS",
+            error_code: "CREATE_INVOICE_FAILED",
             message: error.message,
           },
-          { status: 409 }
-        );
-      }
-
-      if (error.message.includes("No pending usage rows")) {
-        return NextResponse.json(
-          {
-            success: false,
-            error_code: "NO_PENDING_USAGE",
-            message: error.message,
-          },
-          { status: 422 }
+          { status: 500 }
         );
       }
 
       return NextResponse.json(
         {
+          success: true,
+          data: {
+            invoice_id: data,
+          },
+        },
+        { status: 201 }
+      );
+    }
+
+    // No warehouse_id: discover which warehouses have pending usage
+    const { data: usageWhRows, error: whErr } = await supabase
+      .from("b1_v_invoice_usage_unified_2")
+      .select("warehouse_id")
+      .eq("parent_account_id", body.parent_account_id)
+      .eq("client_account_id", body.client_account_id)
+      .gte("snapshot_date", body.period_start)
+      .lte("snapshot_date", body.period_end)
+      .eq("status", "pending")
+      .not("warehouse_id", "is", null);
+
+    if (whErr) {
+      console.error("[billing/invoice/create] Failed to list warehouses:", whErr);
+      return NextResponse.json(
+        {
           success: false,
-          error_code: "CREATE_INVOICE_FAILED",
-          message: error.message,
+          error_code: "LIST_WAREHOUSES_FAILED",
+          message: whErr.message,
         },
         { status: 500 }
       );
     }
 
+    const warehouseIds = Array.from(
+      new Set((usageWhRows ?? []).map((r: any) => r.warehouse_id).filter(Boolean))
+    ) as string[];
+
+    if (warehouseIds.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error_code: "NO_PENDING_USAGE",
+          message: "No pending usage rows found for this period.",
+        },
+        { status: 422 }
+      );
+    }
+
+    // Fetch human-friendly warehouse labels
+    const { data: whInfoRows, error: whInfoErr } = await supabase
+      .from("v_billing_warehouses")
+      .select("id,name,city,state")
+      .eq("parent_account_id", body.parent_account_id)
+      .in("id", warehouseIds);
+
+    if (whInfoErr) {
+      console.error("[billing/invoice/create] Failed to fetch warehouse info:", whInfoErr);
+      // Non-fatal: we can still proceed with IDs only
+    }
+
+    const warehouseLabelById: Record<string, string> = {};
+    for (const w of whInfoRows ?? []) {
+      const name = (w as any).name ?? (w as any).id;
+      const city = String((w as any).city ?? "").trim();
+      const state = String((w as any).state ?? "").trim();
+      const suffix = city || state ? ` (${[city, state].filter(Boolean).join(", ")})` : "";
+      warehouseLabelById[(w as any).id] = `${name}${suffix}`;
+    }
+
+    const results: Array<
+      | { warehouse_id: string; warehouse_label: string; invoice_id: string; success: true }
+      | { warehouse_id: string; warehouse_label: string; success: false; error_code: string; message: string }
+    > = [];
+
+    for (const wid of warehouseIds) {
+      const { data, error } = await createOne(wid);
+      if (error) {
+        const msg = error.message ?? "Unknown error";
+        let code = "CREATE_INVOICE_FAILED";
+        if (msg.includes("Invoice already exists") || msg.includes("Invoice já existe")) {
+          code = "INVOICE_ALREADY_EXISTS";
+        } else if (msg.includes("No pending usage rows")) {
+          code = "NO_PENDING_USAGE";
+        }
+        results.push({
+          warehouse_id: wid,
+          warehouse_label: warehouseLabelById[wid] ?? wid,
+          success: false,
+          error_code: code,
+          message: msg,
+        });
+      } else {
+        results.push({
+          warehouse_id: wid,
+          warehouse_label: warehouseLabelById[wid] ?? wid,
+          invoice_id: data as string,
+          success: true,
+        });
+      }
+    }
+
+    const created = results.filter((r) => (r as any).success === true);
+
     return NextResponse.json(
       {
         success: true,
         data: {
-          invoice_id: data,
+          mode: "per_warehouse",
+          results,
+          created_count: created.length,
         },
       },
       { status: 201 }
