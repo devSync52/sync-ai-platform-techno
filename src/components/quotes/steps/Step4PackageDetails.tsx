@@ -56,7 +56,7 @@ function ProductSearchModal({
     setLoading(true)
     const { data, error } = await supabase
       .from('vw_products_master_enriched')
-      .select('sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in')
+      .select('sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, available, on_hand, allocated')
       .eq('account_id', clientId)
       .or(`sku.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
       .limit(20)
@@ -131,8 +131,18 @@ function ProductSearchModal({
                 <div>
                   <p className="font-semibold">{product.description || product.sku}</p>
                   <p className="text-sm text-gray-500">SKU: {product.sku}</p>
+                  <p className="text-sm text-gray-500">
+                    Available: {Number(product.available ?? 0).toLocaleString('en-US')}
+                    {product.on_hand != null ? ` · On hand: ${Number(product.on_hand ?? 0).toLocaleString('en-US')}` : ''}
+                    {product.allocated != null ? ` · Allocated: ${Number(product.allocated ?? 0).toLocaleString('en-US')}` : ''}
+                  </p>
                 </div>
-                <Button variant="secondary" className="w-full sm:w-auto" onClick={() => handleAdd(product)}>
+                <Button
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => handleAdd(product)}
+                  disabled={Number(product.available ?? 0) <= 0}
+                >
                   Add to package
                 </Button>
               </li>
@@ -194,6 +204,15 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
     if (field === 'quantity' || field === 'price') {
       const price = field === 'price' ? value : currentItem.price || 0
       const quantity = field === 'quantity' ? value : currentItem.quantity || 1
+
+      // Validate quantity against available stock (if present)
+      if (field === 'quantity' && (currentItem as any).available != null) {
+        const available = Number((currentItem as any).available)
+        if (Number.isFinite(available) && quantity > available) {
+          alert(`Quantity (${quantity}) exceeds available stock (${available}).`)
+        }
+      }
+
       updatedItem.subtotal = price * quantity
     }
 
@@ -201,12 +220,19 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
     setItems(updated)
   }
 
-  const handleAddProductFromSearch = (product: PackageItem) => {
+  const handleAddProductFromSearch = (product: any) => {
     const enriched = {
       ...product,
       price: product.price || 0,
       subtotal: (product.price || 0) * (product.quantity || 1),
     }
+
+    // Warn immediately if product has zero or negative availability
+    if (Number(enriched.available ?? 0) <= 0) {
+      alert('This product has no available stock and should not be added.')
+      return
+    }
+
     setItems([...items, enriched])
   }
 

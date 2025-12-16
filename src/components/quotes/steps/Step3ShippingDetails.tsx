@@ -64,9 +64,10 @@ useEffect(() => {
       const place = data.places?.[0]
       setAddress(prev => ({
         ...prev,
-        city: place['place name'],
-        state: place['state abbreviation'],
-        country: data.country,
+        city: place?.['place name'] ?? '',
+        state: place?.['state abbreviation'] ?? '',
+        // zippopotam.us returns country abbreviation at the top level, not inside places[0]
+        country: data?.['country abbreviation'] ?? '',
         zip_code: zip,
       }))
     } catch (err) {
@@ -134,8 +135,14 @@ useEffect(() => {
 
         <Input
           value={address.country}
-          onChange={e => setAddress(prev => ({ ...prev, country: e.target.value }))}
-          placeholder="Country"
+          onChange={e =>
+            setAddress(prev => ({
+              ...prev,
+              country: e.target.value.slice(0, 4)
+            }))
+          }
+          placeholder="Country (e.g. US)"
+          maxLength={4}
         />
         <h2 className="text-lg font-semibold">Contact data</h2>
                 <Input

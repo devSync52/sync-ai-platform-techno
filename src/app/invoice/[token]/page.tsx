@@ -414,7 +414,7 @@ export default async function InvoicePublicPage({
 
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-muted-foreground">
-          If you have any questions about this invoice, please contact your account manager.
+          If you have any questions about this invoice, please contact us.
         </div>
       </div>
     </div>
