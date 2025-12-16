@@ -204,15 +204,6 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
     if (field === 'quantity' || field === 'price') {
       const price = field === 'price' ? value : currentItem.price || 0
       const quantity = field === 'quantity' ? value : currentItem.quantity || 1
-
-      // Validate quantity against available stock (if present)
-      if (field === 'quantity' && (currentItem as any).available != null) {
-        const available = Number((currentItem as any).available)
-        if (Number.isFinite(available) && quantity > available) {
-          alert(`Quantity (${quantity}) exceeds available stock (${available}).`)
-        }
-      }
-
       updatedItem.subtotal = price * quantity
     }
 
@@ -220,19 +211,12 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
     setItems(updated)
   }
 
-  const handleAddProductFromSearch = (product: any) => {
+  const handleAddProductFromSearch = (product: PackageItem) => {
     const enriched = {
       ...product,
       price: product.price || 0,
       subtotal: (product.price || 0) * (product.quantity || 1),
     }
-
-    // Warn immediately if product has zero or negative availability
-    if (Number(enriched.available ?? 0) <= 0) {
-      alert('This product has no available stock and should not be added.')
-      return
-    }
-
     setItems([...items, enriched])
   }
 
