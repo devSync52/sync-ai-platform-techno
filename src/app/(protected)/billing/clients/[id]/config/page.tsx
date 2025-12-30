@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -407,24 +407,80 @@ export default function ClientConfigPage() {
     clientId,
   })
   const [selectedPlanId, setSelectedPlanId] = useState<string>('default')
-  const [overrides, setOverrides] = useState<Array<{ clientId: string; planServiceId: string; overrideRate?: number; activeOverride?: boolean }>>([])
+  const [overrides, setOverrides] = useState<
+    Array<{ clientId: string; planServiceId: string; overrideRate?: number; activeOverride?: boolean }>
+  >([])
 
-// Warehouse & Global Catalog filtering
-const [warehouseOptions, setWarehouseOptions] = useState<WarehouseOption[]>([])
-const [selectedWh, setSelectedWh] = useState<string>('')
+  // Warehouse & Global Catalog filtering (must be declared before any effects that use them)
+  const [warehouseOptions, setWarehouseOptions] = useState<WarehouseOption[]>([])
+  const [selectedWh, setSelectedWh] = useState<string>('')
 
-const [servicesCatalog, setServicesCatalog] = useState<Array<{ id: string; name: string; category: string; unit: string; defaultRate?: number; active?: boolean }>>([])
-const [effectiveServices, setEffectiveServices] = useState<ClientServiceEffective[]>([])
-const effById = useMemo(() => {
-  const m: Record<string, ClientServiceEffective> = {}
-  for (const e of effectiveServices ?? []) m[e.service_id] = e
-  return m
-}, [effectiveServices])
+  const [servicesCatalog, setServicesCatalog] = useState<
+    Array<{ id: string; name: string; category: string; unit: string; defaultRate?: number; active?: boolean }>
+  >([])
+  const [effectiveServices, setEffectiveServices] = useState<ClientServiceEffective[]>([])
 
-const adapterPlanServices = useMemo(
-  () => servicesCatalog.map(s => ({ id: s.id, defaultRate: s.defaultRate, active: s.active })),
-  [servicesCatalog]
-)
+  const effById = useMemo(() => {
+    const m: Record<string, ClientServiceEffective> = {}
+    for (const e of effectiveServices ?? []) m[e.service_id] = e
+    return m
+  }, [effectiveServices])
+
+  const adapterPlanServices = useMemo(
+    () => servicesCatalog.map(s => ({ id: s.id, defaultRate: s.defaultRate, active: s.active })),
+    [servicesCatalog]
+  )
+
+  // Hydrate overrides from backend effective rows (once per warehouse selection)
+  const overridesHydratedRef = useRef(false)
+  useEffect(() => {
+    // when switching warehouse/client, allow re-hydration
+    overridesHydratedRef.current = false
+  }, [selectedWh, clientId])
+
+  useEffect(() => {
+    if (overridesHydratedRef.current) return
+
+    // If backend returns no rows, clear local overrides for that warehouse
+    if (!effectiveServices || effectiveServices.length === 0) {
+      setOverrides([])
+      overridesHydratedRef.current = true
+      return
+    }
+
+    const next = (effectiveServices as any[])
+      .map((e) => {
+        const overrideUsd =
+          typeof e.override_rate_usd === 'number'
+            ? e.override_rate_usd
+            : typeof e.override_rate_cents === 'number'
+              ? e.override_rate_cents / 100
+              : undefined
+
+        // In our UI model: activeOverride=false means hidden
+        const activeOverride = e.visible === false ? false : true
+
+        // Only keep rows that actually represent a customization (rate override or hidden)
+        if (overrideUsd === undefined && activeOverride === true) return null
+
+        return {
+          clientId,
+          planServiceId: String(e.service_id ?? e.id),
+          overrideRate: overrideUsd,
+          activeOverride,
+        }
+      })
+      .filter(Boolean) as Array<{
+      clientId: string
+      planServiceId: string
+      overrideRate?: number
+      activeOverride?: boolean
+    }>
+
+    setOverrides(next)
+    overridesHydratedRef.current = true
+  }, [effectiveServices, clientId])
+
 
   // Group services by category (from global catalog)
   const svcCategories = useMemo(() => Array.from(new Set(servicesCatalog.map(s => s.category))).sort(), [servicesCatalog])
@@ -673,8 +729,6 @@ const adapterPlanServices = useMemo(
           <TabsTrigger value="taxes">Taxes</TabsTrigger>
           <TabsTrigger value="cycle">Invoice Cycle</TabsTrigger>
           <TabsTrigger value="template">Template</TabsTrigger>
-          <TabsTrigger value="storage">Storage</TabsTrigger>
-          <TabsTrigger value="outbound">Outbound</TabsTrigger>
           <TabsTrigger value="pricing_overrides">Pricing Overrides</TabsTrigger>
         </TabsList>
 
@@ -857,7 +911,7 @@ const adapterPlanServices = useMemo(
 </TabsContent>
 
         {/* Pricing Overrides */}
-        <TabsContent value="pricing_overrides" className="space-y-4 bg-white">
+        <TabsContent value="pricing_overrides" className="space-y-4">
           {configLoading && (
             <Card className="p-4 text-sm text-muted-foreground">Loading billing config…</Card>
           )}
@@ -865,7 +919,7 @@ const adapterPlanServices = useMemo(
             <Card className="p-4 text-sm text-destructive">{configError}</Card>
           )}
           {config && (
-            <Card className="p-6 grid gap-4 sm:grid-cols-2">
+            <Card className="p-6 grid gap-4 sm:grid-cols-2 bg-white">
               <div>
                 <Label className="text-xs uppercase text-muted-foreground">Assigned warehouse</Label>
                 <div className="text-sm font-medium">
@@ -904,7 +958,7 @@ const adapterPlanServices = useMemo(
               </div>
             </Card>
           )}
-          <Card className="p-6">
+          <Card className="p-6 bg-white">
             <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
               <div className="text-sm font-medium">Service Overrides</div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -919,8 +973,8 @@ const adapterPlanServices = useMemo(
 ))}
                   </SelectContent>
                 </Select>
-                <Button size="sm" variant="outline" onClick={() => setOpenBulkImport(true)}>Bulk import</Button>
-                <Button size="sm" onClick={() => setOpenAddCustom(true)}>Add custom service</Button>
+                {/* <Button size="sm" variant="outline" onClick={() => setOpenBulkImport(true)}>Bulk import</Button>
+                <Button size="sm" onClick={() => setOpenAddCustom(true)}>Add custom service</Button>*/}
               </div>
             </div>
             <div className="space-y-4">

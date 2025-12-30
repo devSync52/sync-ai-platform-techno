@@ -491,7 +491,8 @@ export default function InvoiceDetailPage() {
     if (!data) return totals
 
     for (const item of data.items) {
-      const amount = item.amount_cents || 0
+      // PostgREST pode serializar bigint como string -> sempre converter
+      const amount = Number(item.amount_cents ?? 0)
       const catKey = getCategoryKey(item)
       totals[catKey] += amount
     }
@@ -1196,7 +1197,7 @@ const categoryOrder: { key: string; label: string }[] = [
                     const label = getOutboundSubLabel(it)
                     const prev = groups.get(label) ?? { items: [], totalCents: 0 }
                     prev.items.push(it)
-                    prev.totalCents += Number(it.amount_cents || 0)
+                    prev.totalCents += Number(it.amount_cents ?? 0)
                     groups.set(label, prev)
                   }
 

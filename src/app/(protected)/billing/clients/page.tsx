@@ -199,24 +199,7 @@ const resolveMethodLabel = (value: string | null | undefined) => {
               </SelectContent>
             </Select>
           </div>
-          <div className="w-full sm:w-64">
-            <Select
-              value={warehouseFilter}
-              onValueChange={(value: 'all' | string) => setWarehouseFilter(value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All warehouses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All warehouses</SelectItem>
-                {warehouseOptions.map((warehouse) => (
-                  <SelectItem key={warehouse.value} value={warehouse.value}>
-                    {warehouse.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          
         </div>
       </Card>
 
@@ -227,7 +210,6 @@ const resolveMethodLabel = (value: string | null | undefined) => {
             <thead className="text-muted-foreground">
               <tr className="border-b text-left">
                 <th className="py-2 pr-3">Client</th>
-                <th className="py-2 pr-3">Warehouse</th>
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Method</th>
                 <th className="py-2 text-right">Actions</th>
@@ -255,7 +237,6 @@ const resolveMethodLabel = (value: string | null | undefined) => {
                   return (
                     <tr key={row.recordId} className="border-b last:border-0">
                       <td className="py-2 pr-3 font-medium">{row.name ?? row.clientAccountId}</td>
-                      <td className="py-2 pr-3">{warehouseLabel}</td>
                       <td className="py-2 pr-3">{statusBadge(row.isActive)}</td>
                       <td className="py-2 pr-3">{resolveMethodLabel(row.billingMethod)}</td>
                       <td className="py-2 text-right space-x-2">

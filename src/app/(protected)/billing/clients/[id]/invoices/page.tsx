@@ -184,32 +184,73 @@ export default function ClientInvoicesPage() {
       const normalized: InvoiceRow[] = raw
         .filter(Boolean)
         .map((r) => {
-          const cents =
+          // We can receive totals in a few shapes:
+          // - total_cents/subtotal_cents/... as cents
+          // - total_usd as dollars
+          // - total as dollars (sometimes serialized as string)
+          // To avoid the "$44.60" bug (double-dividing), treat any value with a decimal
+          // point as dollars, not cents.
+
+          const centsRaw =
             r.total_cents ??
             r.totalCents ??
-            r.total ??
             r.total_amount_cents ??
+            r.subtotal_cents ??
+            r.subtotalCents ??
             null
 
-          const totalUsd =
+          const totalUsdRaw =
             typeof r.total_usd === 'string' || typeof r.total_usd === 'number'
               ? Number(r.total_usd)
               : null
 
-          const total =
-            totalUsd != null && Number.isFinite(totalUsd)
-              ? totalUsd
-              : typeof cents === 'number'
-                ? cents
-                : typeof cents === 'string' && cents.trim() !== ''
-                  ? Number(cents) / 100
-                  : 0
+          const totalDirectRaw = r.total ?? null
+
+          const parseDollarsMaybe = (v: unknown): number | null => {
+            if (v == null) return null
+            if (typeof v === 'number') return Number.isFinite(v) ? v : null
+            if (typeof v !== 'string') return null
+            const s = v.trim()
+            if (!s) return null
+            // If it looks like dollars already (has decimals), don't divide by 100.
+            if (s.includes('.')) {
+              const n = Number(s)
+              return Number.isFinite(n) ? n : null
+            }
+            // Otherwise assume cents.
+            const n = Number(s)
+            return Number.isFinite(n) ? n / 100 : null
+          }
+
+          let total = 0
+
+          // Priority: explicit USD -> explicit cents -> generic `total`
+          if (totalUsdRaw != null && Number.isFinite(totalUsdRaw)) {
+            total = totalUsdRaw
+          } else if (centsRaw != null) {
+            if (typeof centsRaw === 'number') {
+              total = Number.isFinite(centsRaw) ? centsRaw / 100 : 0
+            } else if (typeof centsRaw === 'string') {
+              total = parseDollarsMaybe(centsRaw) ?? 0
+            } else {
+              total = 0
+            }
+          } else {
+            const parsed = parseDollarsMaybe(totalDirectRaw)
+            if (parsed != null) {
+              total = parsed
+            } else if (typeof totalDirectRaw === 'number') {
+              total = Number.isFinite(totalDirectRaw) ? totalDirectRaw : 0
+            } else {
+              total = 0
+            }
+          }
 
           return {
             id: String(r.id),
             period: String(r.period ?? ''),
             total,
-            total_cents: cents != null ? Number(cents) : null,
+            total_cents: centsRaw != null ? Number(centsRaw) : null,
             subtotal_cents: r.subtotal_cents != null ? Number(r.subtotal_cents) : null,
             status: String(r.status ?? 'draft'),
             issueDate: String(r.issue_date ?? r.issueDate ?? r.created_at ?? ''),
