@@ -219,7 +219,28 @@ function useClientBillingConfigActions({
 }
 
 
+
 const FALLBACK_WAREHOUSE_LABEL = 'Unassigned'
+
+// UI-only ordering for categories (instead of alphabetical)
+const CATEGORY_ORDER = [
+  'UNLOADING',
+  'INBOUND',
+  'STORAGE',
+  'OUTBOUND',
+  'RETURNS',
+  'INSURANCE',
+  'DRAYAGE',
+  'CROSSDOCK',
+  'SUPPLIES',
+  'COURIER',
+
+  
+]
+const categoryOrderIndex = (c: string) => {
+  const i = CATEGORY_ORDER.indexOf(String(c).toUpperCase())
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i
+}
 
 const toUSD = (cents?: number | null) => ((cents ?? 0) / 100)
 const toCents = (usd: number) => Math.round((usd ?? 0) * 100)
@@ -239,12 +260,23 @@ function resolveServiceRate(
 ) {
   const eff = effById[id]
   if (eff) {
+    const num = (v: any): number | undefined => {
+      if (v === null || v === undefined) return undefined
+      if (typeof v === 'number') return Number.isFinite(v) ? v : undefined
+      if (typeof v === 'string') {
+        const n = Number(v)
+        return Number.isFinite(n) ? n : undefined
+      }
+      return undefined
+    }
+
     const rate =
-      typeof (eff as any).effective_rate_usd === 'number'
-        ? (eff as any).effective_rate_usd
-        : (typeof (eff as any).effective_rate_cents === 'number'
-            ? ((eff as any).effective_rate_cents / 100)
-            : undefined)
+      num((eff as any).effective_rate_usd) ??
+      (typeof (eff as any).effective_rate_cents === 'number'
+        ? (eff as any).effective_rate_cents / 100
+        : typeof (eff as any).effective_rate_cents === 'string'
+          ? Number((eff as any).effective_rate_cents) / 100
+          : undefined)
     const active = (eff as any).visible !== false
     return { rate: rate ?? 0, active }
   }
@@ -431,59 +463,63 @@ export default function ClientConfigPage() {
     [servicesCatalog]
   )
 
-  // Hydrate overrides from backend effective rows (once per warehouse selection)
-  const overridesHydratedRef = useRef(false)
+  // Load overrides that are already saved in DB (source of truth)
   useEffect(() => {
-    // when switching warehouse/client, allow re-hydration
-    overridesHydratedRef.current = false
-  }, [selectedWh, clientId])
+    let active = true
+    const loadOverrides = async () => {
+      if (!selectedWh) {
+        if (active) setOverrides([])
+        return
+      }
+      try {
+        const { data, error } = await supabase
+          .from('billing_client_service_overrides')
+          .select('service_id, override_rate_cents, active')
+          .eq('parent_account_id', PARENT_ID)
+          .eq('client_account_id', clientId)
+          .eq('warehouse_id', selectedWh)
 
-  useEffect(() => {
-    if (overridesHydratedRef.current) return
+        if (error) throw error
+        if (!active) return
 
-    // If backend returns no rows, clear local overrides for that warehouse
-    if (!effectiveServices || effectiveServices.length === 0) {
-      setOverrides([])
-      overridesHydratedRef.current = true
-      return
+        const next = (data ?? []).map((r: any) => {
+          const cents = r.override_rate_cents
+          const usd = typeof cents === 'number' ? cents / 100 : typeof cents === 'string' ? Number(cents) / 100 : undefined
+          // In our UI model: activeOverride=false means hidden
+          const activeOverride = r.active === false ? false : true
+          return {
+            clientId,
+            planServiceId: String(r.service_id),
+            overrideRate: Number.isFinite(usd as any) ? (usd as number) : undefined,
+            activeOverride,
+          }
+        })
+
+        setOverrides(next)
+      } catch (e) {
+        console.error('[billing] load overrides failed:', e)
+        if (active) setOverrides([])
+      }
     }
 
-    const next = (effectiveServices as any[])
-      .map((e) => {
-        const overrideUsd =
-          typeof e.override_rate_usd === 'number'
-            ? e.override_rate_usd
-            : typeof e.override_rate_cents === 'number'
-              ? e.override_rate_cents / 100
-              : undefined
-
-        // In our UI model: activeOverride=false means hidden
-        const activeOverride = e.visible === false ? false : true
-
-        // Only keep rows that actually represent a customization (rate override or hidden)
-        if (overrideUsd === undefined && activeOverride === true) return null
-
-        return {
-          clientId,
-          planServiceId: String(e.service_id ?? e.id),
-          overrideRate: overrideUsd,
-          activeOverride,
-        }
-      })
-      .filter(Boolean) as Array<{
-      clientId: string
-      planServiceId: string
-      overrideRate?: number
-      activeOverride?: boolean
-    }>
-
-    setOverrides(next)
-    overridesHydratedRef.current = true
-  }, [effectiveServices, clientId])
+    loadOverrides()
+    return () => {
+      active = false
+    }
+  }, [selectedWh, clientId, supabase])
 
 
-  // Group services by category (from global catalog)
-  const svcCategories = useMemo(() => Array.from(new Set(servicesCatalog.map(s => s.category))).sort(), [servicesCatalog])
+  // Group services by category (from global catalog) and apply custom order
+  const svcCategories = useMemo(() => {
+    const cats = Array.from(new Set(servicesCatalog.map(s => s.category)))
+    return cats.sort((a, b) => {
+      const ia = categoryOrderIndex(a)
+      const ib = categoryOrderIndex(b)
+      if (ia !== ib) return ia - ib
+      // if not in CATEGORY_ORDER, keep a stable alphabetical order at the end
+      return String(a).localeCompare(String(b))
+    })
+  }, [servicesCatalog])
 
   // Collapsible state per category
   const [openCats, setOpenCats] = useState<Record<string, boolean>>({})
@@ -973,8 +1009,8 @@ export default function ClientConfigPage() {
 ))}
                   </SelectContent>
                 </Select>
-                {/* <Button size="sm" variant="outline" onClick={() => setOpenBulkImport(true)}>Bulk import</Button>
-                <Button size="sm" onClick={() => setOpenAddCustom(true)}>Add custom service</Button>*/}
+                
+                <Button size="sm" onClick={() => setOpenAddCustom(true)}>Add custom service</Button>
               </div>
             </div>
             <div className="space-y-4">

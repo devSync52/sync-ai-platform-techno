@@ -69,16 +69,39 @@ export default function InvoiceDetailPage() {
   const [serviceDate, setServiceDate] = useState<string>('')
 
   const [expandedCategories, setExpandedCategories] = useState<
-    Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'return' | 'insurance' | 'extra', boolean>
+    Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'replacement' | 'return' | 'insurance' | 'extra', boolean>
   >({
     unloading: true,
     inbound: true,
     storage: true,
     outbound: true,
+    replacement: true,
     return: false,
     insurance: false,
     extra: false,
   })
+  function isReplacementItem(item: InvoiceItem): boolean {
+    const meta = (item.metadata || {}) as any
+
+    // Primary signal coming from your unified usage view:
+    // order_id = 'REPLACEMENT'
+    const orderId = String(meta.order_id ?? meta.orderId ?? '').toUpperCase()
+    if (orderId === 'REPLACEMENT') return true
+
+    // Secondary: usage id text sometimes carries it (e.g. outbound-*-REPLACEMENT)
+    const usageId = String((item as any).usage_id ?? meta.usage_id ?? meta.usageId ?? '')
+    const usageIdText = String((item as any).usage_id_text ?? (item as any).usageIdText ?? '')
+    const combinedIds = `${usageId} ${usageIdText} ${String((item as any).usage_id_text ?? '')}`.toUpperCase()
+    if (combinedIds.includes('REPLACEMENT')) return true
+
+    // Fallback: description/type label heuristics
+    const typeLabel = String(meta.type_label ?? meta.typeLabel ?? '').toUpperCase()
+    const desc = String(item.description ?? '').toUpperCase()
+    const hay = `${typeLabel} ${desc}`
+    if (hay.includes('REPLACEMENT')) return true
+
+    return false
+  }
 
   const [expandedOutboundGroups, setExpandedOutboundGroups] = useState<Record<string, boolean>>({})
   const [bulkRateUsdByGroup, setBulkRateUsdByGroup] = useState<Record<string, string>>({})
@@ -159,6 +182,7 @@ export default function InvoiceDetailPage() {
     | 'inbound'
     | 'storage'
     | 'outbound'
+    | 'replacement'
     | 'return'
     | 'insurance'
     | 'extra' {
@@ -190,6 +214,7 @@ export default function InvoiceDetailPage() {
       | 'inbound'
       | 'storage'
       | 'outbound'
+      | 'replacement'
       | 'return'
       | 'insurance'
       | 'extra'
@@ -250,7 +275,7 @@ export default function InvoiceDetailPage() {
           'wrapping',
         ].includes(c)
       )
-        return 'outbound'
+        return isReplacementItem(item) ? 'replacement' : 'outbound'
 
       // Return
       if (['return', 'returns', 'returns processing', 'returns_processing'].includes(c))
@@ -299,7 +324,7 @@ export default function InvoiceDetailPage() {
       typeLabel.includes('labeling') ||
       typeLabel.includes('wrapping')
     )
-      return 'outbound'
+      return isReplacementItem(item) ? 'replacement' : 'outbound'
     if (typeLabel.includes('return')) return 'return'
     if (typeLabel.includes('insurance')) return 'insurance'
 
@@ -318,7 +343,7 @@ export default function InvoiceDetailPage() {
       desc.includes('label') ||
       desc.includes('wrapping')
     )
-      return 'outbound'
+      return isReplacementItem(item) ? 'replacement' : 'outbound'
     if (desc.includes('return')) return 'return'
     if (desc.includes('insurance')) return 'insurance'
 
@@ -479,11 +504,12 @@ export default function InvoiceDetailPage() {
   }, [invoiceId])
 
   const categoryTotals = useMemo(() => {
-    const totals: Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'return' | 'insurance' | 'extra', number> = {
+    const totals: Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'replacement' | 'return' | 'insurance' | 'extra', number> = {
       unloading: 0,
       inbound: 0,
       storage: 0,
       outbound: 0,
+      replacement: 0,
       return: 0,
       insurance: 0,
       extra: 0,
@@ -501,11 +527,12 @@ export default function InvoiceDetailPage() {
   }, [data])
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'return' | 'insurance' | 'extra', number> = {
+    const counts: Record<'unloading' | 'inbound' | 'storage' | 'outbound' | 'replacement' | 'return' | 'insurance' | 'extra', number> = {
       unloading: 0,
       inbound: 0,
       storage: 0,
       outbound: 0,
+      replacement: 0,
       return: 0,
       insurance: 0,
       extra: 0,
@@ -551,6 +578,7 @@ const categoryOrder: { key: string; label: string }[] = [
   { key: 'inbound', label: 'Inbound' },
   { key: 'storage', label: 'Storage' },
   { key: 'outbound', label: 'Outbound' },
+  { key: 'replacement', label: 'Replacement' },
   { key: 'return', label: 'Return' },
   { key: 'insurance', label: 'Insurance' },
   { key: 'extra', label: 'Extras' },
@@ -923,6 +951,7 @@ const categoryOrder: { key: string; label: string }[] = [
             | 'inbound'
             | 'storage'
             | 'outbound'
+            | 'replacement'
             | 'return'
             | 'insurance'
             | 'extra'
@@ -1070,6 +1099,7 @@ const categoryOrder: { key: string; label: string }[] = [
       | 'inbound'
       | 'storage'
       | 'outbound'
+      | 'replacement'
       | 'return'
       | 'insurance'
       | 'extra'
@@ -1185,19 +1215,20 @@ const categoryOrder: { key: string; label: string }[] = [
 
           {/* Linhas da categoria (só quando expandida) */}
           {expanded &&
-            (catKey === 'outbound'
+            (catKey === 'outbound' || catKey === 'replacement'
               ? (() => {
                   // Group OUTBOUND items by sub-service
                   const groups = new Map<
                     string,
-                    { items: InvoiceItem[]; totalCents: number }
+                    { items: InvoiceItem[]; totalCents: number; totalQty: number }
                   >()
 
                   for (const it of items) {
                     const label = getOutboundSubLabel(it)
-                    const prev = groups.get(label) ?? { items: [], totalCents: 0 }
+                    const prev = groups.get(label) ?? { items: [], totalCents: 0, totalQty: 0 }
                     prev.items.push(it)
                     prev.totalCents += Number(it.amount_cents ?? 0)
+                    prev.totalQty += Number(it.qty ?? 0)
                     groups.set(label, prev)
                   }
 
@@ -1222,6 +1253,14 @@ const categoryOrder: { key: string; label: string }[] = [
 
                   let globalIndex = 0
 
+                  const formatQty = (n: number) => {
+                    if (!Number.isFinite(n)) return '0'
+                    return Math.floor(n) === n ? String(n) : n.toFixed(2)
+                  }
+
+                  const shouldShowQtyInHeader = (label: string) =>
+                    label === 'Fulfillment Units' || label === 'Standard Labeling' || label === 'Wrapping'
+
                   return ordered.map(([label, payload]) => {
                     const subExpanded = expandedOutboundGroups[label] ?? false
                     return (
@@ -1229,9 +1268,12 @@ const categoryOrder: { key: string; label: string }[] = [
                         {/* Subheader row */}
                         <tr className="bg-white border-b">
                           <td colSpan={3} className="py-3 pl-6 text-sm font-semibold">
-                            OUTBOUND – {label}
+                            {catKey === 'replacement' ? 'REPLACEMENT' : 'OUTBOUND'} – {label}
                             <span className="ml-2 font-normal normal-case text-[11px] text-muted-foreground/80">
-                              ({payload.items.length} item{payload.items.length === 1 ? '' : 's'})
+                              ({payload.items.length} item{payload.items.length === 1 ? '' : 's'}
+                              {shouldShowQtyInHeader(label)
+                                ? ` / ${formatQty(payload.totalQty)} quantity`
+                                : ''})
                             </span>
                           </td>
                           <td className="py-3" />
@@ -1304,7 +1346,7 @@ const categoryOrder: { key: string; label: string }[] = [
 
                             const itemCatKey = getCategoryKey(item)
                             const isOutboundOrExtra =
-                              itemCatKey === 'outbound' || itemCatKey === 'extra'
+                              itemCatKey === 'outbound' || itemCatKey === 'replacement' || itemCatKey === 'extra'
 
                             const orderId =
                               item.metadata?.order_id || item.metadata?.orderId || null
@@ -1467,7 +1509,7 @@ const categoryOrder: { key: string; label: string }[] = [
                     (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')
                   const itemCatKey = getCategoryKey(item)
                   const isOutboundOrExtra =
-                    itemCatKey === 'outbound' || itemCatKey === 'extra'
+                    itemCatKey === 'outbound' || itemCatKey === 'replacement' || itemCatKey === 'extra'
                   const orderId =
                     item.metadata?.order_id || item.metadata?.orderId || null
                   const occurredDate = item.occurred_at
