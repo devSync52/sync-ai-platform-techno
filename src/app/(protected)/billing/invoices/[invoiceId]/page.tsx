@@ -106,10 +106,14 @@ export default function InvoiceDetailPage() {
   const [expandedOutboundGroups, setExpandedOutboundGroups] = useState<Record<string, boolean>>({})
   const [bulkRateUsdByGroup, setBulkRateUsdByGroup] = useState<Record<string, string>>({})
   const [bulkApplyLoadingByGroup, setBulkApplyLoadingByGroup] = useState<Record<string, boolean>>({})
-  const handleApplyBulkRate = async (label: string, itemsToUpdate: InvoiceItem[]) => {
+  const handleApplyBulkRate = async (
+    groupKey: string,
+    displayLabel: string,
+    itemsToUpdate: InvoiceItem[]
+  ) => {
     if (!data) return
 
-    const rawUsd = (bulkRateUsdByGroup[label] ?? '').trim()
+    const rawUsd = (bulkRateUsdByGroup[groupKey] ?? '').trim()
     const rateUsd = Number(rawUsd)
 
     if (!rawUsd || !Number.isFinite(rateUsd) || rateUsd < 0) {
@@ -121,12 +125,12 @@ export default function InvoiceDetailPage() {
 
     if (typeof window !== 'undefined') {
       const confirmed = window.confirm(
-        `Apply rate $${rateUsd.toFixed(2)} to all ${itemsToUpdate.length} items in OUTBOUND – ${label}?`
+        `Apply rate $${rateUsd.toFixed(2)} to all ${itemsToUpdate.length} items in ${displayLabel}?`
       )
       if (!confirmed) return
     }
 
-    setBulkApplyLoadingByGroup((prev) => ({ ...prev, [label]: true }))
+    setBulkApplyLoadingByGroup((prev) => ({ ...prev, [groupKey]: true }))
 
     try {
       // Patch all items in the subgroup
@@ -162,11 +166,11 @@ export default function InvoiceDetailPage() {
       }
 
       // Optional: clear input after apply
-      setBulkRateUsdByGroup((prev) => ({ ...prev, [label]: '' }))
+      setBulkRateUsdByGroup((prev) => ({ ...prev, [groupKey]: '' }))
     } catch (err: any) {
       alert(err?.message || 'Unexpected error while applying bulk rate')
     } finally {
-      setBulkApplyLoadingByGroup((prev) => ({ ...prev, [label]: false }))
+      setBulkApplyLoadingByGroup((prev) => ({ ...prev, [groupKey]: false }))
     }
   }
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
@@ -1168,7 +1172,7 @@ const categoryOrder: { key: string; label: string }[] = [
                       type="button"
                       className="text-[11px] px-2 py-1 border bg-white rounded-md text-muted-foreground hover:bg-muted disabled:opacity-50"
                       disabled={!!bulkApplyLoadingByGroup['__extras__'] || items.length === 0}
-                      onClick={() => handleApplyBulkRate('__extras__', items)}
+                      onClick={() => handleApplyBulkRate('__extras__', 'EXTRAS', items)}
                     >
                       {bulkApplyLoadingByGroup['__extras__'] ? 'Applying…' : 'Apply to all'}
                     </button>
@@ -1262,13 +1266,15 @@ const categoryOrder: { key: string; label: string }[] = [
                     label === 'Fulfillment Units' || label === 'Standard Labeling' || label === 'Wrapping'
 
                   return ordered.map(([label, payload]) => {
-                    const subExpanded = expandedOutboundGroups[label] ?? false
+                    const groupKey = `${catKey}:${label}`
+                    const displayLabel = `${catKey === 'replacement' ? 'REPLACEMENT' : 'OUTBOUND'} – ${label}`
+                    const subExpanded = expandedOutboundGroups[groupKey] ?? false
                     return (
                       <React.Fragment key={`outbound-sub-${label}`}>
                         {/* Subheader row */}
                         <tr className="bg-white border-b">
                           <td colSpan={3} className="py-3 pl-6 text-sm font-semibold">
-                            {catKey === 'replacement' ? 'REPLACEMENT' : 'OUTBOUND'} – {label}
+                            {displayLabel}
                             <span className="ml-2 font-normal normal-case text-[11px] text-muted-foreground/80">
                               ({payload.items.length} item{payload.items.length === 1 ? '' : 's'}
                               {shouldShowQtyInHeader(label)
@@ -1298,11 +1304,11 @@ const categoryOrder: { key: string; label: string }[] = [
                                       const allSame = payload.items.every((it) => it.rate_cents === first.rate_cents)
                                       return allSame ? (first.rate_cents / 100).toFixed(2) : '—'
                                     })()}
-                                    value={bulkRateUsdByGroup[label] ?? ''}
+                                    value={bulkRateUsdByGroup[groupKey] ?? ''}
                                     onChange={(e) =>
                                       setBulkRateUsdByGroup((prev) => ({
                                         ...prev,
-                                        [label]: e.target.value,
+                                        [groupKey]: e.target.value,
                                       }))
                                     }
                                   />
@@ -1310,12 +1316,12 @@ const categoryOrder: { key: string; label: string }[] = [
                                     type="button"
                                     className="text-[11px] px-2 py-1 border bg-white rounded-md text-muted-foreground hover:bg-muted disabled:opacity-50"
                                     disabled={
-                                      !!bulkApplyLoadingByGroup[label] ||
+                                      !!bulkApplyLoadingByGroup[groupKey] ||
                                       payload.items.length === 0
                                     }
-                                    onClick={() => handleApplyBulkRate(label, payload.items)}
+                                    onClick={() => handleApplyBulkRate(groupKey, displayLabel, payload.items)}
                                   >
-                                    {bulkApplyLoadingByGroup[label] ? 'Applying…' : 'Apply to all'}
+                                    {bulkApplyLoadingByGroup[groupKey] ? 'Applying…' : 'Apply to all'}
                                   </button>
                                 </div>
                               )}
@@ -1326,7 +1332,7 @@ const categoryOrder: { key: string; label: string }[] = [
                                 onClick={() =>
                                   setExpandedOutboundGroups((prev) => ({
                                     ...prev,
-                                    [label]: !subExpanded,
+                                    [groupKey]: !subExpanded,
                                   }))
                                 }
                               >

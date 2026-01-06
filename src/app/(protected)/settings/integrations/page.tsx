@@ -16,8 +16,7 @@ interface IntegrationData {
 
 const availableIntegrations: { name: string; type: IntegrationType }[] = [
   { name: 'Sellercloud', type: 'sellercloud' },
-  { name: 'Extensiv (3PL)', type: 'extensiv' },
-  { name: 'Project44', type: 'project44' }
+  { name: 'Extensiv (3PL)', type: 'extensiv' }
 ]
 
 export default function IntegrationsPage() {
