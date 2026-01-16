@@ -476,48 +476,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
                 disabled
               />
             </div></div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-              <div>
-                <Label>Length (in)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={String(item.length ?? 0)}
-                  onChange={(e) => handleItemChange(index, 'length', parseFloat(e.target.value.replace(',', '.')))}
-                />
-              </div>
-              <div>
-                <Label>Width (in)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={String(item.width ?? 0)}
-                  onChange={(e) => handleItemChange(index, 'width', parseFloat(e.target.value.replace(',', '.')))}
-                />
-              </div>
-              <div>
-                <Label>Height (in)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={String(item.height ?? 0)}
-                  onChange={(e) => handleItemChange(index, 'height', parseFloat(e.target.value.replace(',', '.')))}
-                />
-              </div>
-              <div>
-                <Label>Weight (lbs)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={String(item.weight_lbs ?? 0)}
-                  onChange={(e) => handleItemChange(index, 'weight_lbs', parseFloat(e.target.value.replace(',', '.')))}
-                />
-              </div>
-            </div>
+            
            <div className="flex justify-end">
              <Button variant="destructive" size="sm" onClick={() => handleRemoveItem(index)}>
                Remove

@@ -114,34 +114,53 @@ function extractOutputText(resp: any): string {
   return chunks.join('\n').trim()
 }
 
-async function pdfToPngDataUrls(pdfBytes: ArrayBuffer, maxPages = 5, scale = 2.0): Promise<string[]> {
-  // Lazy-load deps at runtime (Node only). Use createRequire to avoid RSC/webpack eval issues.
+async function pdfToTextPages(pdfBytes: ArrayBuffer, maxPages = 10): Promise<string[]> {
+  // Extract embedded text from PDFs without pdfjs-dist bundling issues.
+  // Uses `pdf-parse` (CJS). If the PDF is scanned/image-only, text will be empty.
   const req = createRequire(import.meta.url)
 
-  // Load pdfjs at runtime (ESM). This path exists in modern pdfjs-dist.
-  const pdfjsLib = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as any
-  const { createCanvas } = req('@napi-rs/canvas') as any
+  // IMPORTANT: Use static string-literal requires so Next/Webpack can bundle the dependency.
+  // Avoid dynamic `req(spec)` which triggers the "Critical dependency" warning and can lead to MODULE_NOT_FOUND at runtime.
+  let pdfParse: any = null
+  let lastErr: any = null
 
-  const loadingTask = (pdfjsLib as any).getDocument({ data: new Uint8Array(pdfBytes) })
-  const pdf = await loadingTask.promise
-
-  const pageCount = Math.min(pdf.numPages, maxPages)
-  const images: string[] = []
-
-  for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-    const page = await pdf.getPage(pageNum)
-    const viewport = page.getViewport({ scale })
-
-    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
-    const ctx = canvas.getContext('2d')
-
-    await (page as any).render({ canvas, canvasContext: ctx as any, viewport } as any).promise
-
-    const pngBuffer = canvas.toBuffer('image/png')
-    images.push(`data:image/png;base64,${pngBuffer.toString('base64')}`)
+  try {
+    pdfParse = req('pdf-parse/lib/pdf-parse.js')
+  } catch (e: any) {
+    lastErr = e
+    try {
+      pdfParse = req('pdf-parse/lib/pdf-parse')
+    } catch (e2: any) {
+      lastErr = e2
+      try {
+        pdfParse = req('pdf-parse')
+      } catch (e3: any) {
+        lastErr = e3
+      }
+    }
   }
 
-  return images
+  if (!pdfParse) {
+    throw new Error(
+      `Failed to load pdf-parse. Ensure it is installed (npm i pdf-parse). Last error: ${lastErr?.message || lastErr}`
+    )
+  }
+
+  let data: any
+  try {
+    data = await pdfParse(Buffer.from(pdfBytes))
+  } catch (e: any) {
+    throw new Error(`pdf-parse failed to parse PDF: ${e?.message || e}`)
+  }
+  const text: string = String(data?.text || '').trim()
+
+  if (!text) return []
+
+  // Try to split by form-feed (common page separator); otherwise treat as a single page.
+  const rawPages = text.split('\f').map((p) => p.trim()).filter(Boolean)
+  const pages = (rawPages.length ? rawPages : [text]).slice(0, maxPages)
+
+  return pages
 }
 
 function extractUsage(resp: any): { input_tokens: number; output_tokens: number; total_tokens: number } | null {
@@ -196,6 +215,44 @@ async function callOpenAIVision(imageUrl: string) {
           content: [
             { type: 'input_text', text: SAFE_PROMPT },
             { type: 'input_image', image_url: imageUrl },
+          ],
+        },
+      ],
+    }),
+  })
+
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(json?.error?.message || `OpenAI error (${res.status})`)
+  }
+
+  const text = extractOutputText(json)
+  const usage = extractUsage(json)
+  const cost = usage ? estimateCostUsdFromUsage(usage) : null
+  return { raw: json, text, usage, cost }
+}
+
+async function callOpenAIText(documentText: string) {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not set')
+
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4.1-mini',
+      input: [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: SAFE_PROMPT },
+            {
+              type: 'input_text',
+              text: `DOCUMENT_TEXT\n\n${documentText}`.slice(0, 120_000),
+            },
           ],
         },
       ],
@@ -319,7 +376,7 @@ export async function POST(req: Request) {
     const prefs: any = (draft as any).preferences ?? {}
     const files: EnrichmentFile[] = Array.isArray(prefs?.enrichment_files) ? prefs.enrichment_files : []
 
-    // Images + PDFs (PDF pages are converted to images)
+    // Images + PDFs (PDFs are parsed as text when possible; scanned PDFs need an image pipeline)
     const imageFiles = files.filter((f) => (f.contentType || '').startsWith('image/'))
     const pdfFiles = files.filter((f) => (f.contentType || '') === 'application/pdf')
 
@@ -373,11 +430,13 @@ export async function POST(req: Request) {
 
         perFile.push({ path: f.path, name: f.name, ok: true, usage, cost })
       } catch (e: any) {
+        console.error('[enrich][image] vision failed', { draftId, file: f.path, error: e })
         perFile.push({ path: f.path, name: f.name, ok: false, error: e?.message || 'vision_failed' })
       }
     }
 
-    // PDFs: convert up to 5 pages to images and run vision per page (single file per draft)
+    // PDFs: extract up to 10 pages of TEXT (no canvas) and run the model per page.
+    // If the PDF is scanned (no embedded text), we'll likely get empty pages and return a helpful error.
     for (const f of pdfFiles.slice(0, 1)) {
       const { data: signed, error: sErr } = await supabaseAdmin.storage
         .from('quote_uploads')
@@ -393,15 +452,39 @@ export async function POST(req: Request) {
         if (!pdfRes.ok) throw new Error(`Failed to download PDF (${pdfRes.status})`)
         const pdfBytes = await pdfRes.arrayBuffer()
 
-        const pageImages = await pdfToPngDataUrls(pdfBytes, 5, 2.0)
+        const pageTexts = await pdfToTextPages(pdfBytes, 10)
 
-        for (let i = 0; i < pageImages.length; i++) {
+        const nonEmptyCount = pageTexts.filter((t) => (t || '').trim().length > 0).length
+        if (nonEmptyCount === 0) {
+          perFile.push({
+            path: f.path,
+            name: f.name,
+            ok: false,
+            error: 'pdf_has_no_extractable_text',
+            hint: 'This PDF looks scanned/image-only. Upload a photo/PNG of the label or enable a PDF->image converter service to use vision.',
+          })
+          continue
+        }
+
+        for (let i = 0; i < pageTexts.length; i++) {
+          const pageText = (pageTexts[i] || '').trim()
+          if (!pageText) continue
+
           const pageName = `${f.name}#page${i + 1}`
+
           try {
-            const { text, usage, cost } = await callOpenAIVision(pageImages[i])
+            const { text, usage, cost } = await callOpenAIText(pageText)
             const parsed = tryParseJson<EnrichSuggestion>(text)
             if (!parsed.ok) {
-              perFile.push({ path: f.path, name: pageName, ok: false, error: 'model_returned_invalid_json', rawText: text, usage, cost })
+              perFile.push({
+                path: f.path,
+                name: pageName,
+                ok: false,
+                error: 'model_returned_invalid_json',
+                rawText: text,
+                usage,
+                cost,
+              })
               continue
             }
 
@@ -416,10 +499,12 @@ export async function POST(req: Request) {
 
             perFile.push({ path: f.path, name: pageName, ok: true, usage, cost })
           } catch (e: any) {
-            perFile.push({ path: f.path, name: pageName, ok: false, error: e?.message || 'vision_failed' })
+            console.error('[enrich][pdf][page] failed', { draftId, file: f.path, page: i + 1, error: e })
+            perFile.push({ path: f.path, name: pageName, ok: false, error: e?.message || 'text_model_failed' })
           }
         }
       } catch (e: any) {
+        console.error('[enrich][pdf] processing failed', { draftId, file: f.path, error: e })
         perFile.push({ path: f.path, name: f.name, ok: false, error: e?.message || 'pdf_processing_failed' })
       }
     }

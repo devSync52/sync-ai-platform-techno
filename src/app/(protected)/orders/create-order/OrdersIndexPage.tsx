@@ -68,6 +68,7 @@ export default function QuotesPage() {
         step: 1,
         client: user.account_id,
         ship_from: step_data_2,
+        order: true,
       })
       .select('id')
       .single()
