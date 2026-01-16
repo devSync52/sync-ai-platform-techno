@@ -47,14 +47,14 @@ export default function ProtectedLayoutClient({
   return (
     <div className="flex h-screen overflow-visible">
       {/* Sidebar Desktop */}
-      <aside className="hidden lg:block w-64">
+      <aside className="hidden lg:block w-80">
         <Sidebar />
       </aside>
 
       {/* Sidebar Mobile */}
       {showSidebar && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
-          <div className="w-64 bg-[#3f2d90] shadow-md">
+          <div className="w-80 bg-primary shadow-md">
             <Sidebar onLinkClick={() => setShowSidebar(false)} />
           </div>
           <div
@@ -67,7 +67,7 @@ export default function ProtectedLayoutClient({
       {/* Conteúdo principal */}
       <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
         {/* Topbar Mobile */}
-        <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-[#3f2d90] flex items-center justify-between px-4 shadow">
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-primary flex items-center justify-between px-4 shadow">
           <button
             onClick={() => setShowSidebar(true)}
             className="p-2 rounded-md hover:bg-white/20 transition"

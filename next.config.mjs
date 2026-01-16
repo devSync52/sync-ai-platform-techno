@@ -17,8 +17,10 @@ const baseConfig = {
     enabled: true,
   },
   images: {
-    domains: ['euzjrgnyzfgldubqglba.supabase.co'], // substitua pelo seu domínio Supabase se for outro
+    domains: ['euzjrgnyzfgldubqglba.supabase.co'],
   },
+  // Prevent Next from bundling native binaries used only on the server (e.g. PDF rendering)
+  serverExternalPackages: ['@napi-rs/canvas'],
   webpack(config) {
     config.resolve.alias['@'] = path.resolve(__dirname, 'src')
     return config

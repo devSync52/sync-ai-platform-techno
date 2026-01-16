@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
@@ -10,8 +10,6 @@ import { Step1ClientSelection } from './steps/Step1ClientSelection'
 import { Step2WarehouseSelection } from './steps/Step2WarehouseSelection'
 import Step3ShippingDetails from './steps/Step3ShippingDetails'
 import Step4PackageDetails from './steps/Step4PackageDetails'
-import Step5DeliveryPreferences from './steps/Step5DeliveryPreferences'
-import { StepSelectService } from './steps/StepSelectService'
 import { Button } from '@/components/ui/button'
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
@@ -37,7 +35,7 @@ type EnrichmentFile = {
 
 const supabase = createClientComponentClient<Database>()
 
-export default function QuoteWizard() {
+export default function OrderWizard() {
   const { id: quoteId } = useParams()
   const [quoteData, setQuoteData] = useState<Database['public']['Tables']['saip_quote_drafts']['Row'] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -475,11 +473,31 @@ export default function QuoteWizard() {
       alert(e?.message || 'Failed to apply Items')
     }
   }
-
+  const router = useRouter()
   const handleApplyAll = async () => {
     await handleApplyShipFrom()
     await handleApplyShipTo()
     await handleApplyItems()
+  }
+
+  const handleSaveOrder = async () => {
+    if (!quoteData?.id) return
+  
+    try {
+      await updateDraft(
+        {
+          order: true,
+          status: 'converted',
+
+          step: 4,
+        } as any
+      )
+  
+      router.push('/orders/create-order')
+    } catch (e: any) {
+      console.error('❌ Save Order failed:', e)
+      alert(e?.message || 'Failed to save order')
+    }
   }
 
   const uploadViaApi = async (draftId: string, file: File) => {
@@ -758,7 +776,7 @@ export default function QuoteWizard() {
       {/* Sticky / scrollable steps header on mobile */}
       <div className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 border-b bg-background/90 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:backdrop-blur-0">
         <div className="overflow-x-auto px-3 md:overflow-visible md:px-0">
-          <QuoteStepsHeader currentStep={currentStep} onStepClick={setCurrentStep} />
+          <QuoteStepsHeader currentStep={currentStep} onStepClick={(idx) => setCurrentStep(Math.min(idx, 3))} />
         </div>
       </div>
 
@@ -802,22 +820,9 @@ export default function QuoteWizard() {
             <Step4PackageDetails
               draftId={quoteData!.id}
               initialItems={(quoteData!.items as any[]) || []}
-              onNext={() => setCurrentStep(4)}
+              onNext={handleSaveOrder}
               onBack={() => setCurrentStep(2)}
-            />
-          )}
-          {currentStep === 4 && (
-            <Step5DeliveryPreferences
-              draftId={quoteData!.id}
-              initialPreferences={quoteData!.preferences || {}}
-              onNext={() => setCurrentStep(5)}
-              onBack={() => setCurrentStep(3)}
-            />
-          )}
-          {currentStep === 5 && (
-            <StepSelectService
-              draftId={quoteData!.id}
-              onBack={() => setCurrentStep(4)}
+              nextLabel="Save Order"
             />
           )}
         </div>
@@ -1215,17 +1220,9 @@ export default function QuoteWizard() {
 
                     <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="secondary" onClick={handleApplyShipFrom}>
-                          Apply Ship From
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={handleApplyShipTo}>
-                          Apply Ship To
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={handleApplyItems}>
-                          Apply Items
-                        </Button>
+
                         <Button type="button" onClick={handleApplyAll}>
-                          Apply All
+                          Apply
                         </Button>
                       </div>
 

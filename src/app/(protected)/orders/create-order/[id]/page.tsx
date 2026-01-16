@@ -1,5 +1,5 @@
 import React from 'react'
-import QuoteWizard from '@/components/quotes/QuoteWizard'
+import QuoteWizard from '@/components/orders/OrderWizard'
 
 // @ts-ignore
 export default async function Page({ params }) {

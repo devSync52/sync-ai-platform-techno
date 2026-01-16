@@ -53,8 +53,8 @@ export function QuotesList() {
           .from('saip_quote_drafts')
           .select('*')
           .eq('account_id', user.account_id)
+          .or('order.eq.true')
           .order('created_at', { ascending: false })
-        query = query.or('order.is.null,order.eq.false')
   
         // By default, client sees all quotes for the account (no extra filter).
         // Staff-client can only see quotes they created.
@@ -217,10 +217,10 @@ export function QuotesList() {
   return (
     <div className="border rounded-lg p-6 space-y-6 bg-white shadow">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 className="text-lg font-semibold">Quotes</h2>
+        <h2 className="text-lg font-semibold">Orders</h2>
         <input
           type="text"
-          placeholder="Search quotes..."
+          placeholder="Search Orders..."
           className="w-full sm:w-64 border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -228,7 +228,7 @@ export function QuotesList() {
       </div>
 
       {filteredQuotes.length === 0 ? (
-        <p className="text-sm text-gray-500">No quotes found.</p>
+        <p className="text-sm text-gray-500">No orders found.</p>
       ) : (
         <ul className="space-y-2">
           {filteredQuotes.map((quote) => (
@@ -296,18 +296,10 @@ export function QuotesList() {
                   </>
                 ) : (
                   <>
-                    <Button size="sm" onClick={() => router.push(`/orders/quotes/${quote.id}`)}>
-                      View / Edit Quote
+                    <Button size="sm" onClick={() => router.push(`/orders/create-order/${quote.id}`)}>
+                      View / Edit Order
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="bg-white"
-                      size="sm"
-                      title="Export this quote as PDF"
-                      onClick={() => handleOpenQuoteModal(quote.id)}
-                    >
-                      View PDF
-                    </Button>
+
                     <Button
                       variant="outline"
                       size="sm"

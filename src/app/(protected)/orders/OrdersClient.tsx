@@ -69,36 +69,60 @@ export default function OrdersClient({ userId }: { userId: string }) {
       const userAccountId = userRecord.account_id
       const userRole = userRecord.role
       if (!userAccountId) return
-  
+
       setAccountId(userAccountId)
 
+      const { data: accountRecord, error: accountError } = await supabase
+        .from('accounts')
+        .select('source')
+        .eq('id', userAccountId)
+        .maybeSingle()
+
+      if (accountError) {
+        console.error('❌ Error fetching account source:', accountError.message)
+      }
+
+      const isExtensiv = (accountRecord?.source || '').toLowerCase() === 'extensiv'
+      const ordersTable = isExtensiv ? 'extensiv_orders' : 'ai_orders_unified_6'
+      const orderDateField = isExtensiv ? 'creation_date' : 'order_date'
+  
+      const statusField = isExtensiv ? 'status' : 'order_status'
+      const statusFilterField =
+        userRole === 'client' || userRole === 'staff-client'
+          ? (isExtensiv ? 'account_id_channel' : 'channel_account_id')
+          : 'account_id'
+
       const { data: statusRows, error: statusError } = await supabase
-        .from('ai_orders_unified_6')
-        .select('order_status')
-        .eq(
-          userRole === 'client' || userRole === 'staff-client'
-            ? 'channel_account_id'
-            : 'account_id',
-          userAccountId
-        )
+        .from(ordersTable)
+        .select(statusField)
+        .eq(statusFilterField, userAccountId)
 
       if (statusError) {
         console.error('❌ Error fetching status options:', statusError.message)
       } else {
-        const allStatuses = Array.from(new Set(statusRows?.map(r => r.order_status).filter(Boolean)))
+        const allStatuses = Array.from(
+          new Set(
+            (statusRows || [])
+              .map((r: any) => r?.[statusField])
+              .filter((v: any) => v !== null && v !== undefined)
+              .map((v: any) => String(v))
+          )
+        )
         setAllStatusOptions(allStatuses)
       }
   
       let query = supabase
-        .from('ai_orders_unified_6')
+        .from(ordersTable)
         .select(
-          'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id',
+          isExtensiv
+            ? 'id, account_id, account_id_channel, external_id, order_number, customer_name, facility_name, status, source, creation_date, process_date, tracking_number'
+            : 'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id',
           { count: 'exact' }
         )
-
+  
 // ✅ Filtrar corretamente dependendo da role
 if (userRole === 'client' || userRole === 'staff-client') {
-  query = query.eq('channel_account_id', userAccountId)
+  query = query.eq(isExtensiv ? 'account_id_channel' : 'channel_account_id', userAccountId)
 } else {
   query = query.eq('account_id', userAccountId)
 }
@@ -108,25 +132,32 @@ if (sourceFilter !== 'all') {
 }
 
 if (statusFilter) {
-  query = query.eq('order_status', statusFilter)
+  if (isExtensiv) {
+    const numericStatus = Number(statusFilter)
+    query = query.eq('status', Number.isNaN(numericStatus) ? statusFilter : numericStatus)
+  } else {
+    query = query.eq('order_status', statusFilter)
+  }
 }
 
 if (startDate) {
-  query = query.gte('order_date', startDate)
+  query = query.gte(orderDateField, startDate)
 }
 
 if (endDate) {
-  query = query.lte('order_date', endDate)
+  query = query.lte(orderDateField, endDate)
 }
 
 if (searchTerm) {
   query = query.or(
-    `order_id.ilike.%${searchTerm}%,marketplace_name.ilike.%${searchTerm}%,client_name.ilike.%${searchTerm}%,order_source_order_id.ilike.%${searchTerm}%`
+    isExtensiv
+      ? `order_number.ilike.%${searchTerm}%,external_id.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%,tracking_number.ilike.%${searchTerm}%`
+      : `order_id.ilike.%${searchTerm}%,marketplace_name.ilike.%${searchTerm}%,client_name.ilike.%${searchTerm}%,order_source_order_id.ilike.%${searchTerm}%`
   )
 }
 
 // ✅ Ordenação por data decrescente
-query = query.order('order_date', { ascending: false })
+query = query.order(orderDateField, { ascending: false })
 
 const { data, count, error } = await query.range(start, end)
   
@@ -135,7 +166,22 @@ const { data, count, error } = await query.range(start, end)
         return
       }
   
-      setOrders(data || [])
+      const normalizedOrders = isExtensiv
+        ? (data || []).map((row: any) => ({
+            order_uuid: row.external_id ?? String(row.id),
+            order_id: row.order_number ?? row.external_id ?? String(row.id),
+            order_source_order_id: row.external_id ?? row.order_number ?? '—',
+            client_name: row.customer_name ?? '—',
+            grand_total: null,
+            order_date: row.creation_date ?? row.process_date ?? null,
+            order_status: row.status_closed ? 'Closed' : row.status !== null && row.status !== undefined ? String(row.status) : '—',
+            source: (row.source || 'extensiv') as string,
+            marketplace_name: row.facility_name ?? 'extensiv',
+            channel_account_id: row.account_id_channel ?? null,
+          }))
+        : data || []
+
+      setOrders(normalizedOrders)
       setTotalCount(count || 0)
       setUserRole(userRecord.role)
     }
@@ -322,7 +368,7 @@ const { data, count, error } = await query.range(start, end)
                       setSelectedOrder({ ...order, id: order.order_uuid })
                       setModalOpen(true)
                     }}
-                    className="text-white px-1 py-1 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition min-w-[80px]"
+                    className="text-white px-1 py-1 rounded-md text-sm bg-primary hover:bg-primary/90 transition min-w-[80px]"
                   >
                     Details
                   </button>

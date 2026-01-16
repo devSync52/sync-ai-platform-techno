@@ -41,7 +41,7 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
 
   const { data: accountData } = await supabase
     .from('accounts')
-    .select('logo')
+    .select('logo, template')
     .eq('id', userData?.account_id)
     .single()
 
@@ -65,11 +65,17 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
     logoUrl: accountData?.logo ?? undefined,
   }
 
+  const themeStyle = accountData?.template
+    ? ({ ['--primary' as any]: accountData.template } as React.CSSProperties)
+    : undefined
+
   return (
     <SupabaseProvider serverSession={null}>
-      <ProtectedLayoutClient user={headerUser} hideLayout={isOnboarding}>
-        {children}
-      </ProtectedLayoutClient>
+      <div style={themeStyle}>
+        <ProtectedLayoutClient user={headerUser} hideLayout={isOnboarding}>
+          {children}
+        </ProtectedLayoutClient>
+      </div>
     </SupabaseProvider>
   )
 }

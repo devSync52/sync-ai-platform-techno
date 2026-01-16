@@ -7,6 +7,7 @@ import { resendInviteAction } from '@/actions/resendInvite'
 import { toast } from 'sonner'
 import Table from '@/components/ui/table'
 import { useSupabase } from '@/components/supabase-provider'
+import { Send, RefreshCw, Ban, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface InvitationSimple {
   id: string
@@ -109,7 +110,7 @@ export default function ChannelsClient({
     if (!source) return null
     let color = 'bg-gray-200 text-gray-700 border-gray-300'
     if (source === 'sellercloud') color = 'bg-blue-500 text-white py-1'
-    else if (source === 'extensiv') color = 'bg-purple-600 text-white py-1'
+    else if (source === 'extensiv') color = 'bg-primary text-white py-1'
     return (
       <span className={`ml-2 px-2 py-0.5 text-xs font-semibold rounded ${color}`}>
         {source.charAt(0).toUpperCase() + source.slice(1)}
@@ -264,6 +265,9 @@ export default function ChannelsClient({
     currentPage * itemsPerPage
   )
   const totalPages = Math.ceil(filteredChannels.length / itemsPerPage)
+  const totalCount = filteredChannels.length
+  const startIndex = totalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
+  const endIndex = Math.min(currentPage * itemsPerPage, totalCount)
 
   return (
     <div className="p-6">
@@ -320,38 +324,42 @@ export default function ChannelsClient({
                       <td className="py-3 px-4 text-gray-500">{channel.city ?? '-'}</td>
                       <td className="p-3 text-sm">{renderInvitationStatus(status)}</td>
                       <td className="p-3 text-center align-top">
-                        <div className="flex flex-col items-center gap-1">
+                        <div className="flex flex-row items-center justify-center gap-2 flex-wrap">
                           {['pending', 'accepted'].includes(status.toLowerCase()) ? (
                             <>
                               {status.toLowerCase() === 'pending' && (
                                 <button
                                   onClick={() => handleResendInvite(channel.id)}
-                                  className="w-full px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
+                                  className="flex items-center gap-1 px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
                                   disabled={resendingId === channel.id}
                                 >
-                                  {resendingId === channel.id ? 'Resending...' : 'Resend Invite'}
+                                  <RefreshCw size={14} />
+                                  {resendingId === channel.id ? 'Resending' : 'Resend'}
                                 </button>
                               )}
                               <button
                                 onClick={() => handleRevokeInvite(channel.id)}
-                                className="w-full px-3 py-2 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+                                className="flex items-center gap-1 px-3 py-2 bg-red-500 text-white text-xs rounded hover:bg-red-600"
                               >
+                                <Ban size={14} />
                                 Revoke
                               </button>
                             </>
                           ) : (
                             <button
                               onClick={() => openInviteModal(channel)}
-                              className="w-full px-3 py-2 bg-[#3f2d90] hover:bg-[#3f2d90]/90 text-white text-xs rounded"
+                              className="flex items-center gap-1 px-3 py-2 bg-primary hover:bg-primary/90 text-white text-xs rounded"
                             >
-                              Send Invite
+                              <Send size={14} />
+                              Invite
                             </button>
                           )}
 
                           <button
                             onClick={() => openMarkupModal(channel)}
-                            className="w-full px-3 py-2 border border-[#3f2d90] text-[#3f2d90] text-xs rounded hover:bg-[#3f2d90]/5"
+                            className="flex items-center gap-1 px-3 py-2 border border-primary text-primary text-xs rounded hover:bg-primary/5"
                           >
+                            <Pencil size={14} />
                             Edit
                           </button>
 
@@ -377,24 +385,30 @@ export default function ChannelsClient({
           </Table>
 
           {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-4 mt-6">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
-              >
-                Previous
-              </button>
-              <span className="text-gray-700 text-sm">
-                Page {currentPage} of {totalPages}
+            <div className="flex justify-between items-center mt-6 px-4 text-sm">
+              <span className="text-gray-600">
+                Showing {startIndex} - {endIndex} of {totalCount}
               </span>
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 text-sm"
-              >
-                Next
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="inline-flex items-center gap-1 px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft size={16} />
+                  Prev
+                </button>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="inline-flex items-center gap-1 px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Next page"
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
           )}
         </>

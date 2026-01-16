@@ -44,12 +44,13 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const [ordersOpen, setOrdersOpen] = useState(false)
   const [billingOpen, setBillingOpen] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [accountLogo, setAccountLogo] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchUserRole = async () => {
       const { data, error } = await supabase
         .from('users')
-        .select('role')
+        .select('role, account_id')
         .eq('id', session?.user?.id ?? '')
         .single()
 
@@ -57,13 +58,30 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         console.error('Error fetching user role:', error.message)
       } else {
         setUserRole(data?.role)
+
+        // Fetch account logo (white-label) based on the user's account_id
+        if (data?.account_id) {
+          const { data: accountData, error: accountError } = await supabase
+            .from('accounts')
+            .select('"logo-main"')
+            .eq('id', data.account_id)
+            .single()
+
+          if (accountError) {
+            console.error('Error fetching account logo:', accountError.message)
+          } else {
+            setAccountLogo((accountData as any)?.['logo-main'] ?? null)
+          }
+        } else {
+          setAccountLogo(null)
+        }
       }
     }
 
     if (session?.user) {
       fetchUserRole()
     }
-  }, [session?.user])
+  }, [session?.user, supabase])
 
   useEffect(() => {
     if (pathname.startsWith('/settings')) setSettingsOpen(true)
@@ -87,7 +105,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       label: 'Orders',
       icon: ShoppingBag,
       items: [
-        { href: '/orders', label: 'All Orders' },
+        { href: '/orders', label: 'Manage Orders' },
+        { href: '/orders/create-order', label: 'Create Orders' },
         { href: '/orders/quotes', label: 'Quotations' },
       ],
     },
@@ -176,15 +195,16 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   })
 
   return (
-    <div className="flex flex-col h-full bg-[#3f2d90] text-white shadow-md">
+    <div className="flex flex-col h-full bg-primary text-white shadow-md">
       {/* LOGO TOP */}
-      <div className="h-20 flex items-center justify-center border-b border-[#352682] px-4">
+      <div className="h-20 flex items-center justify-center border-b border-[#0000001c] px-4">
         <Image
-          src="/sync-ai-platform-logo.svg"
+          src={accountLogo || '/sync-ai-platform-logo.svg'}
           alt="Logo"
-          width={180}
+          width={215}
           height={48}
           priority
+          unoptimized
         />
       </div>
 
@@ -201,7 +221,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
                     if (item.label === 'Orders') setOrdersOpen(prev => !prev)
                     else if (item.label === 'Billing') setBillingOpen(prev => !prev)
                   }}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#352682] transition text-white"
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#0000001c] transition text-white"
                 >
                   <span className="flex items-center gap-3">
                     <item.icon size={18} />
@@ -235,8 +255,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
                           onClick={onLinkClick}
                           className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
                             isActive
-                              ? 'bg-white text-[#3f2d90] font-semibold'
-                              : 'text-white hover:bg-[#352682]'
+                              ? 'bg-white text-primary font-semibold'
+                              : 'text-white hover:bg-[#0000001c]'
                           }`}
                         >
                           <span>{label}</span>
@@ -255,8 +275,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
                 onClick={onLinkClick}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
                   isActive
-                    ? 'bg-white text-[#3f2d90] font-semibold'
-                    : 'text-white hover:bg-[#352682]'
+                    ? 'bg-white text-primary font-semibold'
+                    : 'text-white hover:bg-[#0000001c]'
                 }`}
               >
                 <item.icon size={18} />
@@ -270,7 +290,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         <div>
           <button
             onClick={() => setSettingsOpen((prev) => !prev)}
-            className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#352682] transition text-white"
+            className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#0000001c] transition text-white"
           >
             <span className="flex items-center gap-3">
               <Settings size={18} />
@@ -298,8 +318,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
                   onClick={onLinkClick}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
                     isActive
-                      ? 'bg-white text-[#3f2d90] font-semibold'
-                      : 'text-white hover:bg-[#352682]'
+                      ? 'bg-white text-primary font-semibold'
+                      : 'text-white hover:bg-[#0000001c]'
                   }`}
                 >
                   <Icon size={16} />
@@ -312,7 +332,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       </nav>
 
       {/* FOOTER */}
-      <div className="border-t border-[#352682] p-4 flex items-center justify-between text-sm">
+      <div className="border-t border-[#0000001c] p-4 flex items-center justify-between text-sm">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 uppercase">
             {session?.user.email?.[0]}

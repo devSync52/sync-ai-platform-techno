@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { computeMultiBoxFromItems } from '@/lib/shipping/multibox'
+import { useRouter } from 'next/navigation'
 
 type PackageItem = {
   sku: string
@@ -33,6 +34,8 @@ interface Step4PackageDetailsProps {
   initialItems: Json
   onNext: () => void
   onBack: () => void
+  /** Optional override for the primary CTA label (Orders flow uses "Save Order") */
+  nextLabel?: string
 }
 
 function ProductSearchModal({
@@ -159,6 +162,7 @@ function ProductSearchModal({
   if (!show) return null
 
   const warehouseMissing = !warehouseId
+  const router = useRouter()
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -222,7 +226,7 @@ function ProductSearchModal({
   )
 }
 
-export default function Step4PackageDetails({ draftId, initialItems, onNext, onBack }: Step4PackageDetailsProps) {
+export default function Step4PackageDetails({ draftId, initialItems, onNext, onBack, nextLabel = 'Next' }: Step4PackageDetailsProps) {
   const [items, setItems] = useState<PackageItem[]>([])
   const [showProductSearchModal, setShowProductSearchModal] = useState(false)
   const [clientId, setClientId] = useState<string>('')
@@ -283,9 +287,14 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
     const updatedItem = { ...currentItem, [field]: value }
 
     if (field === 'quantity' || field === 'price') {
-      const price = field === 'price' ? value : currentItem.price || 0
-      const quantity = field === 'quantity' ? value : currentItem.quantity || 1
-      updatedItem.subtotal = price * quantity
+      const priceRaw = field === 'price' ? value : currentItem.price
+      const qtyRaw = field === 'quantity' ? value : currentItem.quantity
+    
+      const price = Number(priceRaw ?? 0)
+      const quantity = Number(qtyRaw ?? 1)
+    
+      updatedItem.subtotal =
+        (Number.isFinite(price) ? price : 0) * (Number.isFinite(quantity) ? quantity : 1)
     }
 
     updated[index] = updatedItem
@@ -441,7 +450,10 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
               <Input
                 type="number"
                 value={item.quantity}
-                onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10)
+                  handleItemChange(index, 'quantity', Number.isFinite(v) ? v : 0)
+                }}
               />
             </div>
             <div>
@@ -452,7 +464,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
   value={item.price ?? ''}
   onChange={(e) => {
     const numericValue = parseFloat(e.target.value)
-    handleItemChange(index, 'price', isNaN(numericValue) ? null : numericValue)
+    handleItemChange(index, 'price', Number.isFinite(numericValue) ? numericValue : 0)
   }}
 />
             </div>
@@ -538,7 +550,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
             + Search Product
           </Button>
           <Button onClick={handleSaveAndNext} disabled={items.length === 0 || isCalculating}>
-            {isCalculating ? 'Calculating package...' : 'Next'}
+          {isCalculating ? 'Calculating package...' : nextLabel}
           </Button>
         </div>
       </div>
@@ -561,7 +573,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
           + Product
         </Button>
         <Button className="w-1/3" onClick={handleSaveAndNext} disabled={items.length === 0 || isCalculating}>
-          {isCalculating ? 'Calculating…' : 'Next'}
+        {isCalculating ? 'Calculating…' : nextLabel}
         </Button>
       </div>
 
