@@ -105,10 +105,6 @@ export default function SalesByMarketplaceChart({
         return acc
       }, {} as Record<string, { marketplace: string; orders: number; logo?: string }>)
 
-      console.log('🟪 Total fetched orders:', allData.length)
-      console.log('🟪 Unique counted:', seen.size)
-      console.log('🟪 Grouped orders by marketplace:', grouped)
-
       const result = Object.values(grouped).sort((a, b) => b.orders - a.orders)
       setData(result)
     }

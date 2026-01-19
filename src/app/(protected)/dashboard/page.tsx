@@ -5,12 +5,12 @@ export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-  const user = session?.user
 
-  if (!user) {
+  if (userError || !user) {
     throw new Error('User not authenticated')
   }
 

@@ -178,6 +178,8 @@ export default function InvoiceDetailPage() {
   const [editDraft, setEditDraft] = useState<Partial<InvoiceItem>>({})
   const [shareLoading, setShareLoading] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [issuing, setIssuing] = useState(false)
 
   function getCategoryKey(
     item: InvoiceItem
@@ -591,25 +593,37 @@ const categoryOrder: { key: string; label: string }[] = [
   // Issue Invoice logic
   const handleIssueInvoice = useCallback(async () => {
     if (!data?.invoice?.id) return
+    setIssuing(true)
+    setError(null)
+    setNotice(null)
     try {
       const res = await fetch(`/api/billing/invoices/${data.invoice.id}/issue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId: data.invoice.id })
+        body: JSON.stringify({ invoiceId: data.invoice.id }),
       })
       const json = await res.json()
       if (!res.ok || !json.success) {
         setError(json.message || 'Failed to issue invoice')
         return
       }
+
       // Reload invoice data and update status
       const reloadRes = await fetch(`/api/billing/invoice/${data.invoice.id}`)
       const reloadJson = await reloadRes.json()
       if (reloadRes.ok && reloadJson.success) {
         setData(reloadJson.data)
       }
+
+      setNotice('Invoice issued successfully.')
+
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
     } catch (err: any) {
       setError(err.message || 'Unexpected error while issuing invoice')
+    } finally {
+      setIssuing(false)
     }
   }, [data])
 
@@ -834,10 +848,8 @@ const categoryOrder: { key: string; label: string }[] = [
           : 'Detailed view of the selected invoice.'}
         actions={
           <>
-            <Link href="/billing/clients/624e9507-d7c4-4a7d-af64-3064e8743884/invoices">
-              <Button variant="outline">Back to Invoices</Button>
-            </Link>
-            <Button variant="outline">Generate PDF</Button>
+            
+            <Button variant="outline">Send to Quickbooks</Button>
             <Button
               variant="outline"
               onClick={handleShareInvoice}
@@ -866,6 +878,11 @@ const categoryOrder: { key: string; label: string }[] = [
   {shareError && (
     <div className="text-sm text-destructive">
       Share error: {shareError}
+    </div>
+  )}
+  {notice && (
+    <div className="text-sm border border-green-200 bg-green-50 text-green-700 rounded-md px-3 py-2">
+      {notice}
     </div>
   )}
 
@@ -1679,9 +1696,9 @@ const categoryOrder: { key: string; label: string }[] = [
           <Button
             className="bg-primary text-white"
             onClick={handleIssueInvoice}
-            disabled={loading || !data}
+            disabled={loading || !data || issuing}
           >
-            Issue Invoice
+            {issuing ? 'Issuing…' : 'Issue Invoice'}
           </Button>
         </div>
       </Card>

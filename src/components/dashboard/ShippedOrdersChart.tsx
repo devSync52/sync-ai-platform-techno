@@ -16,17 +16,27 @@ import { PackageCheck } from 'lucide-react'
 export default function ShippedOrdersChart({
   userRole,
   userAccountId,
+  source,
 }: {
   userRole: string
   userAccountId: string
+  source?: string | null
 }) {
   const [data, setData] = useState<{ hour: string; shipped: number; total_items: number }[]>([])
   const [showItems, setShowItems] = useState(false)
   const [period, setPeriod] = useState<'24h' | '7d' | '31d' | '3m'>('7d')
   const [totals, setTotals] = useState<{ orders: number; items: number }>({ orders: 0, items: 0 })
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  const normalizedSource = (source ?? '').toString().trim().toLowerCase()
+  const isExtensiv = normalizedSource === 'extensiv' || normalizedSource.includes('extensiv')
+
+  const tableName = isExtensiv ? 'ai_extensiv_shipping_info_items' : 'ai_shipping_info_sc_v2'
+  const dateField = isExtensiv ? 'ship_date' : 'order_date'
 
   useEffect(() => {
     async function fetchData() {
+      setErrorMsg(null)
       const now = new Date()
       const nowUTC = new Date(now.toISOString())
 
@@ -52,10 +62,26 @@ export default function ShippedOrdersChart({
       // Build filters once
       const baseFilters = (qb: any) => {
         qb = qb
-          .gte('order_date', startDate.toISOString())
-          .lte('order_date', nowUTC.toISOString())
-          .eq('shipping_status', 3)
-        if (userRole === 'client' || userRole === 'staff-client') {
+          .gte(dateField, startDate.toISOString())
+          .lte(dateField, nowUTC.toISOString())
+
+        // Shipped filter differs by source:
+        // - Sellercloud (sc_v2): shipped rows use numeric shipping_status = 3
+        // - Extensiv: shipped == closed. Some datasets use status_code=1, others use shipping_status='closed' (case variations).
+        // Require ship_date to exist to avoid counting unshipped rows.
+        if (isExtensiv) {
+          qb = qb
+            .or('status_code.eq.1,shipping_status.ilike.closed')
+            .not('ship_date', 'is', null)
+        } else {
+          qb = qb.eq('shipping_status', 3)
+        }
+
+        if (isExtensiv) {
+          // Extensiv datasets sometimes use different ids depending on role/context.
+          // To avoid returning 0 rows, match either channel_account_id OR account_id.
+          qb = qb.or(`channel_account_id.eq.${userAccountId},account_id.eq.${userAccountId}`)
+        } else if (userRole === 'client' || userRole === 'staff-client') {
           qb = qb.eq('channel_account_id', userAccountId)
         } else {
           qb = qb.eq('account_id', userAccountId)
@@ -63,30 +89,48 @@ export default function ShippedOrdersChart({
         return qb
       }
 
+      const selectFields = isExtensiv
+        ? `${dateField}, order_id, qty`
+        : `${dateField}, shipping_status, items_count`
+
       // Base select for series
       let query = baseFilters(
         supabase
-          .from('ai_shipping_info_sc_v2')
-          .select('order_date, shipping_status, items_count')
+          .from(tableName)
+          .select(selectFields)
       )
 
       // ---- Pagination to bypass PostgREST 1k page cap ----
       const pageSize = 1000
       let from = 0
-      let allRows: { order_date: string; shipping_status: number; items_count: number }[] = []
+      let allRows: {
+        order_date?: string
+        ship_date?: string
+        shipping_status?: any
+        status_code?: any
+        items_count?: number
+        order_id?: string
+        qty?: any
+      }[] = []
 
       while (true) {
         const { data: page, error } = await query
-          .order('order_date', { ascending: true })
+          .order(dateField, { ascending: true })
           .range(from, from + pageSize - 1)
 
         if (error) {
           console.error('❌ Error fetching shipped orders (page):', {
+            tableName,
+            dateField,
+            isExtensiv,
+            userRole,
+            userAccountId,
             message: error?.message,
             details: error?.details,
             hint: error?.hint,
             code: error?.code,
           })
+          setErrorMsg(error?.message ?? 'Error fetching shipped orders')
           break
         }
 
@@ -99,41 +143,62 @@ export default function ShippedOrdersChart({
       }
       // ----------------------------------------------------
 
-      // Accurate totals (orders via count head:true; items via sum of all pages)
-      const itemsSum = (allRows || []).reduce((sum, r) => sum + (Number(r.items_count) || 0), 0)
-      const { count: ordersCount, error: countError } = await baseFilters(
-        supabase.from('ai_shipping_info_sc_v2').select('*', { count: 'exact', head: true })
+      // Accurate totals:
+      // - Sellercloud: orders via count head:true; items via sum(items_count)
+      // - Extensiv items view: orders via DISTINCT order_id; items via sum(qty)
+      const itemsSum = (allRows || []).reduce(
+        (sum, r) => sum + (Number(isExtensiv ? r.qty : r.items_count) || 0),
+        0
       )
-      if (countError) {
-        console.warn('⚠️ Count fallback to client length due to error:', countError)
+
+      if (isExtensiv) {
+        const distinctOrders = new Set((allRows || []).map((r) => r.order_id).filter(Boolean) as string[])
+        setTotals({ orders: distinctOrders.size, items: itemsSum })
+      } else {
+        const { count: ordersCount, error: countError } = await baseFilters(
+          supabase.from(tableName).select('*', { count: 'exact', head: true })
+        )
+        if (countError) {
+          console.warn('⚠️ Count fallback to client length due to error:', countError)
+        }
+        setTotals({ orders: ordersCount ?? allRows.length, items: itemsSum })
       }
-      setTotals({ orders: ordersCount ?? allRows.length, items: itemsSum })
 
       // Group per hour for chart
-      const byHour = (allRows || []).reduce((acc: { hour: string; shipped: number; total_items: number }[], order) => {
-        const date = new Date(order.order_date)
+      const hourMap = new Map<string, { orders: Set<string>; items: number }>()
+
+      ;(allRows || []).forEach((order) => {
+        const rawDate = (order as any)[dateField] as string | undefined
+        if (!rawDate) return
+        const date = new Date(rawDate)
+
         let hour = date.getHours()
         const ampm = hour >= 12 ? 'PM' : 'AM'
         hour = hour % 12
         hour = hour ? hour : 12
         const key = `${hour} ${ampm}`
 
-        const itemsCount = Number(order.items_count) || 0
-        const existing = acc.find((item) => item.hour === key)
+        const itemsCount = Number(isExtensiv ? order.qty : order.items_count) || 0
 
-        if (existing) {
-          existing.shipped += 1
-          existing.total_items += itemsCount
-        } else {
-          acc.push({
-            hour: key,
-            shipped: 1,
-            total_items: itemsCount,
-          })
+        if (!hourMap.has(key)) {
+          hourMap.set(key, { orders: new Set<string>(), items: 0 })
         }
+        const entry = hourMap.get(key)!
+        entry.items += itemsCount
 
-        return acc
-      }, [])
+        if (isExtensiv) {
+          if (order.order_id) entry.orders.add(String(order.order_id))
+        } else {
+          // Sellercloud rows are order-level, so each row is one order
+          entry.orders.add(`${key}-${entry.orders.size}-${Math.random()}`)
+        }
+      })
+
+      const byHour = Array.from(hourMap.entries()).map(([hour, v]) => ({
+        hour,
+        shipped: v.orders.size,
+        total_items: v.items,
+      }))
 
       // Sort by hour in 24-hour format for correct ordering
       byHour.sort((a, b) => {
@@ -149,14 +214,11 @@ export default function ShippedOrdersChart({
         return parseHour(a.hour) - parseHour(b.hour)
       })
 
-      console.log('📦 Raw data from Supabase (allRows):', allRows)
-      console.log('📦 Grouped by hour:', byHour)
-
       setData(byHour)
     }
 
     fetchData()
-  }, [userRole, userAccountId, period])
+  }, [userRole, userAccountId, period, source])
 
   const totalShipped = totals.orders
   const totalItems = totals.items
@@ -179,6 +241,7 @@ export default function ShippedOrdersChart({
             <p className="text-sm font-semibold text-gray-700">Shipped</p>
             <p className="text-xl font-bold text-green-600">{totalShipped} Orders / {totalItems} Items</p>
             <p className="text-xs text-gray-500">{periodLabel}</p>
+            {errorMsg ? <p className="text-xs text-red-500">{errorMsg}</p> : null}
           </div>
         </div>
         <div className="flex items-center gap-4">

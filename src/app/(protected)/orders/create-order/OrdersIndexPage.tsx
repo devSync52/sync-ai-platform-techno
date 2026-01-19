@@ -66,7 +66,6 @@ export default function QuotesPage() {
         user_id: user.id,
         account_id: user.account_id,
         step: 1,
-        client: user.account_id,
         ship_from: step_data_2,
         order: true,
       })

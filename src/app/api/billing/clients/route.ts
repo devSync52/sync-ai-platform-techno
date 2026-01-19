@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
 import type { BillingClientSummary } from '@/types/billing'
 
 type BillingClientRow = {
   id: string
+  parent_account_id?: string | null
   client_account_id: string | null
   name: string | null
   source: string | null
@@ -20,18 +22,72 @@ type WarehouseRow = {
   parent_account_id?: string | null
 }
 
+
 export async function GET() {
+  const cookieStore = (await cookies()) as any
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          // Next.js cookies() supports setting cookies in Route Handlers
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          // Prefer delete when available; otherwise overwrite with immediate expiration
+          try {
+            ;(cookieStore as any).delete(name)
+          } catch {
+            cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+          }
+        },
+      },
+    }
+  )
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Expect the parent account to be available as a claim/metadata.
+  // Adjust these keys if your project stores it elsewhere.
+  const parentAccountId =
+    (user.user_metadata as any)?.parent_account_id ??
+    (user.app_metadata as any)?.parent_account_id ??
+    (user.user_metadata as any)?.account_id ??
+    (user.app_metadata as any)?.account_id ??
+    null
+
+  if (!parentAccountId) {
+    return NextResponse.json(
+      { error: 'Missing parent_account_id on user session' },
+      { status: 400 }
+    )
+  }
+
   const [
     { data: clients, error: clientsError },
     { data: warehouses, error: warehousesError },
   ] = await Promise.all([
-    (supabaseAdmin as any)
+    (supabase as any)
       .from('billing_clients')
       .select('*')
+      .eq('parent_account_id', parentAccountId)
       .order('name', { ascending: true }),
-    (supabaseAdmin as any)
+    (supabase as any)
       .from('v_billing_warehouses')
-      .select('id,name'),
+      .select('id,name,parent_account_id')
+      .eq('parent_account_id', parentAccountId),
   ])
 
   const firstError = clientsError || warehousesError

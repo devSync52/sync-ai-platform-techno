@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { SupabaseProvider } from '@/components/supabase-provider'
 import { redirect } from 'next/navigation'
-import { PropsWithChildren } from 'react'
+import { PropsWithChildren, type CSSProperties } from 'react'
 import { headers } from 'next/headers'
 import ProtectedLayoutClient from './ProtectedLayoutClient'
 import '@/styles/daypicker-custom.css'
@@ -41,7 +41,7 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
 
   const { data: accountData } = await supabase
     .from('accounts')
-    .select('logo, template')
+    .select('logo, template, "logo-main"')
     .eq('id', userData?.account_id)
     .single()
 
@@ -63,10 +63,11 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
     avatarLetter: userData?.name?.charAt(0).toUpperCase() ?? 'U',
     avatarUrl: userDetails?.avatar_url ?? undefined,
     logoUrl: accountData?.logo ?? undefined,
+    logoMain: (accountData as any)?.['logo-main'] ?? undefined,
   }
 
   const themeStyle = accountData?.template
-    ? ({ ['--primary' as any]: accountData.template } as React.CSSProperties)
+    ? ({ ['--primary' as any]: accountData.template } as CSSProperties)
     : undefined
 
   return (

@@ -71,9 +71,6 @@ export function Step1ClientSelection({
       if (initialClient) {
         const clientId = initialClient as string
         setSelectedClientId(clientId)
-        if (onClientChange) {
-          onClientChange(clientId)
-        }
         setIsLoadingDraft(false)
       } else if (draftId) {
         const { data, error } = await supabase
@@ -86,9 +83,6 @@ export function Step1ClientSelection({
           console.error('❌ Error loading draft client:', error)
         } else if (data?.client) {
           setSelectedClientId(data.client)
-          if (onClientChange) {
-            onClientChange(data.client)
-          }
         }
         setIsLoadingDraft(false)
       }
@@ -102,9 +96,6 @@ export function Step1ClientSelection({
     if (!isLoadingDraft && !selectedClientId && clients.length === 1) {
       const onlyClient = clients[0]
       setSelectedClientId(onlyClient.id)
-      if (onClientChange) {
-        onClientChange(onlyClient.id)
-      }
     }
   }, [isLoadingDraft, selectedClientId, clients, onClientChange])
 
@@ -118,9 +109,6 @@ export function Step1ClientSelection({
         {!isLoadingDraft && (
           <Select value={selectedClientId} onValueChange={(clientId) => {
             setSelectedClientId(clientId)
-            if (onClientChange) {
-              onClientChange(clientId)
-            }
           }}>
             <SelectTrigger>
               <SelectValue placeholder="Select a client..." />

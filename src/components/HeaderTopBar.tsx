@@ -14,6 +14,8 @@ interface HeaderProps {
     avatarLetter?: string
     avatarUrl?: string | null
     logoUrl?: string | null
+    logoMain?: string | null
+    parentAccountId?: string | null
   }
 }
 
@@ -63,6 +65,18 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
 
 useEffect(() => {
   const handleLogoUpdate = () => {
+    // If account has logo-main, always use Sync blue logo
+    if (typeof user.logoMain === 'string' && user.logoMain.trim().length > 0) {
+      setLogoUrlWithVersion('https://euzjrgnyzfgldubqglba.supabase.co/storage/v1/object/public/img/sync-logo-blue.png')
+      return
+    }
+
+    // If this is a parent account (no parent_account_id) and no logo-main, show no logo at all
+    if (!user.parentAccountId) {
+      setLogoUrlWithVersion('')
+      return
+    }
+
     const currentLogoUrl = user.logoUrl
     if (currentLogoUrl) {
       const separator = currentLogoUrl.includes('?') ? '&' : '?'
@@ -82,7 +96,7 @@ useEffect(() => {
   return () => {
     window.removeEventListener('logo-updated', handleLogoUpdate)
   }
-}, [user.logoUrl ?? ''])
+}, [user.logoUrl, user.logoMain, user.parentAccountId])
 
   const roleColors = getRoleColors(user.role || '')
 
@@ -92,19 +106,19 @@ useEffect(() => {
   }
 
   return (
-    <div className="hidden lg:flex items-center justify-between h-20 px-6 bg-white border-b shadow-sm relative">
+    <>
+      {/* Spacer to offset the fixed header height (only on lg+) */}
+      <div className="hidden lg:block h-20" />
+
+      <div className="hidden lg:flex items-center justify-between h-20 px-6 bg-white border-b shadow-sm fixed top-0 right-0 z-50 lg:left-80">
       <div className="flex items-center gap-4">
-        {(user.role === 'client' || user.role === 'staff-client') && (
-          logoUrlWithVersion ? (
-            <img
-              src={logoUrlWithVersion}
-              alt="Company Logo"
-              className="h-10 object-contain rounded-md"
-            />
-          ) : (
-            <div className="text-xl font-semibold text-gray-400">Your Logo</div>
-          )
-        )}
+        {logoUrlWithVersion ? (
+          <img
+            src={logoUrlWithVersion}
+            alt="Company Logo"
+            className="h-10 object-contain rounded-md"
+          />
+        ) : null}
       </div>
 
       {/* Ações */}
@@ -174,6 +188,7 @@ useEffect(() => {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   )
 }

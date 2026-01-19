@@ -12,7 +12,43 @@ import Step3ShippingDetails from './steps/Step3ShippingDetails'
 import Step4PackageDetails from './steps/Step4PackageDetails'
 import { Button } from '@/components/ui/button'
 
+
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
+
+// Robustly extract a client id from various draft.client shapes (string, JSON object, JSON-encoded string, etc)
+const extractClientId = (raw: any): string | null => {
+  if (raw === null || raw === undefined) return null
+
+  // If it's already an object (jsonb), try common shapes
+  if (typeof raw === 'object') {
+    const id = (raw as any)?.id ?? (raw as any)?.client_id ?? (raw as any)?.value
+    return id ? String(id) : null
+  }
+
+  // If it's a string, it might be a plain uuid OR a JSON-encoded string (e.g. "\"uuid\"")
+  if (typeof raw === 'string') {
+    const s = raw.trim()
+    if (!s) return null
+
+    // Try parse JSON if it looks like JSON (quotes/braces/brackets)
+    if (
+      (s.startsWith('"') && s.endsWith('"')) ||
+      s.startsWith('{') ||
+      s.startsWith('[')
+    ) {
+      try {
+        const parsed = JSON.parse(s)
+        return extractClientId(parsed)
+      } catch {
+        // fall through
+      }
+    }
+
+    return s
+  }
+
+  return null
+}
 
 const sanitizeFileName = (name: string) => {
   // Supabase Storage keys are URL-path-like; avoid spaces/unicode/control chars.
@@ -52,12 +88,36 @@ export default function OrderWizard() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
 
-  const openFilePicker = () => fileInputRef.current?.click()
-  const openCamera = () => cameraInputRef.current?.click()
+  // Keep the selected client id in sync with the draft
+  const [clientId, setClientId] = useState<string | null>(null)
+
+  // Only allow document upload/extraction after the user selects a client.
+  const canUseDocs = !!clientId
+  useEffect(() => {
+    const next = extractClientId(quoteData?.client)
+    setClientId(next)
+  }, [quoteData?.client])
+
+  const openFilePicker = () => {
+    if (!canUseDocs) {
+      alert('Select a client first to upload a document/photo.')
+      return
+    }
+    fileInputRef.current?.click()
+  }
+  const openCamera = () => {
+    if (!canUseDocs) {
+      alert('Select a client first to take a photo.')
+      return
+    }
+    cameraInputRef.current?.click()
+  }
 
   const onDrag = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+
+    if (!canUseDocs) return
 
     if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true)
     if (e.type === 'dragleave') setDragActive(false)
@@ -68,9 +128,14 @@ export default function OrderWizard() {
     e.stopPropagation()
     setDragActive(false)
 
+    if (!canUseDocs) {
+      alert('Select a client first to upload a document/photo.')
+      return
+    }
+
     const files = e.dataTransfer?.files
 
-      if (getExistingFiles().length > 0) {
+    if (getExistingFiles().length > 0) {
       alert('Only one document/photo is allowed. Remove the current file to upload a new one.')
       return
     }
@@ -584,6 +649,10 @@ export default function OrderWizard() {
       alert('Only one document/photo is allowed. Remove the current file to upload a new one.')
       return
     }
+    if (!canUseDocs) {
+      alert('Select a client first to upload a document/photo.')
+      return
+    }
 
     let hasSupabaseSession = false
 
@@ -711,10 +780,6 @@ export default function OrderWizard() {
     }
   }
 
-  // Estado para manter o client atualizado
-  const [clientId, setClientId] = useState<string | null>(
-    typeof quoteData?.client === 'string' ? quoteData.client : quoteData?.client?.toString() ?? null
-  )
 
   useEffect(() => {
     if (currentStep === 3) {
@@ -828,7 +893,8 @@ export default function OrderWizard() {
         </div>
 
         {/* Documents panel (desktop) */}
-        <aside className="hidden md:block">
+        {canUseDocs ? (
+          <aside className="hidden md:block">
           <div className="sticky top-24 rounded-lg border bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
               <div>
@@ -987,11 +1053,13 @@ export default function OrderWizard() {
               )
             })()}
           </div>
-        </aside>
+          </aside>
+        ) : null}
       </div>
 
       {/* Documents FAB (mobile) */}
-      <div className="md:hidden">
+      {canUseDocs ? (
+        <div className="md:hidden">
         <Button
           className="fixed bottom-5 right-5 z-40 rounded-full px-4 py-3 shadow-lg"
           onClick={() => setDocsOpen(true)}
@@ -1144,7 +1212,8 @@ export default function OrderWizard() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      ) : null}
       {/* Enrichment modal */}
       {enrichModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">

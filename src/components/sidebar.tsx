@@ -205,6 +205,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
           height={48}
           priority
           unoptimized
+          style={{ width: 'auto', height: 'auto' }}
         />
       </div>
 

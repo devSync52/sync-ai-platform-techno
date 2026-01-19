@@ -764,7 +764,6 @@ export default function ClientConfigPage() {
           <TabsTrigger value="discounts">Discounts</TabsTrigger>
           <TabsTrigger value="taxes">Taxes</TabsTrigger>
           <TabsTrigger value="cycle">Invoice Cycle</TabsTrigger>
-          <TabsTrigger value="template">Template</TabsTrigger>
           <TabsTrigger value="pricing_overrides">Pricing Overrides</TabsTrigger>
         </TabsList>
 

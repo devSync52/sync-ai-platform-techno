@@ -6,6 +6,22 @@ import { Database } from '@/types/supabase'
 export async function middleware(req: NextRequest) {
   const requestHeaders = new Headers(req.headers)
 
+  const { pathname } = req.nextUrl
+
+  // Allow public assets through without auth redirects
+  const isPublicAsset =
+    pathname === '/site.webmanifest' ||
+    pathname === '/manifest.json' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/favicon.ico' ||
+    pathname.startsWith('/_next/') ||
+    /\.[a-zA-Z0-9]+$/.test(pathname)
+
+  if (isPublicAsset) {
+    return NextResponse.next()
+  }
+
   // --- Rotas públicas ---
   const PUBLIC_PATHS = ['/invoice']
   if (PUBLIC_PATHS.some((p) => req.nextUrl.pathname.startsWith(p))) {
@@ -36,15 +52,15 @@ export async function middleware(req: NextRequest) {
   )
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
   // Redirect staff-client to orders/quotes instead of dashboard
-  const userRole = (session.user.user_metadata?.role as string) || ''
+  const userRole = (user.user_metadata?.role as string) || ''
   const path = req.nextUrl.pathname
   if (userRole === 'staff-client' && (path === '/' || path === '/dashboard')) {
     return NextResponse.redirect(new URL('/orders/quotes', req.url))
@@ -57,6 +73,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!login|register|forgot-password|reset-password|onboarding|accept-invite|api|_next|favicon.ico|public|test|invoice).*)',
+    '/((?!login|register|forgot-password|reset-password|onboarding|accept-invite|api|_next|favicon.ico|site.webmanifest|manifest.json|robots.txt|sitemap.xml|public|test|invoice).*)',
   ],
 }

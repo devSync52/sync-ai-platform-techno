@@ -88,10 +88,6 @@ export default function OrdersPerDayChart({
         .sort((a, b) => a.date.localeCompare(b.date))
 
       setData(chartData)
-      console.log('🟢 OrdersPerDayChart Debug')
-      console.log('🟢 Total fetched orders:', allOrders.length)
-      console.log('🟢 Unique counted:', chartData.length)
-      console.log('🟢 Daily grouped orders:', chartData)
     }
 
     fetchOrders()

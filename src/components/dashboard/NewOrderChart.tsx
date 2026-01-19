@@ -14,14 +14,24 @@ import {
 export default function NewOrdersChart({
   userRole,
   userAccountId,
+  source,
 }: {
   userRole: string
   userAccountId: string
+  source?: string | null
 }) {
   const [data, setData] = useState<{ hour: string; value: number; amount: number }[]>([])
-  const [showOrderCount, setShowOrderCount] = useState(false)
+  const [showOrderCount, setShowOrderCount] = useState(true)
   const [period, setPeriod] = useState<'7d' | '24h' | '31d' | '3m'>('7d')
   const [totals, setTotals] = useState<{ orders: number; amount: number }>({ orders: 0, amount: 0 })
+
+  const normalizedSource = (source ?? '').toString().trim().toLowerCase()
+  const isExtensiv = normalizedSource === 'extensiv' || normalizedSource.includes('extensiv')
+  const primaryStroke = 'currentColor'
+
+  useEffect(() => {
+    if (isExtensiv) setShowOrderCount(true)
+  }, [isExtensiv])
 
   useEffect(() => {
     async function fetchData() {
@@ -136,28 +146,26 @@ export default function NewOrdersChart({
         return parseHour(a.hour) - parseHour(b.hour)
       })
 
-      console.log('🛒 New orders raw (allRows):', allRows)
-      console.log('🛒 New orders grouped by hour:', byHour)
-
       setData(byHour)
     }
 
     fetchData()
   }, [userRole, userAccountId, period])
 
-  const totalValue = showOrderCount ? totals.orders : totals.amount
+  const effectiveShowOrderCount = isExtensiv ? true : showOrderCount
+  const totalValue = effectiveShowOrderCount ? totals.orders : totals.amount
 
   return (
     <div className="h-full w-full bg-white rounded-2xl p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="bg-[#3f2d90]/10 text-[#3f2d90] p-2 rounded-full">
+          <div className="bg-[#3f2d90]/10 text-primary p-2 rounded-full">
             <ShoppingBag size={20} />
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-700">New Orders</p>
-            <p className="text-xl font-bold text-[#3f2d90]">
-              {showOrderCount
+            <p className="text-xl font-bold text-primary">
+              {effectiveShowOrderCount
                 ? `${totalValue} Orders`
                 : totalValue.toLocaleString('en-US', {
                     style: 'currency',
@@ -175,15 +183,16 @@ export default function NewOrdersChart({
           </div>
         </div>
         <div className="relative z-50" style={{ pointerEvents: 'auto' }}>
-          <button
-            onClick={() => {
-              console.log('🔁 Toggle clicked:', !showOrderCount)
-              setShowOrderCount(!showOrderCount)
-            }}
-            className="text-xs text-primary underline"
-          >
-            {showOrderCount ? 'Show value' : 'Show number of orders'}
-          </button>
+          {!isExtensiv ? (
+            <button
+              onClick={() => {
+                setShowOrderCount(!showOrderCount)
+              }}
+              className="text-xs text-primary underline"
+            >
+              {showOrderCount ? 'Show value' : 'Show number of orders'}
+            </button>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="text-xs flex mt-1 items-center gap-1 text-primary border px-2 py-1 rounded-md hover:bg-muted">
@@ -207,10 +216,10 @@ export default function NewOrdersChart({
           </DropdownMenu>
         </div>
       </div>
-      <div className="h-[200px] mt-4">
+      <div className="h-[200px] mt-4 text-primary">
       <ResponsiveContainer width="100%" height="100%">
   <LineChart
-    key={showOrderCount ? 'orders' : 'value'} 
+    key={effectiveShowOrderCount ? 'orders' : 'value'} 
     data={data}
   >
     <CartesianGrid strokeDasharray="3 3" />
@@ -218,15 +227,15 @@ export default function NewOrdersChart({
     <YAxis hide />
     <Tooltip
       formatter={(value: number) =>
-        showOrderCount
+        effectiveShowOrderCount
           ? [`${value} orders`, 'Orders']
           : [value.toLocaleString('en-US', { style: 'currency', currency: 'USD' }), 'Sales']
       }
     />
     <Line
       type="monotone"
-      dataKey={showOrderCount ? 'value' : 'amount'}
-      stroke="#3f2d90"
+      dataKey={effectiveShowOrderCount ? 'value' : 'amount'}
+      stroke={primaryStroke}
       strokeWidth={3}
       dot={{ r: 4 }}
       activeDot={{ r: 6 }}

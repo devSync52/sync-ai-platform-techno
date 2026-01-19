@@ -93,68 +93,87 @@ export default function ClientInvoicesPage() {
     }
     return map
   }, [warehouseOptions])
-  const fetchWarehouses = async () => {
+  const fetchWarehouses = async (opts?: { force?: boolean }) => {
     if (!id) return
+
+    // Avoid re-fetching if we already have options (fix flaky UX)
+    if (!opts?.force && warehouseOptions.length > 0) return
+
+    const cacheKey = `billing:client:${id}:warehouses:v1`
+
     try {
       setIsWarehousesLoading(true)
       setWarehousesError(null)
 
-      // Preferred endpoint: returns warehouses the client is associated with
-      const res = await fetch(`/api/billing/clients/${id}/warehouses`)
-      if (res.ok) {
-        const json = await res.json()
-        const list = (json?.data || json?.warehouses || []) as any[]
+      // 1) Try cached options first (sessionStorage)
+      if (!opts?.force && typeof window !== 'undefined') {
+        const cached = window.sessionStorage.getItem(cacheKey)
+        if (cached) {
+          const parsed = JSON.parse(cached) as WarehouseOption[]
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setWarehouseOptions(parsed)
+            // Preselect default if nothing chosen yet
+            if (!warehouseId && parsed.length === 1) setWarehouseId(parsed[0].id)
+            return
+          }
+        }
+      }
 
-        const opts: WarehouseOption[] = (list || [])
-          .filter(Boolean)
-          .map((w) => {
-            const wid = String(w.id || w.warehouse_id)
-            const name = String(w.name || w.label || w.warehouse_name || '')
+      // 2) Fetch from the dedicated endpoint
+      const res = await fetch(`/api/billing/clients/${id}/warehouses`, {
+        headers: { 'Cache-Control': 'no-store' },
+      })
 
-            // UX: do not include city/state in the dropdown label
-            const pretty = name ? name.trim() : wid
+      // One retry helps with occasional cold starts / transient failures
+      if (!res.ok) {
+        await new Promise((r) => setTimeout(r, 400))
+      }
 
-            return {
-              id: wid,
-              label: pretty,
-            }
-          })
-          .filter((w) => w.id && w.id !== 'null' && w.id !== 'undefined')
+      const res2 = res.ok ? res : await fetch(`/api/billing/clients/${id}/warehouses`, {
+        headers: { 'Cache-Control': 'no-store' },
+      })
 
-        // Deduplicate by id
-        const dedup = Array.from(new Map(opts.map((o) => [o.id, o])).values())
-        setWarehouseOptions(dedup)
-
-        // If a default warehouse exists, preselect it (only if nothing chosen yet)
-        const def = (list || []).find((w) => Boolean(w?.is_default))
-        const defId = def ? String(def.id || def.warehouse_id) : ''
-        if (!warehouseId && defId) setWarehouseId(defId)
-
-        // If there's only one warehouse, preselect it (only if nothing chosen yet)
-        if (!warehouseId && dedup.length === 1) setWarehouseId(dedup[0].id)
-
+      if (!res2.ok) {
+        const text = await res2.text().catch(() => '')
+        setWarehousesError('Failed to load warehouses.')
+        console.warn('[billing/clients/:id/warehouses] non-OK response', res2.status, text)
+        setWarehouseOptions([])
         return
       }
 
-      // Fallback: derive options from already-loaded invoices
-      const derived = Array.from(
-        new Set((invoices || []).map((r: any) => r.warehouse_id).filter(Boolean))
-      ).map((wid) => ({ id: String(wid), label: `Warehouse ${String(wid).slice(0, 8)}…` }))
+      const json = await res2.json()
+      const list = (json?.data || json?.warehouses || []) as any[]
 
-      setWarehouseOptions(derived)
-      if (!res.ok) {
-        setWarehousesError('Warehouses endpoint not available (using fallback).')
+      const optsList: WarehouseOption[] = (list || [])
+        .filter(Boolean)
+        .map((w) => {
+          const wid = String(w.id || w.warehouse_id)
+          const name = String(w.name || w.label || w.warehouse_name || '')
+          const pretty = name ? name.trim() : wid
+          return { id: wid, label: pretty }
+        })
+        .filter((w) => w.id && w.id !== 'null' && w.id !== 'undefined')
+
+      // Deduplicate by id
+      const dedup = Array.from(new Map(optsList.map((o) => [o.id, o])).values())
+      setWarehouseOptions(dedup)
+
+      // Cache for this session
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(cacheKey, JSON.stringify(dedup))
       }
+
+      // Preselect default warehouse if provided
+      const def = (list || []).find((w) => Boolean(w?.is_default))
+      const defId = def ? String(def.id || def.warehouse_id) : ''
+      if (!warehouseId && defId) setWarehouseId(defId)
+
+      // If there's only one warehouse, preselect it
+      if (!warehouseId && dedup.length === 1) setWarehouseId(dedup[0].id)
     } catch (err: any) {
       console.error('Unexpected error loading warehouses', err)
       setWarehousesError(err?.message || 'Unexpected error loading warehouses')
-
-      // Fallback: derive options from already-loaded invoices
-      const derived = Array.from(
-        new Set((invoices || []).map((r: any) => r.warehouse_id).filter(Boolean))
-      ).map((wid) => ({ id: String(wid), label: `Warehouse ${String(wid).slice(0, 8)}…` }))
-
-      setWarehouseOptions(derived)
+      setWarehouseOptions([])
     } finally {
       setIsWarehousesLoading(false)
     }
@@ -310,7 +329,7 @@ export default function ClientInvoicesPage() {
   useEffect(() => {
     fetchInvoices()
     fetchClientInfo()
-    fetchWarehouses()
+    fetchWarehouses({ force: true })
   }, [id])
 
   // Auto-refresh when returning to this tab/page so totals reflect edits
@@ -334,12 +353,6 @@ export default function ClientInvoicesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  useEffect(() => {
-    if (isPeriodModalOpen) {
-      fetchWarehouses()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPeriodModalOpen])
 
   const handleDeleteInvoice = async (invoiceId: string) => {
     if (!confirm('Are you sure you want to delete this invoice?')) {

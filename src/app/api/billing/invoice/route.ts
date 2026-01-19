@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 
 type DbInvoiceRow = {
   id: string
@@ -21,11 +21,54 @@ type DbInvoiceRow = {
 }
 
 export async function GET() {
-  const supabase = (createRouteHandlerClient as any)({ cookies })
+  const cookieStore = (await cookies()) as any
 
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          try {
+            ;(cookieStore as any).delete(name)
+          } catch {
+            cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+          }
+        },
+      },
+    }
+  )
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parentAccountId =
+    (user.app_metadata as any)?.parent_account_id ??
+    (user.user_metadata as any)?.parent_account_id ??
+    (user.app_metadata as any)?.account_id ??
+    (user.user_metadata as any)?.account_id
+
+  if (!parentAccountId) {
+    return NextResponse.json(
+      { error: 'Missing account context for user' },
+      { status: 403 }
+    )
+  }
 
   const { data, error } = await supabase
-    .from('b1_v_billing_invoices_1_view') 
+    .from('b1_v_billing_invoices_1_view')
     .select(
       `
       id,
@@ -45,6 +88,7 @@ export async function GET() {
       client_logo_url
     `
     )
+    .eq('parent_account_id', parentAccountId)
     .order('issue_date', { ascending: false })
 
   if (error) {
