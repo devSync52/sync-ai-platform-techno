@@ -1,15 +1,59 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
-    const clientAccountId = params.id
-    const parentAccountId = '80dddf96-059f-4d4a-86f0-69443ceb0db9'
+    const cookieStore = (await cookies()) as any
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            cookieStore.set({ name, value, ...options })
+          },
+          remove(name: string, options: any) {
+            try {
+              ;(cookieStore as any).delete(name)
+            } catch {
+              cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+            }
+          },
+        },
+      }
+    )
+
+    const { id: clientAccountId } = await params
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+    }
+
+    const parentAccountId =
+      (user.app_metadata as any)?.parent_account_id ??
+      (user.user_metadata as any)?.parent_account_id ??
+      (user.app_metadata as any)?.account_id ??
+      (user.user_metadata as any)?.account_id
+
+    if (!parentAccountId) {
+      return NextResponse.json(
+        { success: false, message: 'Missing account context' },
+        { status: 403 }
+      )
+    }
 
     const { data: clientInfo, error: clientInfoError } = await supabase
       .from('b1_v_billing_configs')

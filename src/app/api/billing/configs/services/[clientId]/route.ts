@@ -1,117 +1,82 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 
-/**
- * GET – lista serviços efetivos + overrides do cliente
- */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { clientId: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { clientId } = params
-  const supabase = (createRouteHandlerClient as any)({ cookies })
+  try {
+    const { id: warehouseId } = await params
 
-  // Aqui você pode apontar pra sua view de serviços efetivos:
-  // ex: public.b1_v_billing_services_by_client ou similar
-  const { data, error } = await supabase
-    .from('b1_v_billing_services_by_client') // ajuste o nome da view se for outro
-    .select('*')
-    .eq('client_account_id', clientId)
+    if (!warehouseId || warehouseId === 'undefined') {
+      return NextResponse.json({ error: 'Missing warehouse id' }, { status: 400 })
+    }
 
-  if (error) {
-    console.error('[billing/services] GET error:', error)
+    const cookieStore = (await cookies()) as any
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            cookieStore.set({ name, value, ...options })
+          },
+          remove(name: string, options: any) {
+            try {
+              ;(cookieStore as any).delete(name)
+            } catch {
+              cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+            }
+          },
+        },
+      }
+    )
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const parentAccountId =
+      (user.app_metadata as any)?.parent_account_id ??
+      (user.user_metadata as any)?.parent_account_id ??
+      (user.app_metadata as any)?.account_id ??
+      (user.user_metadata as any)?.account_id
+
+    if (!parentAccountId) {
+      return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
+    }
+
+    const { data, error } = await supabase
+      .from('b1_v_warehouse_services_1')
+      .select('*')
+      .eq('warehouse_id', warehouseId)
+      .eq('parent_account_id', parentAccountId)
+
+    if (error) {
+      console.error('[warehouse/services] GET error:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch warehouse services', details: error.message },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ services: data ?? [] })
+  } catch (err: any) {
+    console.error('[warehouse/services] GET unexpected:', err)
     return NextResponse.json(
-      { error: 'Failed to fetch client services', details: error.message },
+      { error: err?.message ?? 'Unexpected error' },
       { status: 500 }
     )
   }
-
-  return NextResponse.json({ services: data ?? [] })
-}
-
-/**
- * PATCH – salva overrides de serviços do cliente
- */
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { clientId: string } }
-) {
-  const { clientId } = params
-  const supabase = (createRouteHandlerClient as any)({ cookies })
-
-  const body = await req.json()
-  console.log('[billing/services] PATCH body:', body)
-
-  const overrides = Array.isArray(body.overrides) ? body.overrides : []
-
-  if (!overrides.length) {
-    return NextResponse.json(
-      { error: 'No overrides provided' },
-      { status: 400 }
-    )
-  }
-
-  // Buscar parent_account_id e warehouse padrão do cliente
-  const { data: clientRow, error: clientErr } = await supabase
-    .from('billing_clients_view')
-    .select('parent_account_id, warehouse_id')
-    .eq('client_account_id', clientId)
-    .maybeSingle()
-
-  if (clientErr || !clientRow?.parent_account_id) {
-    console.error('[billing/services] missing parent_account_id', clientErr, clientRow)
-    return NextResponse.json(
-      { error: 'Cannot find parent_account_id for client' },
-      { status: 400 }
-    )
-  }
-
-  // Montar payload para upsert
-  const rows = overrides
-    .filter((o: any) => !!o.service_id)
-    .map((o: any) => {
-      // Aceita override_rate_cents ou override_rate_usd
-      let override_rate_cents: number | null = null
-
-      if (typeof o.override_rate_cents === 'number') {
-        override_rate_cents = o.override_rate_cents
-      } else if (typeof o.override_rate_usd === 'number') {
-        override_rate_cents = Math.round(o.override_rate_usd * 100)
-      }
-
-      return {
-        parent_account_id: clientRow.parent_account_id,
-        client_account_id: clientId,
-        warehouse_id: o.warehouse_id ?? clientRow.warehouse_id ?? null,
-        service_id: o.service_id,
-        override_rate_cents,
-        active: o.active ?? true,
-      }
-    })
-
-  console.log('[billing/services] PATCH upsert rows:', rows)
-
-  if (!rows.length) {
-    return NextResponse.json(
-      { error: 'No valid overrides to upsert' },
-      { status: 400 }
-    )
-  }
-
-  const { data, error } = await supabase
-  .from('billing_client_service_overrides')
-  .upsert(rows, { onConflict: 'client_account_id,warehouse_id,service_id' })
-  .select()
-
-  if (error) {
-    console.error('[billing/services] PATCH error:', error)
-    return NextResponse.json(
-      { error: 'Failed to save overrides', details: error.message },
-      { status: 400 }
-    )
-  }
-
-  return NextResponse.json({ success: true, overrides: data })
 }

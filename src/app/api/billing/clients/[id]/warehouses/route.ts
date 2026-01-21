@@ -1,22 +1,53 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 
 // GET /api/billing/clients/:id/warehouses
 // Returns warehouses for this client with a user-friendly label.
 // Backed by: public.b1_v_client_warehouses_options
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const clientId = params?.id
+  const { id: clientId } = await params
 
   if (!clientId || clientId === 'undefined') {
     return NextResponse.json({ error: 'Missing client id' }, { status: 400 })
   }
 
-  const supabase = (createRouteHandlerClient as any)({ cookies })
+  const cookieStore = (await cookies()) as any
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          try {
+            ;(cookieStore as any).delete(name)
+          } catch {
+            cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+          }
+        },
+      },
+    }
+  )
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   try {
     // Optional: resolve parent_account_id to avoid RLS-related empty results

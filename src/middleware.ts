@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { Database } from '@/types/supabase'
 
 export async function middleware(req: NextRequest) {
   const requestHeaders = new Headers(req.headers)
@@ -28,39 +26,47 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Cria response + supabase
+  // Cria response (middleware roda no Edge Runtime)
   const res = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   })
 
-  const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get: (name: string) => req.cookies.get(name)?.value,
-        set: (name: string, value: string, options) => {
-          res.cookies.set({ name, value, ...options })
-        },
-        remove: (name: string, options) => {
-          res.cookies.set({ name, value: '', ...options })
-        },
-      },
-    }
-  )
+  // Supabase SSR client puxa APIs de Node (ex: process.version) e não é compatível com Edge.
+  // Aqui fazemos um check leve por cookie/token apenas para redirecionar cedo.
+  // A proteção real deve continuar no servidor (route handlers / server components).
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Tenta encontrar um access token do Supabase nas cookies (nomes podem variar conforme config)
+  const accessToken =
+    req.cookies.get('sb-access-token')?.value ||
+    req.cookies.get('supabase-access-token')?.value ||
+    req.cookies.get('sb:token')?.value ||
+    req.cookies
+      .getAll()
+      .find((c) => c.name.includes('sb-') && c.name.includes('auth-token'))?.value
 
-  if (!user) {
+  if (!accessToken) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
+  // Opcional: tenta ler role do JWT (SEM validar assinatura) apenas para redirect de UX.
+  // Não use isso como autorização.
+  let userRole = ''
+  try {
+    const parts = accessToken.split('.')
+    if (parts.length >= 2) {
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+      const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
+      const json = atob(padded)
+      const payload = JSON.parse(json) as any
+      userRole = (payload?.user_metadata?.role as string) || ''
+    }
+  } catch {
+    // ignore
+  }
+
   // Redirect staff-client to orders/quotes instead of dashboard
-  const userRole = (user.user_metadata?.role as string) || ''
   const path = req.nextUrl.pathname
   if (userRole === 'staff-client' && (path === '/' || path === '/dashboard')) {
     return NextResponse.redirect(new URL('/orders/quotes', req.url))

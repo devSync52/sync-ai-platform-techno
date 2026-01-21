@@ -16,7 +16,10 @@ interface IntegrationData {
 
 const availableIntegrations: { name: string; type: IntegrationType }[] = [
   { name: 'Sellercloud', type: 'sellercloud' },
-  { name: 'Extensiv (3PL)', type: 'extensiv' }
+  { name: 'Extensiv (3PL)', type: 'extensiv' },
+  { name: 'UPS', type: 'ups' },
+  { name: 'FedEx', type: 'fedex' },
+  { name: 'QuickBooks', type: 'quickbooks' }
 ]
 
 export default function IntegrationsPage() {

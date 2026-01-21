@@ -1,25 +1,65 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 
-/**
- * GET billing config para um clientId
- */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { clientId: string } }
+  { params }: { params: Promise<{ clientId: string }> }
 ) {
-  const { clientId } = params
+  const { clientId } = await params
 
-  // Usa exatamente o padrão que já estava funcionando em runtime
-  // e "burla" o TS com cast em createRouteHandlerClient
-  const supabase = (createRouteHandlerClient as any)({ cookies })
+  const cookieStore = (await cookies()) as any
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          try {
+            ;(cookieStore as any).delete(name)
+          } catch {
+            cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+          }
+        },
+      },
+    }
+  )
+  
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parentAccountId =
+    (user.app_metadata as any)?.parent_account_id ??
+    (user.user_metadata as any)?.parent_account_id ??
+    (user.app_metadata as any)?.account_id ??
+    (user.user_metadata as any)?.account_id
+
+  if (!parentAccountId) {
+    return NextResponse.json(
+      { error: 'Missing account context' },
+      { status: 403 }
+    )
+  }
 
   const { data, error } = await supabase
-    .from('billing_configs') // view pública
+    .from('billing_configs')
     .select('*')
     .eq('client_account_id', clientId)
+    .eq('parent_account_id', parentAccountId)
     .maybeSingle()
 
   if (error) {
@@ -33,25 +73,66 @@ export async function GET(
   return NextResponse.json({ config: data })
 }
 
-/**
- * PATCH para atualizar ou criar config
- */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { clientId: string } }
+  { params }: { params: Promise<{ clientId: string }> }
 ) {
-  const { clientId } = params
+  const { clientId } = await params
 
-  const supabase = (createRouteHandlerClient as any)({ cookies })
+  const cookieStore = (await cookies()) as any
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          try {
+            ;(cookieStore as any).delete(name)
+          } catch {
+            cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+          }
+        },
+      },
+    }
+  )
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parentAccountId =
+    (user.app_metadata as any)?.parent_account_id ??
+    (user.user_metadata as any)?.parent_account_id ??
+    (user.app_metadata as any)?.account_id ??
+    (user.user_metadata as any)?.account_id
+
+  if (!parentAccountId) {
+    return NextResponse.json(
+      { error: 'Missing account context' },
+      { status: 403 }
+    )
+  }
 
   const body = await req.json()
   console.log('[billing/configs] PATCH body:', body)
 
-  // Buscar parent_account_id (e warehouse, se tiver) do cliente
   const { data: clientRow, error: clientErr } = await supabase
     .from('billing_clients_view')
     .select('parent_account_id, warehouse_id')
     .eq('client_account_id', clientId)
+    .eq('parent_account_id', parentAccountId)
     .maybeSingle()
 
   if (clientErr || !clientRow?.parent_account_id) {
@@ -66,8 +147,6 @@ export async function PATCH(
     parent_account_id: clientRow.parent_account_id,
     client_account_id: clientId,
     warehouse_id: body.warehouse_id ?? clientRow.warehouse_id ?? null,
-
-    // campos expostos no front
     billing_active: body.billing_active ?? true,
     billing_method: body.billing_method ?? 'postpaid',
     min_monthly_fee_cents: body.min_monthly_fee_cents ?? 0,
@@ -82,7 +161,7 @@ export async function PATCH(
   console.log('[billing/configs] PATCH upsert payload:', payload)
 
   const { data, error } = await supabase
-    .from('billing_configs') // view pública updatable
+    .from('billing_configs')
     .upsert(payload, {
       onConflict: 'client_account_id,warehouse_id',
     })

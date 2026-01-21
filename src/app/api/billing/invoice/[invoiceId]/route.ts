@@ -1,14 +1,59 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import type { NextRequest } from 'next/server'
 
 export async function GET(
   _req: Request,
-  { params }: { params: { invoiceId: string } }
+  { params }: { params: Promise<{ invoiceId: string }> }
 ) {
-  const invoiceId = params.invoiceId
-  const supabase = createRouteHandlerClient({ cookies })
+  const { invoiceId } = await params
+
+  const cookieStore = (await cookies()) as any
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          try {
+            ;(cookieStore as any).delete(name)
+          } catch {
+            cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+          }
+        },
+      },
+    }
+  )
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parentAccountId =
+    (user.app_metadata as any)?.parent_account_id ??
+    (user.user_metadata as any)?.parent_account_id ??
+    (user.app_metadata as any)?.account_id ??
+    (user.user_metadata as any)?.account_id
+
+  if (!parentAccountId) {
+    return NextResponse.json(
+      { success: false, message: 'Missing account context' },
+      { status: 403 }
+    )
+  }
 
   try {
     // 1 — Load invoice header
@@ -16,6 +61,7 @@ export async function GET(
       .from('b1_v_billing_invoices_1_view')
       .select('*')
       .eq('id', invoiceId)
+      .eq('parent_account_id', parentAccountId)
       .maybeSingle()
 
     if (invError) {
@@ -145,12 +191,71 @@ export async function GET(
 }
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { invoiceId: string } }
+  { params }: { params: Promise<{ invoiceId: string }> }
 ) {
-  const supabase = (createRouteHandlerClient as any)({ cookies })
-  const { invoiceId } = params
+  const { invoiceId } = await params
+
+  const cookieStore = (await cookies()) as any
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          try {
+            ;(cookieStore as any).delete(name)
+          } catch {
+            cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+          }
+        },
+      },
+    }
+  )
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parentAccountId =
+    (user.app_metadata as any)?.parent_account_id ??
+    (user.user_metadata as any)?.parent_account_id ??
+    (user.app_metadata as any)?.account_id ??
+    (user.user_metadata as any)?.account_id
+
+  if (!parentAccountId) {
+    return NextResponse.json(
+      { success: false, message: 'Missing account context' },
+      { status: 403 }
+    )
+  }
 
   console.log('[billing/invoices] DELETE invoiceId=', invoiceId)
+
+  const { data: invoiceRow, error: invErr } = await supabase
+    .from('b1_v_billing_invoices_1_view')
+    .select('id')
+    .eq('id', invoiceId)
+    .eq('parent_account_id', parentAccountId)
+    .maybeSingle()
+
+  if (invErr || !invoiceRow) {
+    return NextResponse.json(
+      { success: false, message: 'Invoice not found' },
+      { status: 404 }
+    )
+  }
 
   const { data, error } = await supabase.rpc(
     'billing_delete_invoice_1',
