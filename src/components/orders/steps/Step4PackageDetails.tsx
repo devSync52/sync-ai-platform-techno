@@ -53,85 +53,52 @@ function ProductSearchModal({
   warehouseId?: string
   shipFromName?: string
 }) {
-  const supabase = useSupabase()
+
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
   const handleSearch = async () => {
-    // IMPORTANT:
-    // - `warehouseId` coming from Step 2 is `public.warehouses.id`
-    // - `vw_products_master_enriched.warehouse_id` is the WMS/billing warehouse id (different UUID space)
-    // So we resolve the correct warehouse_id to filter the view by using the ship-from name.
-
-    if (!clientId || !warehouseId) return
-    console.log('[Step4][ProductSearch] Searching products', {
+    if (!clientId) return
+  
+    console.log('[Step4][ProductSearch] Searching products (SSR)', {
       clientId,
       warehouseId,
       searchTerm,
       shipFromName,
     })
+  
     setLoading(true)
-
-    const shipFromKey = String(shipFromName || '').trim().split(' ')[0] // e.g. "Miami"
-    let resolvedViewWarehouseId: string | null = null
-
-    if (shipFromKey.length > 0) {
-      const { data: whRows, error: whErr } = await supabase
-        .from('vw_products_master_enriched')
-        .select('warehouse_id, warehouse_name')
-        .eq('account_id', clientId)
-        .ilike('warehouse_name', `%${shipFromKey}%`)
-        .limit(5)
-
-      if (whErr) {
-        console.error('[Step4][ProductSearch] Failed to resolve warehouse for view', whErr)
-      } else {
-        resolvedViewWarehouseId = (whRows?.[0] as any)?.warehouse_id ?? null
-        console.log('[Step4][ProductSearch] Resolved view warehouse', {
-          shipFromKey,
-          resolvedViewWarehouseId,
-          candidates: (whRows || []).map((r: any) => ({ id: r.warehouse_id, name: r.warehouse_name })),
-        })
-      }
-    }
-
-    if (!resolvedViewWarehouseId) {
-      console.warn('[Step4][ProductSearch] Could not resolve warehouse for view; refusing to search to avoid wrong-warehouse results', {
+  
+    try {
+      const params = new URLSearchParams({
         clientId,
-        warehouseId,
-        shipFromName,
+        shipFromName: shipFromName || '',
+        term: searchTerm || '',
       })
-      setResults([])
+  
+      const res = await fetch(`/api/products/search?${params.toString()}`, {
+        credentials: 'include',
+      })
+  
+      const json = await res.json().catch(() => ({}))
+  
+      if (!res.ok) {
+        console.error('[Step4][ProductSearch] SSR search failed', json)
+        setResults([])
+        return
+      }
+  
+      console.log('[Step4][ProductSearch] SSR search ok', {
+        resolvedViewWarehouseId: json?.resolvedViewWarehouseId ?? null,
+        shipFromKey: json?.shipFromKey ?? null,
+        count: Array.isArray(json?.products) ? json.products.length : 0,
+      })
+  
+      setResults(json?.products || [])
+    } finally {
       setLoading(false)
-      return
     }
-
-    let query = supabase
-      .from('vw_products_master_enriched')
-      .select('id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, available, on_hand, allocated, warehouse_id, inventory_warehouse_id, parent_account_id, account_id, client_account_id')
-      .eq('account_id', clientId)
-      .eq('warehouse_id', resolvedViewWarehouseId)
-      .limit(20)
-
-    const term = (searchTerm || '').trim()
-    if (term.length > 0) {
-      query = query.or(`sku.ilike.%${term}%,description.ilike.%${term}%`)
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error('❌ Failed to fetch products:', error)
-      setResults([])
-    } else {
-      console.log('[Step4][ProductSearch] Results', {
-        count: (data || []).length,
-        sample: (data || []).slice(0, 3),
-      })
-      setResults(data || [])
-    }
-    setLoading(false)
   }
 
   const handleAdd = (product: any) => {
@@ -151,7 +118,6 @@ function ProductSearchModal({
       stackable: false,
       hazardous: false,
       freight_class: '',
-      // vw_products_master_enriched não tem preço, então deixamos 0 por padrão
       price: 0,
       subtotal: 0,
     }
@@ -234,52 +200,72 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
   const [shipFromName, setShipFromName] = useState<string>('')
   const [isCalculating, setIsCalculating] = useState(false)
 
-  const supabase = useSupabase()
+
   const currentUser = useCurrentUser()
+
+  const getDraft = async () => {
+    const res = await fetch(`/api/quotes/drafts/${draftId}`, { credentials: 'include' })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(json?.error || json?.message || 'Failed to load draft')
+    }
+    return (json?.draft ?? json?.data?.draft ?? null) as any
+  }
+  
+  const patchDraft = async (patch: any) => {
+    const res = await fetch(`/api/quotes/drafts/${draftId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(patch),
+    })
+  
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(json?.error || json?.message || 'Failed to update draft')
+    }
+  
+    return (json?.draft ?? json?.data?.draft ?? null) as any
+  }
 
   useEffect(() => {
     async function fetchClientId() {
       if (!currentUser?.account_id) return
-
-      const { data: draft, error: draftError } = await supabase
-        .from('saip_quote_drafts')
-        .select('client, ship_from')
-        .eq('id', draftId)
-        .single()
-
-      if (draftError || !draft?.client) {
-        console.error('❌ Failed to fetch client ID:', draftError)
-        return
-      }
-
-      setClientId(draft.client)
-      const wh = (draft as any)?.ship_from?.warehouse_id ?? (draft as any)?.ship_from?.warehouseId ?? ''
-      const shipName = (draft as any)?.ship_from?.name ?? ''
-      setWarehouseId(String(wh || ''))
-      setShipFromName(String(shipName || ''))
-      console.log('[Step4] Draft context loaded', {
-        draftId,
-        clientId: String(draft.client),
-        warehouseId: String(wh || ''),
-        shipFromName: String(shipName || ''),
-        shipFrom: (draft as any)?.ship_from ?? null,
-      })
-
-      const { data: draftData, error: draftFetchError } = await supabase
-        .from('saip_quote_drafts')
-        .select('items')
-        .eq('id', draftId)
-        .single()
-
-      if (draftFetchError) {
-        console.error('❌ Failed to load draft items:', draftFetchError)
-      } else if (draftData?.items) {
-        setItems(draftData.items)
+    
+      try {
+        const draft = await getDraft()
+    
+        if (!draft?.client) {
+          console.error('❌ Failed to fetch client ID: missing client on draft')
+          return
+        }
+    
+        setClientId(String(draft.client))
+    
+        const wh = (draft as any)?.ship_from?.warehouse_id ?? (draft as any)?.ship_from?.warehouseId ?? ''
+        const shipName = (draft as any)?.ship_from?.name ?? ''
+    
+        setWarehouseId(String(wh || ''))
+        setShipFromName(String(shipName || ''))
+    
+        console.log('[Step4] Draft context loaded', {
+          draftId,
+          clientId: String(draft.client),
+          warehouseId: String(wh || ''),
+          shipFromName: String(shipName || ''),
+          shipFrom: (draft as any)?.ship_from ?? null,
+        })
+    
+        if ((draft as any)?.items) {
+          setItems((draft as any).items)
+        }
+      } catch (e) {
+        console.error('❌ Failed to load draft context:', e)
       }
     }
 
     fetchClientId()
-  }, [draftId, initialItems, supabase, currentUser])
+  }, [draftId, currentUser])
 
   const handleItemChange = (index: number, field: keyof PackageItem, value: any) => {
     const updated = [...items]
@@ -380,18 +366,15 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
         service_class: '',
       }
   
-      const { error } = await supabase
-        .from('saip_quote_drafts')
-        .update({
+      try {
+        await patchDraft({
           items,
           preferences,
           // Always clear previous quote results when package details change
           quote_results: null,
         })
-        .eq('id', draftId)
-  
-      if (error) {
-        console.error('❌ Failed to save quote items:', error)
+      } catch (e) {
+        console.error('❌ Failed to save quote items:', e)
         return
       }
     
@@ -509,7 +492,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
             + Search Product
           </Button>
           <Button onClick={handleSaveAndNext} disabled={items.length === 0 || isCalculating}>
-          {isCalculating ? 'Calculating package...' : nextLabel}
+          {isCalculating ? 'Saving order...' : nextLabel}
           </Button>
         </div>
       </div>

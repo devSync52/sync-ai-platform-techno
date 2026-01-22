@@ -50,85 +50,46 @@ function ProductSearchModal({
   warehouseId?: string
   shipFromName?: string
 }) {
-  const supabase = useSupabase()
+
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
   const handleSearch = async () => {
-    // IMPORTANT:
-    // - `warehouseId` coming from Step 2 is `public.warehouses.id`
-    // - `vw_products_master_enriched.warehouse_id` is the WMS/billing warehouse id (different UUID space)
-    // So we resolve the correct warehouse_id to filter the view by using the ship-from name.
-
     if (!clientId || !warehouseId) return
-    console.log('[Step4][ProductSearch] Searching products', {
+  
+    console.log('[Step4][ProductSearch] Searching products (SSR)', {
       clientId,
       warehouseId,
       searchTerm,
       shipFromName,
     })
+  
     setLoading(true)
-
-    const shipFromKey = String(shipFromName || '').trim().split(' ')[0] // e.g. "Miami"
-    let resolvedViewWarehouseId: string | null = null
-
-    if (shipFromKey.length > 0) {
-      const { data: whRows, error: whErr } = await supabase
-        .from('vw_products_master_enriched')
-        .select('warehouse_id, warehouse_name')
-        .eq('account_id', clientId)
-        .ilike('warehouse_name', `%${shipFromKey}%`)
-        .limit(5)
-
-      if (whErr) {
-        console.error('[Step4][ProductSearch] Failed to resolve warehouse for view', whErr)
-      } else {
-        resolvedViewWarehouseId = (whRows?.[0] as any)?.warehouse_id ?? null
-        console.log('[Step4][ProductSearch] Resolved view warehouse', {
-          shipFromKey,
-          resolvedViewWarehouseId,
-          candidates: (whRows || []).map((r: any) => ({ id: r.warehouse_id, name: r.warehouse_name })),
-        })
-      }
-    }
-
-    if (!resolvedViewWarehouseId) {
-      console.warn('[Step4][ProductSearch] Could not resolve warehouse for view; refusing to search to avoid wrong-warehouse results', {
+  
+    try {
+      const params = new URLSearchParams({
         clientId,
-        warehouseId,
-        shipFromName,
+        shipFromName: shipFromName || '',
+        term: searchTerm || '',
       })
-      setResults([])
+  
+      const res = await fetch(`/api/products/search?${params.toString()}`, {
+        credentials: 'include',
+      })
+  
+      const json = await res.json().catch(() => ({}))
+  
+      if (!res.ok) {
+        console.error('[Step4][ProductSearch] SSR search failed', json)
+        setResults([])
+        return
+      }
+  
+      setResults(json?.products || [])
+    } finally {
       setLoading(false)
-      return
     }
-
-    let query = supabase
-      .from('vw_products_master_enriched')
-      .select('id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, available, on_hand, allocated, warehouse_id, inventory_warehouse_id, parent_account_id, account_id, client_account_id')
-      .eq('account_id', clientId)
-      .eq('warehouse_id', resolvedViewWarehouseId)
-      .limit(20)
-
-    const term = (searchTerm || '').trim()
-    if (term.length > 0) {
-      query = query.or(`sku.ilike.%${term}%,description.ilike.%${term}%`)
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error('❌ Failed to fetch products:', error)
-      setResults([])
-    } else {
-      console.log('[Step4][ProductSearch] Results', {
-        count: (data || []).length,
-        sample: (data || []).slice(0, 3),
-      })
-      setResults(data || [])
-    }
-    setLoading(false)
   }
 
   const handleAdd = (product: any) => {

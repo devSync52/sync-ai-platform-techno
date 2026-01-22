@@ -89,6 +89,22 @@ export default function Step5DeliveryPreferences({
 }: Step5DeliveryPreferencesProps) {
   const supabase  = useSupabase()
   const router = useRouter();
+
+  const patchDraft = async (patch: any) => {
+    const res = await fetch(`/api/quotes/drafts/${draftId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(patch),
+    })
+
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(json?.error || json?.message || 'Failed to update draft')
+    }
+
+    return (json?.draft ?? json?.data?.draft ?? null) as any
+  }
   const [loading, setLoading] = useState(true)
   const [isSimulating, setIsSimulating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -912,29 +928,25 @@ export default function Step5DeliveryPreferences({
               }
 
               try {
-                setSaving(true);
+                setSaving(true)
 
-                const { error } = await supabase
-                  .from('saip_quote_drafts')
-                  .update({
-                    selected_service: selectedService, // salva tudo
-                    status: 'quoted',
-                    updated_at: new Date(),
-                  })
-                  .eq('id', draft!.id);
+                const next = await patchDraft({
+                  selected_service: selectedService,
+                  status: 'quoted',
+                  updated_at: new Date().toISOString(),
+                })
 
-                if (error) {
-                  console.error('❌ Failed to save selection:', error);
-                  toast.error('Failed to save selection.');
-                } else {
-                  toast.success('Selection saved successfully!');
-                  router.push('/orders/quotes');
+                if (next) {
+                  setDraft((prev) => (prev ? { ...prev, ...next } : prev))
                 }
+
+                toast.success('Selection saved successfully!')
+                router.push('/orders/quotes')
               } catch (err) {
-                console.error('❌ Unexpected error saving quote:', err);
-                toast.error('Unexpected error saving quote.');
+                console.error('❌ Failed to save selection:', err)
+                toast.error('Failed to save selection.')
               } finally {
-                setSaving(false);
+                setSaving(false)
               }
             }}
           >

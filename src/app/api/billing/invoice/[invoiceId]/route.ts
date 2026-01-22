@@ -104,16 +104,13 @@ export async function GET(
       const rows = (page ?? []) as any[]
       itemsAll = itemsAll.concat(rows)
 
-      // If we got less than a full page, we're done
       if (rows.length < pageSize) break
 
       offset += pageSize
 
-      // Hard safety guard to prevent infinite loops in weird cases
       if (offset > 100_000) break
     }
 
-    // Safety: fetch storage line explicitly (should be 0 or 1)
     const { data: storageRows, error: storageErr } = await supabase
       .from('b1_v_invoice_items_1')
       .select('*')
@@ -144,19 +141,12 @@ export async function GET(
         return ad - bd
       })
 
-    // Normalize client label fields
     const clientLabel =
       invoice.client_name ??
       invoice.client_code ??
       invoice.client_account_id
 
     const storageCount = (items ?? []).filter((it: any) => String(it?.usage_kind) === 'storage').length
-    console.log(
-      '[invoice_GET] fetched=', (itemsAll ?? []).length,
-      'deduped=', (items ?? []).length,
-      'storage_count=',
-      storageCount
-    )
 
     return NextResponse.json(
       {
@@ -168,7 +158,7 @@ export async function GET(
         data: {
           invoice: {
             ...invoice,
-            client_label: clientLabel, // use in UI
+            client_label: clientLabel,
             client_logo_url: invoice.client_logo_url ?? null,
             client_name: invoice.client_name ?? null,
           },

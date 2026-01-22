@@ -4,7 +4,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
-import type { PostgrestError } from '@supabase/supabase-js'
 import QuoteStepsHeader, { QuoteStepsHeaderProps } from './QuoteStepsHeader'
 import { Step1ClientSelection } from './steps/Step1ClientSelection'
 import { Step2WarehouseSelection } from './steps/Step2WarehouseSelection'
@@ -14,6 +13,14 @@ import { Button } from '@/components/ui/button'
 
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
+
+type WizardError = {
+  message: string
+  details?: string | null
+  hint?: string | null
+  code?: string | null
+}
+
 
 // Robustly extract a client id from various draft.client shapes (string, JSON object, JSON-encoded string, etc)
 const extractClientId = (raw: any): string | null => {
@@ -75,7 +82,7 @@ export default function OrderWizard() {
   const { id: quoteId } = useParams()
   const [quoteData, setQuoteData] = useState<Database['public']['Tables']['saip_quote_drafts']['Row'] | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<PostgrestError | null>(null)
+  const [error, setError] = useState<WizardError | null>(null)
   const [currentStep, setCurrentStep] = useState(0)
 
   const [docsOpen, setDocsOpen] = useState(false)
@@ -147,19 +154,52 @@ export default function OrderWizard() {
     if (!quoteId) return
 
     const fetchQuote = async () => {
-      const { data, error } = await supabase
-        .from('saip_quote_drafts')
-        .select('*')
-        .eq('id', Array.isArray(quoteId) ? quoteId[0] : quoteId)
-        .single()
-
-      if (error) {
-        setError(error)
-      } else {
-        setQuoteData(data)
+      try {
+        const id = Array.isArray(quoteId) ? quoteId[0] : quoteId
+    
+        const res = await fetch(`/api/quotes/drafts/${id}`, {
+          credentials: 'include',
+        })
+    
+        const json = await res.json().catch(() => ({}))
+    
+        if (!res.ok) {
+          setError({
+            message:
+              json?.error ||
+              json?.message ||
+              'Quote not found or access denied (RLS).',
+            details: null,
+            hint: json?.hint ?? null,
+            code: String(res.status),
+          })
+          return
+        }
+    
+        const draft = (json?.draft ?? json?.data?.draft ?? null) as any
+    
+        if (!draft) {
+          setError({
+            message: 'Quote not found or access denied (RLS).',
+            details: null,
+            hint:
+              'Ensure the server route validates the user and tenant for this draft.',
+            code: 'PGRST116',
+          })
+          return
+        }
+    
+        setQuoteData(draft)
+      } catch (e: any) {
+        setError({
+          message: e?.message || 'Failed to load quote',
+          details: null,
+          hint: null,
+          code: 'FETCH_ERROR',
+        })
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
     fetchQuote()
@@ -323,39 +363,56 @@ export default function OrderWizard() {
 
   const saveFilesToDraft = async (files: EnrichmentFile[]) => {
     if (!quoteData?.id) return
-
+  
     const prefs: any = quoteData?.preferences ?? {}
-    const nextPrefs = {
-      ...prefs,
-      enrichment_files: files,
+    const nextPrefs = { ...prefs, enrichment_files: files }
+  
+    const res = await fetch(`/api/quotes/drafts/${quoteData.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ preferences: nextPrefs }),
+    })
+  
+    const json = await res.json().catch(() => ({}))
+  
+    if (!res.ok) {
+      console.error('❌ Failed to save enrichment_files (api):', json)
+      throw new Error(json?.error || 'Failed to save enrichment files')
     }
-
-    const { error } = await supabase
-      .from('saip_quote_drafts')
-      .update({ preferences: nextPrefs as any })
-      .eq('id', quoteData.id)
-
-    if (error) {
-      console.error('❌ Failed to save enrichment_files:', error)
-      throw error
-    }
-
-    setQuoteData((prev) => (prev ? { ...prev, preferences: nextPrefs as any } : prev))
+  
+    const nextDraft = (json?.draft ?? json?.data?.draft ?? null) as any
+    if (nextDraft) setQuoteData(nextDraft)
+    else setQuoteData((prev) => (prev ? { ...prev, preferences: nextPrefs as any } : prev))
   }
 
-  const updateDraft = async (patch: Partial<Database['public']['Tables']['saip_quote_drafts']['Update']>) => {
+  const updateDraft = async (
+    patch: Partial<Database['public']['Tables']['saip_quote_drafts']['Update']>
+  ) => {
     if (!quoteData?.id) throw new Error('Missing draft id')
-
-    const { data, error } = await supabase
-      .from('saip_quote_drafts')
-      .update(patch as any)
-      .eq('id', quoteData.id)
-      .select('*')
-      .single()
-
-    if (error) throw error
-    setQuoteData(data)
-    return data
+  
+    const res = await fetch(`/api/quotes/drafts/${quoteData.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(patch),
+    })
+  
+    const json = await res.json().catch(() => ({}))
+  
+    if (!res.ok) {
+      throw new Error(json?.error || json?.message || 'Failed to update draft')
+    }
+  
+    const nextDraft = (json?.draft ?? json?.data?.draft ?? null) as any
+    if (!nextDraft) {
+      throw new Error(
+        'Update succeeded but draft could not be read back. Ensure the server route returns the updated row.'
+      )
+    }
+  
+    setQuoteData(nextDraft)
+    return nextDraft
   }
 
   const getSuggestion = () => {
@@ -572,6 +629,7 @@ export default function OrderWizard() {
 
     const res = await fetch('/api/quotes/documents/upload', {
       method: 'POST',
+      credentials: 'include',
       body: form,
     })
 

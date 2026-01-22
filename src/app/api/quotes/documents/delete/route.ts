@@ -1,13 +1,17 @@
-
-
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
 
-// Server-side admin client (Service Role). Never expose this key to the browser.
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getAccountIdFromUser(user: any): string | null {
+  const accountId =
+    (user?.app_metadata as any)?.parent_account_id ??
+    (user?.user_metadata as any)?.parent_account_id ??
+    (user?.app_metadata as any)?.account_id ??
+    (user?.user_metadata as any)?.account_id ??
+    null
+
+  return accountId ? String(accountId) : null
+}
 
 type EnrichmentFile = {
   name: string
@@ -20,6 +24,44 @@ type EnrichmentFile = {
 
 export async function POST(req: Request) {
   try {
+    const cookieStore = (await cookies()) as any
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            cookieStore.set({ name, value, ...options })
+          },
+          remove(name: string, options: any) {
+            try {
+              ;(cookieStore as any).delete(name)
+            } catch {
+              cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+            }
+          },
+        },
+      }
+    )
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const callerAccountId = getAccountIdFromUser(user)
+    if (!callerAccountId) {
+      return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
+    }
+
     const body = await req.json().catch(() => null)
     const draftId = String(body?.draftId || '')
     const path = String(body?.path || '')
@@ -28,27 +70,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'draftId and path are required' }, { status: 400 })
     }
 
-    // Minimal access check: require the caller to pass the current app user id.
-    // This project currently does not carry a Supabase Auth session on the client.
-    // If you already have a server-side auth helper, replace this with that.
-    const callerUserId = req.headers.get('x-user-id')
-
-    const { data: draft, error: draftErr } = await supabaseAdmin
+    const { data: draft, error: draftErr } = await supabase
       .from('saip_quote_drafts')
-      .select('id, user_id, preferences')
+      .select('id, account_id, preferences')
       .eq('id', draftId)
-      .single()
+      .maybeSingle()
 
-    if (draftErr || !draft) {
-      return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+    if (draftErr) {
+      return NextResponse.json({ error: draftErr.message }, { status: 500 })
     }
 
-    if (!callerUserId || String(draft.user_id) !== String(callerUserId)) {
+    if (!draft) {
+      return NextResponse.json(
+        { error: 'Draft not found or access denied (RLS).' },
+        { status: 404 }
+      )
+    }
+
+    const draftAccountId = String((draft as any).account_id ?? '')
+    if (draftAccountId && draftAccountId !== callerAccountId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Best-effort remove from storage (ignore missing object)
-    const { error: rmErr } = await supabaseAdmin.storage.from('quote_uploads').remove([path])
+    const { error: rmErr } = await supabase.storage.from('quote_uploads').remove([path])
     if (rmErr) {
       // Keep going; we still want to remove the reference from the draft
       console.warn('⚠️ Storage remove error (continuing):', rmErr)
@@ -66,7 +111,7 @@ export async function POST(req: Request) {
       enrichment_files: nextFiles,
     }
 
-    const { error: updErr } = await supabaseAdmin
+    const { error: updErr } = await supabase
       .from('saip_quote_drafts')
       .update({ preferences: nextPrefs })
       .eq('id', draftId)

@@ -24,47 +24,29 @@ export function Step1ClientSelection({
 }) {
   const supabase = useSupabase()
   const currentUser = useCurrentUser()
-  console.log("🔎 Step1 - CURRENT USER:", JSON.stringify(currentUser, null, 2))
   const [clients, setClients] = useState<Account[]>([])
   const [selectedClientId, setSelectedClientId] = useState('')
   const [isLoadingDraft, setIsLoadingDraft] = useState(true)
 
   useEffect(() => {
     const fetchClients = async () => {
-      if (!currentUser?.account_id || !currentUser?.role) return;
+      try {
+        const res = await fetch('/api/accounts/clients', { credentials: 'include' })
+        const json = await res.json()
 
-      // Se for client ou staff-client, define a própria account como client
-      if (currentUser.role === 'client' || currentUser.role === 'staff-client') {
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('*')
-          .eq('id', currentUser.account_id)
-          .single();
-
-        if (error) {
-          console.error('❌ Error loading self client (client/staff-client role):', error);
-        } else if (data) {
-          setClients([data]);
+        if (!res.ok) {
+          console.error('❌ Error loading clients via API:', json)
+          return
         }
-      } else {
-        // Admins veem os filhos normalmente
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('*')
-          .eq('parent_account_id', currentUser.account_id)
-          .not('external_id', 'is', null)
-          .order('name', { ascending: true });
 
-        if (error) {
-          console.error('❌ Error loading clients:', error);
-        } else {
-          setClients(data || []);
-        }
+        setClients((json?.clients ?? []) as Account[])
+      } catch (err) {
+        console.error('❌ Error loading clients via API:', err)
       }
-    };
+    }
 
     fetchClients()
-  }, [supabase, currentUser?.account_id, currentUser?.role])
+  }, [])
 
   useEffect(() => {
     const fetchInitialClient = async () => {
@@ -76,26 +58,29 @@ export function Step1ClientSelection({
         }
         setIsLoadingDraft(false)
       } else if (draftId) {
-        const { data, error } = await supabase
-          .from('saip_quote_drafts')
-          .select('client')
-          .eq('id', draftId)
-          .single()
+        try {
+          const res = await fetch(`/api/quotes/drafts/${draftId}`, {
+            credentials: 'include',
+          })
+          const json = await res.json()
 
-        if (error) {
-          console.error('❌ Error loading draft client:', error)
-        } else if (data?.client) {
-          setSelectedClientId(data.client)
-          if (onClientChange) {
-            onClientChange(data.client)
+          if (!res.ok) {
+            console.error('❌ Error loading draft via API:', json)
+          } else if (json?.draft?.client) {
+            setSelectedClientId(json.draft.client)
+            if (onClientChange) {
+              onClientChange(json.draft.client)
+            }
           }
+        } catch (err) {
+          console.error('❌ Error loading draft via API:', err)
         }
         setIsLoadingDraft(false)
       }
     }
 
     fetchInitialClient()
-  }, [initialClient, draftId])
+  }, [initialClient, draftId, onClientChange])
 
   useEffect(() => {
     // Auto-select client when there is only one option and no selection yet
@@ -138,13 +123,17 @@ export function Step1ClientSelection({
           <button
             onClick={async () => {
               if (selectedClientId) {
-                const { error } = await supabase
-                  .from('saip_quote_drafts')
-                  .update({ client: selectedClientId })
-                  .eq('id', draftId)
+                const res = await fetch(`/api/quotes/drafts/${draftId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({ client: selectedClientId }),
+                })
 
-                if (error) {
-                  console.error('❌ Error updating draft:', error)
+                const json = await res.json()
+
+                if (!res.ok) {
+                  console.error('❌ Error updating draft via API:', json)
                   toast.error('Error saving client selection')
                   return
                 }

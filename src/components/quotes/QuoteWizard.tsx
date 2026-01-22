@@ -2,9 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
-import type { PostgrestError } from '@supabase/supabase-js'
 import QuoteStepsHeader, { QuoteStepsHeaderProps } from './QuoteStepsHeader'
 import { Step1ClientSelection } from './steps/Step1ClientSelection'
 import { Step2WarehouseSelection } from './steps/Step2WarehouseSelection'
@@ -15,6 +13,13 @@ import { StepSelectService } from './steps/StepSelectService'
 import { Button } from '@/components/ui/button'
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
+
+type WizardError = {
+  message: string
+  details?: string | null
+  hint?: string | null
+  code?: string | null
+}
 
 const sanitizeFileName = (name: string) => {
   // Supabase Storage keys are URL-path-like; avoid spaces/unicode/control chars.
@@ -35,13 +40,13 @@ type EnrichmentFile = {
   createdAt: string
 }
 
-const supabase = createClientComponentClient<Database>()
 
 export default function QuoteWizard() {
   const { id: quoteId } = useParams()
+  
   const [quoteData, setQuoteData] = useState<Database['public']['Tables']['saip_quote_drafts']['Row'] | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<PostgrestError | null>(null)
+  const [error, setError] = useState<WizardError | null>(null)
   const [currentStep, setCurrentStep] = useState(0)
 
   const [docsOpen, setDocsOpen] = useState(false)
@@ -84,19 +89,52 @@ export default function QuoteWizard() {
     if (!quoteId) return
 
     const fetchQuote = async () => {
-      const { data, error } = await supabase
-        .from('saip_quote_drafts')
-        .select('*')
-        .eq('id', Array.isArray(quoteId) ? quoteId[0] : quoteId)
-        .single()
-
-      if (error) {
-        setError(error)
-      } else {
-        setQuoteData(data)
+      try {
+        const id = Array.isArray(quoteId) ? quoteId[0] : quoteId
+    
+        const res = await fetch(`/api/quotes/drafts/${id}`, {
+          credentials: 'include',
+        })
+    
+        const json = await res.json().catch(() => ({}))
+    
+        if (!res.ok) {
+          setError({
+            message:
+              json?.error ||
+              json?.message ||
+              'Quote not found or access denied (RLS).',
+            details: null,
+            hint: json?.hint ?? null,
+            code: String(res.status),
+          })
+          return
+        }
+    
+        const draft = (json?.draft ?? json?.data?.draft ?? null) as any
+    
+        if (!draft) {
+          setError({
+            message: 'Quote not found or access denied (RLS).',
+            details: null,
+            hint:
+              'Ensure the server route validates the user and tenant for this draft.',
+            code: 'PGRST116',
+          })
+          return
+        }
+    
+        setQuoteData(draft)
+      } catch (e: any) {
+        setError({
+          message: e?.message || 'Failed to load quote',
+          details: null,
+          hint: null,
+          code: 'FETCH_ERROR',
+        })
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
     fetchQuote()
@@ -151,6 +189,8 @@ export default function QuoteWizard() {
     const cityStateZip = formatLine(a.city, a.state, a.zip_code)
     const country = a.country || ''
     const contact = formatLine(a.email, a.phone)
+
+    
 
     return (
       <div className="rounded-md border bg-background p-3">
@@ -212,9 +252,8 @@ export default function QuoteWizard() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Minimal authorization header used by the API route
-        'x-user-id': String(quoteData?.user_id ?? ''),
       },
+      credentials: 'include',
       body: JSON.stringify({ draftId }),
     })
 
@@ -260,39 +299,52 @@ export default function QuoteWizard() {
 
   const saveFilesToDraft = async (files: EnrichmentFile[]) => {
     if (!quoteData?.id) return
-
+  
     const prefs: any = quoteData?.preferences ?? {}
-    const nextPrefs = {
-      ...prefs,
-      enrichment_files: files,
+    const nextPrefs = { ...prefs, enrichment_files: files }
+  
+    const res = await fetch(`/api/quotes/drafts/${quoteData.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ preferences: nextPrefs }),
+    })
+  
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      console.error('❌ Failed to save enrichment_files (api):', json)
+      throw new Error(json?.error || json?.message || 'Failed to save enrichment files')
     }
-
-    const { error } = await supabase
-      .from('saip_quote_drafts')
-      .update({ preferences: nextPrefs as any })
-      .eq('id', quoteData.id)
-
-    if (error) {
-      console.error('❌ Failed to save enrichment_files:', error)
-      throw error
-    }
-
-    setQuoteData((prev) => (prev ? { ...prev, preferences: nextPrefs as any } : prev))
+  
+    const nextDraft = (json?.draft ?? json?.data?.draft ?? null) as any
+    if (nextDraft) setQuoteData(nextDraft)
+    else setQuoteData((prev) => (prev ? { ...prev, preferences: nextPrefs as any } : prev))
   }
 
-  const updateDraft = async (patch: Partial<Database['public']['Tables']['saip_quote_drafts']['Update']>) => {
+  const updateDraft = async (
+    patch: Partial<Database['public']['Tables']['saip_quote_drafts']['Update']>
+  ) => {
     if (!quoteData?.id) throw new Error('Missing draft id')
-
-    const { data, error } = await supabase
-      .from('saip_quote_drafts')
-      .update(patch as any)
-      .eq('id', quoteData.id)
-      .select('*')
-      .single()
-
-    if (error) throw error
-    setQuoteData(data)
-    return data
+  
+    const res = await fetch(`/api/quotes/drafts/${quoteData.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(patch),
+    })
+  
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(json?.error || json?.message || 'Failed to update draft')
+    }
+  
+    const nextDraft = (json?.draft ?? json?.data?.draft ?? null) as any
+    if (!nextDraft) {
+      throw new Error('Update ok but draft not returned. Ensure the server route returns updated row.')
+    }
+  
+    setQuoteData(nextDraft)
+    return nextDraft
   }
 
   const getSuggestion = () => {
@@ -310,47 +362,16 @@ export default function QuoteWizard() {
     const accountId = quoteData?.account_id
     if (!accountId) return null
 
-    // Warehouses are stored under the parent account (draft.account_id is the child).
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('parent_account_id')
-      .eq('id', accountId)
-      .single()
-
-    if (error) {
-      console.warn('[Warehouse] Failed to resolve parent account, using draft.account_id', error)
-      return String(accountId)
-    }
-
-    return String((data as any)?.parent_account_id ?? accountId)
+    // Browser may not have a Supabase Auth session; avoid direct DB reads here.
+    // If you truly need parent_account_id, resolve it in a server API route.
+    return String(accountId)
   }
 
-  const resolveWarehouseIdByZip = async (zipRaw: any): Promise<string | null> => {
-    const effectiveAccountId = await resolveEffectiveAccountId()
-    if (!effectiveAccountId) return null
-
-    const zip = String(zipRaw ?? '')
-      .trim()
-      // Handle ZIP+4
-      .slice(0, 5)
-
-    if (!zip) return null
-
-    const { data, error } = await supabase
-      .from('warehouses')
-      .select('id, is_default')
-      .eq('account_id', effectiveAccountId)
-      .eq('zip_code', zip)
-
-    if (error) {
-      console.error('[Warehouse] ZIP lookup failed', error)
-      return null
-    }
-
-    if (!data || data.length === 0) return null
-
-    const preferred = (data as any[]).find((w) => w.is_default) ?? (data as any[])[0]
-    return preferred?.id ? String(preferred.id) : null
+  const resolveWarehouseIdByZip = async (_zipRaw: any): Promise<string | null> => {
+    // NOTE: This previously queried `warehouses` directly from the client.
+    // The browser often has no Supabase Auth session, so RLS blocks the query.
+    // If you want this feature, implement it as a server API route.
+    return null
   }
 
   const handleApplyShipFrom = async () => {
@@ -489,6 +510,7 @@ export default function QuoteWizard() {
 
     const res = await fetch('/api/quotes/documents/upload', {
       method: 'POST',
+      credentials: 'include',
       body: form,
     })
 
@@ -506,9 +528,8 @@ export default function QuoteWizard() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Minimal authorization header used by the API route
-        'x-user-id': String(quoteData?.user_id ?? ''),
       },
+      credentials: 'include',
       body: JSON.stringify({ draftId, path }),
     })
 
@@ -522,9 +543,8 @@ export default function QuoteWizard() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Minimal authorization header used by the API route
-        'x-user-id': String(quoteData?.user_id ?? ''),
       },
+      credentials: 'include',
       body: JSON.stringify({ draftId, path }),
     })
 
@@ -567,73 +587,25 @@ export default function QuoteWizard() {
       return
     }
 
-    let hasSupabaseSession = false
-
-    // Debug: confirm Supabase Auth session is present for Storage RLS
-    try {
-      const { data: userData } = await supabase.auth.getUser()
-      const { data: sessionData } = await supabase.auth.getSession()
-      hasSupabaseSession = !!sessionData?.session
-      console.log('[Supabase auth] user', userData?.user?.id)
-      console.log('[Supabase auth] session', {
-        hasSession: hasSupabaseSession,
-        sessionUser: sessionData?.session?.user?.id,
-      })
-    } catch (e) {
-      console.warn('[Supabase auth] failed to read session', e)
-    }
-
     setUploadingDocs(true)
     try {
       const uploaded: EnrichmentFile[] = []
 
       for (const file of Array.from(fileList)) {
-        if (!hasSupabaseSession) {
-          // No Supabase Auth session on the client (RLS would block). Use server-side upload endpoint.
-          try {
-            const apiRes = await uploadViaApi(quoteData.id, file)
-            uploaded.push({
-              name: file.name,
-              path: apiRes.path,
-              url: apiRes.url ?? null,
-              contentType: file.type ?? null,
-              size: file.size ?? null,
-              createdAt: new Date().toISOString(),
-            })
-          } catch (e: any) {
-            console.error('❌ Upload error (api):', e)
-            alert(e?.message || 'Upload failed')
-          }
-          continue
-        }
-
-        // Supabase Auth session exists: upload directly to Storage
-        const key = `${crypto.randomUUID?.() ?? String(Date.now())}-${sanitizeFileName(file.name)}`
-        const path = `drafts/${quoteData.id}/${key}`.replace(/^\/+/, '')
-
-        const { error: upErr } = await supabase.storage
-          .from('quote_uploads')
-          .upload(path, file, {
-            contentType: file.type,
-            cacheControl: '3600',
-            upsert: false,
+        try {
+          const apiRes = await uploadViaApi(quoteData.id, file)
+          uploaded.push({
+            name: file.name,
+            path: apiRes.path,
+            url: apiRes.url ?? null,
+            contentType: file.type ?? null,
+            size: file.size ?? null,
+            createdAt: new Date().toISOString(),
           })
-
-        if (upErr) {
-          console.error('❌ Upload error:', upErr)
-          continue
+        } catch (e: any) {
+          console.error('❌ Upload error (api):', e)
+          alert(e?.message || 'Upload failed')
         }
-
-        const { data: pub } = supabase.storage.from('quote_uploads').getPublicUrl(path)
-
-        uploaded.push({
-          name: file.name,
-          path,
-          url: pub?.publicUrl ?? null,
-          contentType: file.type ?? null,
-          size: file.size ?? null,
-          createdAt: new Date().toISOString(),
-        })
       }
 
       const merged = [...getExistingFiles(), ...uploaded]

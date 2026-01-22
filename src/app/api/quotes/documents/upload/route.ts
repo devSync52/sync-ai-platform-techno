@@ -1,15 +1,63 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
 import type { Database } from '@/types/supabase'
 
-// IMPORTANT: use service role server-side only
-const supabaseAdmin = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getAccountContextFromUser(user: any): { accountId: string | null; role: string | null } {
+  const role =
+    (user?.user_metadata as any)?.role ??
+    (user?.app_metadata as any)?.role ??
+    null
+
+  const accountId =
+    (user?.app_metadata as any)?.parent_account_id ??
+    (user?.user_metadata as any)?.parent_account_id ??
+    (user?.app_metadata as any)?.account_id ??
+    (user?.user_metadata as any)?.account_id ??
+    null
+
+  return { accountId: accountId ? String(accountId) : null, role: role ? String(role) : null }
+}
 
 export async function POST(req: Request) {
   try {
+    const cookieStore = (await cookies()) as any
+
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            cookieStore.set({ name, value, ...options })
+          },
+          remove(name: string, options: any) {
+            try {
+              ;(cookieStore as any).delete(name)
+            } catch {
+              cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+            }
+          },
+        },
+      }
+    )
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { accountId: callerAccountId } = getAccountContextFromUser(user)
+    if (!callerAccountId) {
+      return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
+    }
 
 
     const form = await req.formData()
@@ -20,15 +68,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'draftId and file are required' }, { status: 400 })
     }
 
-    // 2) Verificar se o draft existe (e opcional: se o user tem acesso)
-    const { data: draft, error: dErr } = await supabaseAdmin
+    // 2) Verificar se o draft existe e se o user tem acesso (RLS + defense-in-depth)
+    const { data: draft, error: dErr } = await supabase
       .from('saip_quote_drafts')
       .select('id,user_id,account_id')
       .eq('id', draftId)
-      .single()
+      .maybeSingle()
 
-    if (dErr || !draft) {
-      return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+    if (dErr) {
+      return NextResponse.json({ error: dErr.message }, { status: 500 })
+    }
+
+    if (!draft) {
+      return NextResponse.json(
+        { error: 'Draft not found or access denied (RLS).' },
+        { status: 404 }
+      )
+    }
+
+    const draftAccountId = String((draft as any).account_id ?? '')
+    if (draftAccountId && draftAccountId !== callerAccountId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const safeName = file.name
@@ -43,7 +103,7 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    const { error: upErr } = await supabaseAdmin.storage
+    const { error: upErr } = await supabase.storage
       .from('quote_uploads')
       .upload(path, buffer, {
         contentType: file.type || 'application/octet-stream',
@@ -56,7 +116,7 @@ export async function POST(req: Request) {
     }
 
     // Signed URL para preview
-    const { data: signed, error: sErr } = await supabaseAdmin.storage
+    const { data: signed, error: sErr } = await supabase.storage
       .from('quote_uploads')
       .createSignedUrl(path, 60 * 10)
 

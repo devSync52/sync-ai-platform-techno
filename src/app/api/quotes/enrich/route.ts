@@ -1,15 +1,11 @@
 // src/app/api/quotes/enrich/route.ts
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
 import { createRequire } from 'module'
 
 export const runtime = 'nodejs'
 
-// NOTE: Service-role client (server-side only)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 type EnrichmentFile = {
   name: string
@@ -94,6 +90,22 @@ Rules:
 - Quantity must be a number when present.
 - Do not invent data.
 `
+
+function getAccountContextFromUser(user: any): { accountId: string | null; role: string | null } {
+  const role =
+    (user?.user_metadata as any)?.role ??
+    (user?.app_metadata as any)?.role ??
+    null
+
+  const accountId =
+    (user?.app_metadata as any)?.parent_account_id ??
+    (user?.user_metadata as any)?.parent_account_id ??
+    (user?.app_metadata as any)?.account_id ??
+    (user?.user_metadata as any)?.account_id ??
+    null
+
+  return { accountId: accountId ? String(accountId) : null, role: role ? String(role) : null }
+}
 
 function extractOutputText(resp: any): string {
   if (typeof resp?.output_text === 'string') return resp.output_text
@@ -299,29 +311,18 @@ function mergeSuggestions(a: EnrichSuggestion, b: EnrichSuggestion): EnrichSugge
   }
 }
 
-async function resolveParentAccountId(childAccountId: string): Promise<string> {
-  const { data, error } = await supabaseAdmin
-    .from('accounts')
-    .select('parent_account_id')
-    .eq('id', childAccountId)
-    .single()
-
-  if (error) {
-    console.warn('[enrich] Failed to resolve parent account, using child account id', error)
-    return childAccountId
-  }
-
-  return String((data as any)?.parent_account_id ?? childAccountId)
-}
-
-async function resolveWarehouseIdByZip(accountId: string, zipRaw: any): Promise<string | null> {
+async function resolveWarehouseIdByZip(
+  supabase: any,
+  accountId: string,
+  zipRaw: any
+): Promise<string | null> {
   const zip = String(zipRaw ?? '')
     .trim()
     .slice(0, 5) // ZIP+4 → ZIP5
 
   if (!zip) return null
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from('warehouses')
     .select('id, is_default')
     .eq('account_id', accountId)
@@ -338,13 +339,17 @@ async function resolveWarehouseIdByZip(accountId: string, zipRaw: any): Promise<
   return preferred?.id ? String(preferred.id) : null
 }
 
-async function resolveWarehouseIdByZipWithFallback(childAccountId: string, zipRaw: any): Promise<{ id: string | null; parentAccountId: string }> {
-  const parentAccountId = await resolveParentAccountId(childAccountId)
-  const fromParent = await resolveWarehouseIdByZip(parentAccountId, zipRaw)
+async function resolveWarehouseIdByZipWithFallback(
+  supabase: any,
+  childAccountId: string,
+  parentAccountId: string,
+  zipRaw: any
+): Promise<{ id: string | null; parentAccountId: string }> {
+  const fromParent = await resolveWarehouseIdByZip(supabase, parentAccountId, zipRaw)
   if (fromParent) return { id: fromParent, parentAccountId }
 
   // Fallback: some setups store warehouses on the child account.
-  const fromChild = await resolveWarehouseIdByZip(childAccountId, zipRaw)
+  const fromChild = await resolveWarehouseIdByZip(supabase, childAccountId, zipRaw)
   return { id: fromChild, parentAccountId }
 }
 
@@ -356,20 +361,62 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'draftId is required' }, { status: 400 })
     }
 
-    // Minimal authorization (same pattern as upload/delete)
-    const callerUserId = req.headers.get('x-user-id')
+    const cookieStore = (await cookies()) as any
 
-    const { data: draft, error: draftErr } = await supabaseAdmin
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            cookieStore.set({ name, value, ...options })
+          },
+          remove(name: string, options: any) {
+            try {
+              ;(cookieStore as any).delete(name)
+            } catch {
+              cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+            }
+          },
+        },
+      }
+    )
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { accountId: callerAccountId } = getAccountContextFromUser(user)
+    if (!callerAccountId) {
+      return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
+    }
+
+    const { data: draft, error: draftErr } = await supabase
       .from('saip_quote_drafts')
       .select('id, user_id, account_id, preferences')
       .eq('id', draftId)
-      .single()
+      .maybeSingle()
 
-    if (draftErr || !draft) {
-      return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+    if (draftErr) {
+      return NextResponse.json({ error: draftErr.message }, { status: 500 })
     }
 
-    if (!callerUserId || String(draft.user_id) !== String(callerUserId)) {
+    if (!draft) {
+      return NextResponse.json({ error: 'Draft not found or access denied (RLS).' }, { status: 404 })
+    }
+
+    // Extra safety: if the draft is scoped to a different tenant, deny.
+    // (RLS should already enforce this, but we keep defense-in-depth.)
+    const draftAccountId = String((draft as any).account_id ?? '')
+    if (draftAccountId && draftAccountId !== callerAccountId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -402,7 +449,7 @@ export async function POST(req: Request) {
 
     for (const f of imageFiles.slice(0, 5)) {
       // signed url (10 min)
-      const { data: signed, error: sErr } = await supabaseAdmin.storage
+      const { data: signed, error: sErr } = await supabase.storage
         .from('quote_uploads')
         .createSignedUrl(f.path, 60 * 10)
 
@@ -438,7 +485,7 @@ export async function POST(req: Request) {
     // PDFs: extract up to 10 pages of TEXT (no canvas) and run the model per page.
     // If the PDF is scanned (no embedded text), we'll likely get empty pages and return a helpful error.
     for (const f of pdfFiles.slice(0, 1)) {
-      const { data: signed, error: sErr } = await supabaseAdmin.storage
+      const { data: signed, error: sErr } = await supabase.storage
         .from('quote_uploads')
         .createSignedUrl(f.path, 60 * 10)
 
@@ -517,7 +564,12 @@ export async function POST(req: Request) {
       const zip = merged?.ship_from?.zip_code
 
       if (childAccountId && merged?.ship_from && !merged.ship_from.warehouse_id) {
-        const resolved = await resolveWarehouseIdByZipWithFallback(childAccountId, zip)
+        const resolved = await resolveWarehouseIdByZipWithFallback(
+          supabase,
+          childAccountId,
+          callerAccountId,
+          zip
+        )
 
         if (resolved.id) {
           merged = {
@@ -559,7 +611,7 @@ export async function POST(req: Request) {
       },
     }
 
-    const { error: updErr } = await supabaseAdmin
+    const { error: updErr } = await supabase
       .from('saip_quote_drafts')
       .update({ preferences: nextPrefs })
       .eq('id', draftId)
