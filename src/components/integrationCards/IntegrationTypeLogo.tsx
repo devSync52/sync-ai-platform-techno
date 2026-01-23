@@ -10,6 +10,9 @@ export default function IntegrationTypeLogo({ type, size = 80 }: Props) {
     sellercloud: '/logos/sellercloud.png',
     extensiv: '/logos/extensiv.png',
     project44: '/logos/project44.png',
+    ups: '/logos/ups.png',
+    fedex: '/logos/fedex.png',
+    quickbooks: '/logos/quickbooks.png',
     outro: '/logos/integration-generic.png',
   }
 

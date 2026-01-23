@@ -53,6 +53,7 @@ export default function QuoteWizard() {
   const [uploadingDocs, setUploadingDocs] = useState(false)
   const [enriching, setEnriching] = useState(false)
   const [enrichModalOpen, setEnrichModalOpen] = useState(false)
+  const [applyingEnrich, setApplyingEnrich] = useState(false)
 
   const [dragActive, setDragActive] = useState(false)
 
@@ -374,7 +375,7 @@ export default function QuoteWizard() {
     return null
   }
 
-  const handleApplyShipFrom = async () => {
+  const handleApplyShipFrom = async (opts?: { skipConfirm?: boolean }) => {
     const s: any = getSuggestion()
     if (!s?.ship_from) {
       alert('No Ship From data to apply.')
@@ -402,7 +403,7 @@ export default function QuoteWizard() {
     }
 
     const hasExisting = !!parseJsonMaybe<any>(quoteData?.ship_from)
-    if (hasExisting) {
+    if (hasExisting && !opts?.skipConfirm) {
       const ok = confirm('This will overwrite Ship From fields (warehouse_id will be preserved). Continue?')
       if (!ok) return
     }
@@ -421,7 +422,7 @@ export default function QuoteWizard() {
     }
   }
 
-  const handleApplyShipTo = async () => {
+  const handleApplyShipTo = async (opts?: { skipConfirm?: boolean }) => {
     const s: any = getSuggestion()
     if (!s?.ship_to) {
       alert('No Ship To data to apply.')
@@ -441,7 +442,7 @@ export default function QuoteWizard() {
     }
 
     const hasExisting = !!parseJsonMaybe<any>(quoteData?.ship_to)
-    if (hasExisting) {
+    if (hasExisting && !opts?.skipConfirm) {
       const ok = confirm('This will overwrite Ship To fields. Continue?')
       if (!ok) return
     }
@@ -454,7 +455,7 @@ export default function QuoteWizard() {
     }
   }
 
-  const handleApplyItems = async () => {
+  const handleApplyItems = async (opts?: { skipConfirm?: boolean }) => {
     const s: any = getSuggestion()
     const items = Array.isArray(s?.items) ? s.items : []
     if (items.length === 0) {
@@ -468,7 +469,7 @@ export default function QuoteWizard() {
         ? (quoteData?.items as any[]).length > 0
         : false
 
-    if (hasExisting) {
+    if (hasExisting && !opts?.skipConfirm) {
       const ok = confirm('This will overwrite Items. Continue?')
       if (!ok) return
     }
@@ -498,9 +499,18 @@ export default function QuoteWizard() {
   }
 
   const handleApplyAll = async () => {
-    await handleApplyShipFrom()
-    await handleApplyShipTo()
-    await handleApplyItems()
+    if (applyingEnrich) return
+    setApplyingEnrich(true)
+    try {
+      await handleApplyShipFrom({ skipConfirm: true })
+      await handleApplyShipTo({ skipConfirm: true })
+      await handleApplyItems({ skipConfirm: true })
+
+      // Close modal right after applying from the modal.
+      setEnrichModalOpen(false)
+    } finally {
+      setApplyingEnrich(false)
+    }
   }
 
   const uploadViaApi = async (draftId: string, file: File) => {
@@ -1187,17 +1197,8 @@ export default function QuoteWizard() {
 
                     <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="secondary" onClick={handleApplyShipFrom}>
-                          Apply Ship From
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={handleApplyShipTo}>
-                          Apply Ship To
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={handleApplyItems}>
-                          Apply Items
-                        </Button>
-                        <Button type="button" onClick={handleApplyAll}>
-                          Apply All
+                        <Button type="button" onClick={handleApplyAll} disabled={applyingEnrich}>
+                          {applyingEnrich ? 'Applying…' : 'Apply'}
                         </Button>
                       </div>
 

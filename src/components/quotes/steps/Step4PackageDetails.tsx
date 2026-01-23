@@ -70,6 +70,7 @@ function ProductSearchModal({
     try {
       const params = new URLSearchParams({
         clientId,
+        warehouseId: warehouseId || '',
         shipFromName: shipFromName || '',
         term: searchTerm || '',
       })

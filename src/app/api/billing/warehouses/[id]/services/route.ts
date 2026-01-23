@@ -38,7 +38,7 @@ export async function GET(
     }
 
     const rows = (data ?? []).map((row) => ({
-      id: row.global_service_id as string,          // esse é o que vamos usar na invoice
+      id: row.global_service_id as string,      
       warehouseServiceId: row.warehouse_service_id as string,
       warehouseId: row.warehouse_id as string,
       category: row.category as string,

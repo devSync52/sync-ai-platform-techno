@@ -56,7 +56,7 @@ export async function GET(
   }
 
   const { data, error } = await supabase
-    .from('billing_configs')
+    .from('billing_configs') // public view over billing.configs
     .select('*')
     .eq('client_account_id', clientId)
     .eq('parent_account_id', parentAccountId)
@@ -160,13 +160,54 @@ export async function PATCH(
 
   console.log('[billing/configs] PATCH upsert payload:', payload)
 
-  const { data, error } = await supabase
-    .from('billing_configs')
-    .upsert(payload, {
-      onConflict: 'client_account_id,warehouse_id',
-    })
-    .select()
-    .maybeSingle()
+  // NOTE: billing_configs is a VIEW. Writes must go to the base table billing.configs.
+  // Also: warehouse_id can be NULL, and Postgres unique constraints treat NULLs as distinct.
+  // We enforce a single NULL-warehouse row via partial unique indexes, so we need manual upsert for NULL.
+
+  const base = (supabase as any).schema('billing').from('configs')
+
+  let data: any = null
+  let error: any = null
+
+  if (payload.warehouse_id == null) {
+    // Manual upsert for NULL warehouse_id
+    const { data: existing, error: exErr } = await base
+      .select('id')
+      .eq('client_account_id', clientId)
+      .is('warehouse_id', null)
+      .eq('parent_account_id', payload.parent_account_id)
+      .maybeSingle()
+
+    if (exErr) {
+      error = exErr
+    } else if (existing?.id) {
+      const { data: upd, error: updErr } = await base
+        .update(payload)
+        .eq('id', existing.id)
+        .select()
+        .maybeSingle()
+      data = upd
+      error = updErr
+    } else {
+      const { data: ins, error: insErr } = await base
+        .insert(payload)
+        .select()
+        .maybeSingle()
+      data = ins
+      error = insErr
+    }
+  } else {
+    // Standard upsert for non-null warehouse_id
+    const res = await base
+      .upsert(payload, {
+        onConflict: 'client_account_id,warehouse_id',
+      })
+      .select()
+      .maybeSingle()
+
+    data = res.data
+    error = res.error
+  }
 
   if (error) {
     console.error('[billing/configs] PATCH error:', error)

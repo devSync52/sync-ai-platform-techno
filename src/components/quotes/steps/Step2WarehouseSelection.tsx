@@ -48,8 +48,13 @@ export function Step2WarehouseSelection({
 
       // Preferred: use session metadata when available.
       // Fallback: use the draft.account_id to locate warehouses.
-      const sessionAccountId = session?.user?.user_metadata?.account_id as string | undefined
-      const role = session?.user?.user_metadata?.role as string | undefined
+      const sessionAccountId =
+        (session?.user?.app_metadata as any)?.account_id ??
+        (session?.user?.user_metadata as any)?.account_id
+
+      const role =
+        (session?.user?.app_metadata as any)?.role ??
+        (session?.user?.user_metadata as any)?.role
 
       // Always fetch the draft so we can:
       // - read current ship_from.warehouse_id
@@ -112,20 +117,44 @@ export function Step2WarehouseSelection({
         setSelectedWarehouse(String(shipFromObj.warehouse_id))
       }
 
-      const { data, error } = await supabase
+      // Warehouses may live under the client account OR under the parent account.
+      // Try client account first; if empty, fallback to the resolved effectiveAccountId.
+      const selectCols =
+        'id, name, address_line1, address_line2, city, state, zip_code, country, phone, email'
+
+      const { data: data1, error: error1 } = await supabase
         .from('warehouses')
-        .select('id, name, address_line1, address_line2, city, state, zip_code, country, phone, email')
-        .eq('account_id', effectiveAccountId)
+        .select(selectCols)
+        .eq('account_id', accountId)
         .order('name')
 
-      if (error) {
-        console.error('❌ Error fetching warehouses:', error)
+      if (error1) {
+        console.error('❌ Error fetching warehouses (account):', error1)
         toast.error('Failed to load warehouses')
         setLoadingDraft(false)
         return
       }
 
-      setWarehouses(data)
+      let finalData: any[] = data1 ?? []
+
+      if (finalData.length === 0 && effectiveAccountId && effectiveAccountId !== accountId) {
+        const { data: data2, error: error2 } = await supabase
+          .from('warehouses')
+          .select(selectCols)
+          .eq('account_id', effectiveAccountId)
+          .order('name')
+
+        if (error2) {
+          console.error('❌ Error fetching warehouses (effective):', error2)
+          toast.error('Failed to load warehouses')
+          setLoadingDraft(false)
+          return
+        }
+
+        finalData = data2 ?? []
+      }
+
+      setWarehouses(finalData as Warehouse[])
 
       setLoadingDraft(false)
     }

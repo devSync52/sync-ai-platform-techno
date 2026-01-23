@@ -4,10 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import type { Database } from '@/types/supabase'
 
 function getAccountContextFromUser(user: any): { accountId: string | null; role: string | null } {
-  const role =
-    (user?.user_metadata as any)?.role ??
-    (user?.app_metadata as any)?.role ??
-    null
+  const role = (user?.user_metadata as any)?.role ?? (user?.app_metadata as any)?.role ?? null
 
   const accountId =
     (user?.app_metadata as any)?.parent_account_id ??
@@ -25,15 +22,11 @@ async function canAccessClientAccount(
   callerRole: string | null,
   clientId: string
 ): Promise<boolean> {
-  // Se é o próprio tenant, ok
   if (callerAccountId === clientId) return true
 
-  // Se não for admin/staff-admin/superadmin, nega
   const elevated = new Set(['admin', 'superadmin', 'staff-admin'])
   if (!callerRole || !elevated.has(callerRole)) return false
 
-  // Checa se o clientId é filho do callerAccountId (accounts.parent_account_id)
-  // (Se sua tabela/coluna tiver outro nome, ajusta aqui)
   const { data, error } = await supabase
     .from('accounts')
     .select('id, parent_account_id')
@@ -87,53 +80,100 @@ export async function GET(req: Request) {
     }
 
     const url = new URL(req.url)
-    const clientId = String(url.searchParams.get('clientId') ?? '').trim()
-    const warehouseId = String(url.searchParams.get('warehouseId') ?? '').trim()
+    const clientIdParam = String(url.searchParams.get('clientId') ?? '').trim()
+    const warehousePublicId = String(url.searchParams.get('warehouseId') ?? '').trim()
     const shipFromName = String(url.searchParams.get('shipFromName') ?? '').trim()
     const term = String(url.searchParams.get('term') ?? '').trim()
 
-    if (!clientId) {
+    if (!clientIdParam) {
       return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
     }
-    if (!warehouseId) {
+
+    if (!warehousePublicId) {
       return NextResponse.json({ error: 'Missing warehouseId' }, { status: 400 })
     }
 
-    const ok = await canAccessClientAccount(supabase, callerAccountId, callerRole, clientId)
+    // Kept only for debugging/UI context
+    const shipFromKey = String(shipFromName || '').trim().split(' ')[0] // e.g. "Miami"
+
+    // Resolve to an effective client_account_id (scoped to this caller's parent account)
+    let effectiveClientId = clientIdParam
+    let clientIdResolvedFrom: 'client_account_id' | 'account_id' | 'unknown' = 'unknown'
+
+    const { data: directClient, error: directClientErr } = await (supabase as any)
+      .from('vw_products_master_enriched')
+      .select('client_account_id, parent_account_id')
+      .eq('client_account_id', clientIdParam)
+      .eq('parent_account_id', callerAccountId)
+      .limit(1)
+
+    if (directClientErr) {
+      return NextResponse.json({ error: directClientErr.message }, { status: 500 })
+    }
+
+    if (directClient && directClient.length > 0) {
+      effectiveClientId = String((directClient[0] as any).client_account_id)
+      clientIdResolvedFrom = 'client_account_id'
+    } else {
+      const { data: fromAccount, error: fromAccountErr } = await (supabase as any)
+        .from('vw_products_master_enriched')
+        .select('client_account_id, parent_account_id')
+        .eq('account_id', clientIdParam)
+        .eq('parent_account_id', callerAccountId)
+        .limit(1)
+
+      if (fromAccountErr) {
+        return NextResponse.json({ error: fromAccountErr.message }, { status: 500 })
+      }
+
+      if (fromAccount && fromAccount.length > 0) {
+        effectiveClientId = String((fromAccount[0] as any).client_account_id)
+        clientIdResolvedFrom = 'account_id'
+      }
+    }
+
+    if (!effectiveClientId) {
+      return NextResponse.json({ error: 'Unable to resolve client context' }, { status: 400 })
+    }
+
+    const ok = await canAccessClientAccount(supabase, callerAccountId, callerRole, effectiveClientId)
     if (!ok) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Filter directly by warehouseId from the draft (avoid fragile name matching)
-    const resolvedViewWarehouseId = warehouseId
-
-    // Defense-in-depth: ensure the warehouse belongs to the requested client tenant
-    // (avoid searching wrong-warehouse results).
-    const { data: whCheck, error: whCheckErr } = await supabase
-      .from('warehouses')
-      .select('id')
-      .eq('id', warehouseId)
-      .eq('account_id', clientId)
+    // Map public warehouse id (draft) -> billing warehouse id (used by vw_products_master_enriched)
+    const { data: whMap, error: whMapErr } = await (supabase as any)
+      .from('v_warehouses')
+      .select('public_warehouse_id, billing_warehouse_id, account_id, name')
+      .eq('public_warehouse_id', warehousePublicId)
       .maybeSingle()
 
-    if (whCheckErr) {
-      return NextResponse.json({ error: whCheckErr.message }, { status: 500 })
+    if (whMapErr) {
+      return NextResponse.json({ error: whMapErr.message }, { status: 500 })
     }
 
-    if (!whCheck) {
-      return NextResponse.json({ error: 'Invalid warehouse for client' }, { status: 400 })
+    const billingWarehouseId = String((whMap as any)?.billing_warehouse_id ?? '')
+    if (!billingWarehouseId) {
+      return NextResponse.json({ error: 'Warehouse mapping not found', warehousePublicId }, { status: 400 })
     }
 
-    const shipFromKey = String(shipFromName || '').trim().split(' ')[0] // kept for debugging
+    const whOwnerAccountId = String((whMap as any)?.account_id ?? '')
+    if (whOwnerAccountId && whOwnerAccountId !== callerAccountId && whOwnerAccountId !== effectiveClientId) {
+      return NextResponse.json({ error: 'Invalid warehouse for tenant' }, { status: 400 })
+    }
+
+    const candidateWarehouseIds = [billingWarehouseId]
 
     let query = (supabase as any)
       .from('vw_products_master_enriched')
       .select(
         'id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, available, on_hand, allocated, warehouse_id, inventory_warehouse_id, parent_account_id, account_id, client_account_id'
       )
-      .eq('client_account_id', clientId)
+      .eq('client_account_id', effectiveClientId)
       .eq('parent_account_id', callerAccountId)
-      .eq('warehouse_id', resolvedViewWarehouseId)
+      .or(
+        `warehouse_id.in.(${candidateWarehouseIds.join(',')}),inventory_warehouse_id.in.(${candidateWarehouseIds.join(',')})`
+      )
       .limit(20)
 
     if (term.length > 0) {
@@ -147,8 +187,11 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       products: data ?? [],
-      resolvedViewWarehouseId,
       shipFromKey,
+      effectiveClientId,
+      clientIdResolvedFrom,
+      warehousePublicId,
+      billingWarehouseId,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Unexpected error' }, { status: 500 })

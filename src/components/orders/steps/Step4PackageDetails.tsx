@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSupabase } from '@/components/supabase-provider'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { Database } from '@/types/supabase'
 import { Input } from '@/components/ui/input'
@@ -60,41 +59,29 @@ function ProductSearchModal({
 
   const handleSearch = async () => {
     if (!clientId) return
-  
-    console.log('[Step4][ProductSearch] Searching products (SSR)', {
-      clientId,
-      warehouseId,
-      searchTerm,
-      shipFromName,
-    })
-  
+
     setLoading(true)
-  
+
     try {
       const params = new URLSearchParams({
         clientId,
+        warehouseId: warehouseId || '',
         shipFromName: shipFromName || '',
         term: searchTerm || '',
       })
-  
+
       const res = await fetch(`/api/products/search?${params.toString()}`, {
         credentials: 'include',
       })
-  
+
       const json = await res.json().catch(() => ({}))
-  
+
       if (!res.ok) {
         console.error('[Step4][ProductSearch] SSR search failed', json)
         setResults([])
         return
       }
-  
-      console.log('[Step4][ProductSearch] SSR search ok', {
-        resolvedViewWarehouseId: json?.resolvedViewWarehouseId ?? null,
-        shipFromKey: json?.shipFromKey ?? null,
-        count: Array.isArray(json?.products) ? json.products.length : 0,
-      })
-  
+
       setResults(json?.products || [])
     } finally {
       setLoading(false)
@@ -128,7 +115,6 @@ function ProductSearchModal({
   if (!show) return null
 
   const warehouseMissing = !warehouseId
-  const router = useRouter()
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
