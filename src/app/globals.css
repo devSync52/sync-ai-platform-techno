@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Theme tokens (dinâmicos):
+  - Light/Dark via classe `.dark` no <html>
+  - Cor primária por cliente via CSS variable `--primary`
+*/
+:root {
+  --background: #f9fafb;
+  --foreground: #111827;
+  --input: #ffffff;
+
+  /* default (pode ser sobrescrito por cliente) */
+  --primary: #3f2d90;
+  --primary-foreground: #ffffff;
+
+  --ring: #6366f1;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --border: #e5e7eb;
+}
+
+.dark {
+  --background: #020617;
+  --foreground: #f8fafc;
+  --input: #0b1220;
+
+  /* default no dark (pode ser sobrescrito por cliente) */
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+
+  --ring: #8b5cf6;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --muted: #111827;
+  --muted-foreground: #94a3b8;
+  --border: #1f2937;
+}
+
+body {
+  @apply bg-background text-foreground;
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
