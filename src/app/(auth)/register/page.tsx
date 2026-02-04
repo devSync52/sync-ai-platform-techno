@@ -7,6 +7,7 @@ import { useSupabase } from '@/components/supabase-provider'
 import Link from 'next/link'
 import Image from 'next/image'
 import InputIcon from '@/components/ui/inputIcon'
+import { Input } from '@/components/ui/input'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -76,7 +77,7 @@ export default function RegisterPage() {
         )}
       </div>
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+      {/* <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
         <h1 className="text-2xl font-bold text-center text-primary">Sign Up</h1>
         <p className="text-sm text-center text-gray-600">Create your account to get started</p>
 
@@ -128,6 +129,60 @@ export default function RegisterPage() {
             disabled={loading}
           >
             {loading ? <Loader2 className="animate-spin" size={18} /> : 'Create Account'}
+          </button>
+        </form>
+
+        <p className="text-sm text-center text-gray-500">
+          Already have an account?{' '}
+          <Link href="/login" className="text-primary font-bold hover:underline">
+            Log in
+          </Link>
+        </p>
+      </div> */}
+
+      {/* OTP */}
+
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <h1 className="text-2xl font-bold text-center text-primary">Enter Verification Code</h1>
+        <p className="text-sm text-center text-gray-600">Please enter the verification code that was sent to your email address ayan057@yopmail.com</p>
+
+        <form onSubmit={handleRegister} className="space-y-4">
+
+          <div className='flex gap-4 justify-center remove-arrow'>
+            <Input
+              type="number"
+              required
+              className='w-[60px] h-[60px] text-center remove-arrow'
+            />
+            <Input
+              type="number"
+              required
+              className='w-[60px] h-[60px] text-center remove-arrow'
+            />
+            <Input
+              type="number"
+              required
+              className='w-[60px] h-[60px] text-center remove-arrow'
+            />
+            <Input
+              type="number"
+              required
+              className='w-[60px] h-[60px] text-center remove-arrow'
+            />            
+          </div>
+
+          {error && (
+            <div className="text-sm text-red-600 bg-red-100 border border-red-300 rounded-lg px-4 py-2 text-center font-medium">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="w-full bg-primary text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 flex items-center justify-center"
+            disabled={loading}
+          >
+            {loading ? <Loader2 className="animate-spin" size={18} /> : 'Continue'}
           </button>
         </form>
 
