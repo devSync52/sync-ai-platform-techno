@@ -686,6 +686,9 @@ export default function QuoteWizard() {
     }
   }, [currentStep, quoteData])
 
+  // Hide the Documents module on Step 5 (Delivery Preferences)
+  const showDocsUI = currentStep !== 4
+
   if (loading)
     return (
       <div className="flex h-[60vh] items-center justify-center px-3 text-sm text-muted-foreground">
@@ -805,7 +808,8 @@ export default function QuoteWizard() {
         </div>
 
         {/* Documents panel (desktop) */}
-        <aside className="hidden md:block">
+        {showDocsUI ? (
+          <aside className="hidden md:block">
           <div className="sticky top-24 rounded-lg border bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
               <div>
@@ -964,11 +968,13 @@ export default function QuoteWizard() {
               )
             })()}
           </div>
-        </aside>
+          </aside>
+        ) : null}
       </div>
 
       {/* Documents FAB (mobile) */}
-      <div className="md:hidden">
+      {showDocsUI ? (
+        <div className="md:hidden">
         <Button
           className="fixed bottom-5 right-5 z-40 rounded-full px-4 py-3 shadow-lg"
           onClick={() => setDocsOpen(true)}
@@ -1121,7 +1127,8 @@ export default function QuoteWizard() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      ) : null}
       {/* Enrichment modal */}
       {enrichModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">

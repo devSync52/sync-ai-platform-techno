@@ -3,14 +3,20 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import type { Database } from '@/types/supabase'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function assertUuid(value: string, label: string) {
+  if (!UUID_RE.test(value)) {
+    throw new Error(`Invalid ${label}`)
+  }
+}
+
 function getAccountContextFromUser(user: any): { accountId: string | null; role: string | null } {
   const role = (user?.user_metadata as any)?.role ?? (user?.app_metadata as any)?.role ?? null
 
+  // Our JWT stores the signed-in user's account id in user_metadata.account_id
   const accountId =
-    (user?.app_metadata as any)?.parent_account_id ??
-    (user?.user_metadata as any)?.parent_account_id ??
-    (user?.app_metadata as any)?.account_id ??
     (user?.user_metadata as any)?.account_id ??
+    (user?.app_metadata as any)?.account_id ??
     null
 
   return { accountId: accountId ? String(accountId) : null, role: role ? String(role) : null }
@@ -20,21 +26,22 @@ async function canAccessClientAccount(
   supabase: any,
   callerAccountId: string,
   callerRole: string | null,
-  clientId: string
+  targetAccountId: string
 ): Promise<boolean> {
-  if (callerAccountId === clientId) return true
+  // Non-elevated users (client/staff-client/etc) can only access their own account.
+  if (callerAccountId === targetAccountId) return true
 
   const elevated = new Set(['admin', 'superadmin', 'staff-admin'])
   if (!callerRole || !elevated.has(callerRole)) return false
 
+  // Elevated users can access accounts in their tenant (i.e., accounts whose parent_account_id = callerAccountId).
   const { data, error } = await supabase
     .from('accounts')
     .select('id, parent_account_id')
-    .eq('id', clientId)
+    .eq('id', targetAccountId)
     .maybeSingle()
 
-  if (error) return false
-  if (!data) return false
+  if (error || !data) return false
 
   return String((data as any).parent_account_id ?? '') === callerAccountId
 }
@@ -65,6 +72,21 @@ export async function GET(req: Request) {
       }
     )
 
+    // Debug: list cookie names (do not log values) and auth context seen by Postgres
+    try {
+      const cookieNames = (cookieStore.getAll?.() ?? []).map((c: any) => c?.name).filter(Boolean)
+      console.log('[products.search][cookies]', { count: cookieNames.length, names: cookieNames })
+    } catch {
+      console.log('[products.search][cookies]', { error: 'unable to list cookies' })
+    }
+
+    try {
+      const dbg = await (supabase as any).rpc('debug_auth_context')
+      console.log('[products.search][auth]', dbg)
+    } catch (e) {
+      console.log('[products.search][auth]', { error: (e as any)?.message ?? 'debug_auth_context failed' })
+    }
+
     const {
       data: { user },
       error: userError,
@@ -74,16 +96,54 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    try {
+      const dbg2 = await (supabase as any).rpc('debug_auth_context')
+      console.log('[products.search][auth][after_getUser]', dbg2)
+    } catch (e) {
+      console.log('[products.search][auth][after_getUser]', { error: (e as any)?.message ?? 'debug_auth_context failed' })
+    }
+
     const { accountId: callerAccountId, role: callerRole } = getAccountContextFromUser(user)
     if (!callerAccountId) {
       return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
     }
+
+    // Tenant parent account id: for client users, data is scoped by their parent account.
+    // If the caller is a parent account, parent_account_id will be null and we fall back to callerAccountId.
+    let tenantParentAccountId: string = callerAccountId
+    try {
+      const { data: callerAcct, error: callerAcctErr } = await (supabase as any)
+        .from('accounts')
+        .select('parent_account_id')
+        .eq('id', callerAccountId)
+        .maybeSingle()
+
+      if (!callerAcctErr && callerAcct && (callerAcct as any).parent_account_id) {
+        tenantParentAccountId = String((callerAcct as any).parent_account_id)
+      }
+    } catch {
+      // ignore
+    }
+
+    console.log('[products.search][tenant]', {
+      callerAccountId,
+      tenantParentAccountId,
+    })
 
     const url = new URL(req.url)
     const clientIdParam = String(url.searchParams.get('clientId') ?? '').trim()
     const warehousePublicId = String(url.searchParams.get('warehouseId') ?? '').trim()
     const shipFromName = String(url.searchParams.get('shipFromName') ?? '').trim()
     const term = String(url.searchParams.get('term') ?? '').trim()
+
+    console.log('[products.search][request]', {
+      clientIdParam,
+      warehousePublicId,
+      shipFromName,
+      term,
+      callerAccountId,
+      callerRole,
+    })
 
     if (!clientIdParam) {
       return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
@@ -104,7 +164,7 @@ export async function GET(req: Request) {
       .from('vw_products_master_enriched')
       .select('client_account_id, parent_account_id')
       .eq('client_account_id', clientIdParam)
-      .eq('parent_account_id', callerAccountId)
+      .eq('parent_account_id', tenantParentAccountId)
       .limit(1)
 
     if (directClientErr) {
@@ -119,7 +179,7 @@ export async function GET(req: Request) {
         .from('vw_products_master_enriched')
         .select('client_account_id, parent_account_id')
         .eq('account_id', clientIdParam)
-        .eq('parent_account_id', callerAccountId)
+        .eq('parent_account_id', tenantParentAccountId)
         .limit(1)
 
       if (fromAccountErr) {
@@ -132,20 +192,32 @@ export async function GET(req: Request) {
       }
     }
 
+    console.log('[products.search][client-resolution]', {
+      clientIdParam,
+      effectiveClientId,
+      clientIdResolvedFrom,
+    })
+
     if (!effectiveClientId) {
       return NextResponse.json({ error: 'Unable to resolve client context' }, { status: 400 })
     }
 
-    const ok = await canAccessClientAccount(supabase, callerAccountId, callerRole, effectiveClientId)
+    const ok = await canAccessClientAccount(supabase, callerAccountId, callerRole, clientIdParam)
     if (!ok) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Map public warehouse id (draft) -> billing warehouse id (used by vw_products_master_enriched)
+    // Warehouses are typically owned by the tenant parent account.
+    const callerParentAccountId: string | null = tenantParentAccountId !== callerAccountId ? tenantParentAccountId : null
+
+    // Scope the mapping to this tenant: either owned by the caller account or by the caller's parent account.
+    const ownerIds = [callerAccountId, tenantParentAccountId].filter(Boolean) as string[]
+
     const { data: whMap, error: whMapErr } = await (supabase as any)
       .from('v_warehouses')
       .select('public_warehouse_id, billing_warehouse_id, account_id, name')
       .eq('public_warehouse_id', warehousePublicId)
+      .in('account_id', ownerIds)
       .maybeSingle()
 
     if (whMapErr) {
@@ -158,42 +230,116 @@ export async function GET(req: Request) {
     }
 
     const whOwnerAccountId = String((whMap as any)?.account_id ?? '')
-    if (whOwnerAccountId && whOwnerAccountId !== callerAccountId && whOwnerAccountId !== effectiveClientId) {
-      return NextResponse.json({ error: 'Invalid warehouse for tenant' }, { status: 400 })
+    const allowedWarehouseOwners = new Set([callerAccountId, clientIdParam, tenantParentAccountId].filter(Boolean) as string[])
+    if (whOwnerAccountId && !allowedWarehouseOwners.has(whOwnerAccountId)) {
+      return NextResponse.json({
+        error: 'Invalid warehouse for tenant',
+        details: {
+          whOwnerAccountId,
+          callerAccountId,
+          callerParentAccountId,
+          effectiveClientId,
+          warehousePublicId,
+        },
+      }, { status: 400 })
     }
 
-    const candidateWarehouseIds = [billingWarehouseId]
+    console.log('[products.search][warehouse]', {
+      warehousePublicId,
+      billingWarehouseId,
+      whOwnerAccountId,
+      ownerIds,
+    })
 
-    let query = (supabase as any)
+    const selectCols =
+      'id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, available, on_hand, allocated, warehouse_id, inventory_warehouse_id, parent_account_id, account_id, client_account_id'
+
+    console.log('[products.search][query]', {
+      parent_account_id: tenantParentAccountId,
+      clientIdParam,
+      effectiveClientId,
+      billingWarehouseId,
+      term,
+      warehouseFilter: 'warehouse_id.eq.' + billingWarehouseId,
+    })
+
+    // Validate UUID inputs (PostgREST does not accept '::uuid' casts in values)
+    assertUuid(tenantParentAccountId, 'tenant parent_account_id')
+    assertUuid(clientIdParam, 'clientId')
+    assertUuid(billingWarehouseId, 'billing warehouse_id')
+    assertUuid(effectiveClientId, 'effective client_account_id')
+
+    // Query A: primary tenant model (account_id)
+    // NOTE: Match the known-working SQL: filter by warehouse_id only.
+    const qA: any = (supabase as any)
       .from('vw_products_master_enriched')
-      .select(
-        'id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, available, on_hand, allocated, warehouse_id, inventory_warehouse_id, parent_account_id, account_id, client_account_id'
-      )
-      .eq('client_account_id', effectiveClientId)
-      .eq('parent_account_id', callerAccountId)
-      .or(
-        `warehouse_id.in.(${candidateWarehouseIds.join(',')}),inventory_warehouse_id.in.(${candidateWarehouseIds.join(',')})`
-      )
-      .limit(20)
+      .select(selectCols)
+      .filter('parent_account_id', 'eq', tenantParentAccountId)
+      .filter('account_id', 'eq', clientIdParam)
+      .filter('warehouse_id', 'eq', billingWarehouseId)
+      .limit(1000)
 
+    // Query B: legacy/internal model (client_account_id)
+    const qB: any = (supabase as any)
+      .from('vw_products_master_enriched')
+      .select(selectCols)
+      .filter('parent_account_id', 'eq', tenantParentAccountId)
+      .filter('client_account_id', 'eq', effectiveClientId)
+      .filter('warehouse_id', 'eq', billingWarehouseId)
+      .limit(1000)
+
+    const [{ data: dataA, error: errA }, { data: dataB, error: errB }] = await Promise.all([qA, qB])
+
+    if (errA) {
+      return NextResponse.json({ error: errA.message }, { status: 500 })
+    }
+    if (errB) {
+      return NextResponse.json({ error: errB.message }, { status: 500 })
+    }
+
+    // Merge and de-dup by id
+    const mergedMap = new Map<string, any>()
+    for (const row of [...(dataA ?? []), ...(dataB ?? [])]) {
+      const rid = String((row as any)?.id ?? '')
+      if (!rid) continue
+      if (!mergedMap.has(rid)) mergedMap.set(rid, row)
+    }
+
+    let merged = Array.from(mergedMap.values())
+
+    // Optional term filter in-memory (keeps the DB query simple/reliable)
     if (term.length > 0) {
-      query = query.or(`sku.ilike.%${term}%,description.ilike.%${term}%`)
+      const t = term.toLowerCase()
+      merged = merged.filter((r: any) => {
+        const sku = String(r?.sku ?? '').toLowerCase()
+        const desc = String(r?.description ?? '').toLowerCase()
+        return sku.includes(t) || desc.includes(t)
+      })
     }
 
-    const { data, error } = await query
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    // Enforce limit
+    merged = merged.slice(0, 1000)
+
+    console.log('[products.search][result]', {
+      countA: Array.isArray(dataA) ? dataA.length : 0,
+      countB: Array.isArray(dataB) ? dataB.length : 0,
+      count: merged.length,
+      sampleA: Array.isArray(dataA) && dataA.length > 0 ? (dataA as any[]).slice(0, 3).map((r) => ({ id: r.id, sku: r.sku })) : [],
+      sampleB: Array.isArray(dataB) && dataB.length > 0 ? (dataB as any[]).slice(0, 3).map((r) => ({ id: r.id, sku: r.sku })) : [],
+    })
 
     return NextResponse.json({
-      products: data ?? [],
+      products: merged,
       shipFromKey,
       effectiveClientId,
+      tenantParentAccountId,
       clientIdResolvedFrom,
       warehousePublicId,
       billingWarehouseId,
     })
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Unexpected error' }, { status: 500 })
+    const msg = e?.message || 'Unexpected error'
+    const status = typeof msg === 'string' && msg.startsWith('Invalid ') ? 400 : 500
+    return NextResponse.json({ error: msg }, { status })
   }
 }

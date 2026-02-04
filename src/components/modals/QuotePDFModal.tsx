@@ -151,7 +151,13 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
                 items.map((item, i) => (
                   <tr key={i} className="border-t">
                     <td className="px-3 py-2 border">{item.sku}</td>
-                    <td className="px-3 py-2 border">{item.product_name}</td>
+                    <td className="px-3 py-2 border">
+                      {typeof item.product_name === 'string'
+                        ? item.product_name.length > 50
+                          ? `${item.product_name.slice(0, 50)}…`
+                          : item.product_name
+                        : '—'}
+                    </td>
                     <td className="px-3 py-2 border">{item.length}×{item.width}×{item.height}</td>
                     <td className="px-3 py-2 border">{item.weight_lbs}</td>
                     <td className="px-3 py-2 border">{item.quantity}</td>
