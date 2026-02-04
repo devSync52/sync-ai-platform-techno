@@ -44,15 +44,16 @@ export default function RegisterPage() {
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: `${location.origin}/onboarding`,
-      },
+      // options: {
+      //   emailRedirectTo: `${location.origin}/onboarding`,
+      // },
     });
 
     if (signUpError) {
       setError(`❌ ${signUpError.message}`);
     } else {
-      router.push("/login?checkEmail=true");
+      router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
+      // router.push("/login?checkEmail=true");
     }
 
     setLoading(false);
