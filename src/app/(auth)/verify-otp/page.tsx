@@ -14,12 +14,13 @@ export default function VerifyOtpPage() {
 
   const email = searchParams.get("email") || "";
 
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Handle typing
   const handleChange = (value: string, index: number) => {
     if (!/^\d?$/.test(value)) return;
 
@@ -27,24 +28,45 @@ export default function VerifyOtpPage() {
     newOtp[index] = value;
     setOtp(newOtp);
 
-    if (value && index < 3) {
+    if (value && index < 5) {
       inputsRef.current[index + 1]?.focus();
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+  // Handle backspace
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    index: number,
+  ) => {
     if (e.key === "Backspace" && !otp[index] && index > 0) {
       inputsRef.current[index - 1]?.focus();
     }
   };
 
+  // Handle paste (🔥 important part)
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
+
+    if (pastedData.length !== 6) return;
+
+    const newOtp = pastedData.split("");
+    setOtp(newOtp);
+
+    inputsRef.current[5]?.focus();
+  };
+
+  // Verify OTP
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
     const token = otp.join("");
 
-    if (token.length !== 4) {
+    if (token.length !== 6) {
       setError("❌ Please enter the complete OTP");
       return;
     }
@@ -79,18 +101,20 @@ export default function VerifyOtpPage() {
         </p>
 
         <form onSubmit={handleVerify} className="space-y-6">
-          <div className="flex gap-4 justify-center remove-arrow">
+          <div className="flex gap-4 justify-center">
             {otp.map((digit, index) => (
               <Input
                 key={index}
                 ref={(el) => (inputsRef.current[index] = el)}
-                type="number"
+                type="text"
                 inputMode="numeric"
+                autoComplete="one-time-code"
                 maxLength={1}
                 value={digit}
                 onChange={(e) => handleChange(e.target.value, index)}
                 onKeyDown={(e) => handleKeyDown(e, index)}
-                className="w-[60px] h-[60px] text-center text-xl font-bold remove-arrow"
+                onPaste={handlePaste}
+                className="w-[60px] h-[60px] text-center text-xl font-bold"
                 required
               />
             ))}
@@ -104,8 +128,8 @@ export default function VerifyOtpPage() {
 
           <button
             type="submit"
-            className="w-full bg-primary text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 flex items-center justify-center"
             disabled={loading}
+            className="w-full bg-primary text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 flex items-center justify-center disabled:opacity-60"
           >
             {loading ? (
               <Loader2 className="animate-spin" size={18} />
