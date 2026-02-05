@@ -1,82 +1,85 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Mail, Lock, Loader2 } from 'lucide-react'
-import { useSupabase } from '@/components/supabase-provider'
-import InputIcon from '@/components/ui/inputIcon'
-import Link from 'next/link'
-import Image from 'next/image'
-
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Mail, Lock, Loader2 } from "lucide-react";
+import { useSupabase } from "@/components/supabase-provider";
+import InputIcon from "@/components/ui/inputIcon";
+import Link from "next/link";
+import Image from "next/image";
 
 export default function LoginForm() {
-  const supabase = useSupabase()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const showCheckEmail = searchParams.get('checkEmail') === 'true'
+  const supabase = useSupabase();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const showCheckEmail = searchParams.get("checkEmail") === "true";
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [imageError, setImageError] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { data, error: signInError } = await supabase.auth.signInWithPassword(
+      {
+        email,
+        password,
+      },
+    );
 
     if (signInError) {
-      setError(signInError.message)
-      setLoading(false)
-      return
+      setError(signInError.message);
+      setLoading(false);
+      return;
     }
 
-    const userId = data?.user?.id
+    const userId = data?.user?.id;
 
     if (!userId) {
-      setError('Login failed. Please try again.')
-      setLoading(false)
-      return
+      setError("Login failed. Please try again.");
+      setLoading(false);
+      return;
     }
 
     await supabase
-      .from('users')
+      .from("users")
       .update({
         has_logged_in: true,
         last_login_at: new Date().toISOString(),
       })
-      .eq('id', userId)
+      .eq("id", userId);
 
     const { data: userRecord, error: fetchError } = await supabase
-      .from('users')
-      .select('account_id')
-      .eq('id', userId)
-      .maybeSingle()
+      .from("users")
+      .select("account_id")
+      .eq("id", userId)
+      .maybeSingle();
 
     if (fetchError) {
-      setError('Error fetching user info.')
-      setLoading(false)
-      return
+      setError("Error fetching user info.");
+      setLoading(false);
+      return;
     }
 
     if (userRecord?.account_id) {
-      router.push('/dashboard')
+      router.push("/pricing");
     } else {
-      router.push('/onboarding')
+      router.push("/onboarding");
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary to-primary text-gray-900">
       <div className="mb-6">
         {imageError ? (
-          <div className="text-white text-xl font-semibold text-center">SynC AI Platform</div>
+          <div className="text-white text-xl font-semibold text-center">
+            SynC AI Platform
+          </div>
         ) : (
           <Image
             src="/sync-ai-platform-logo.svg"
@@ -132,7 +135,7 @@ export default function LoginForm() {
             {loading ? (
               <Loader2 className="animate-spin" size={18} />
             ) : (
-              'Sign In'
+              "Sign In"
             )}
           </button>
         </form>
@@ -145,7 +148,7 @@ export default function LoginForm() {
             Forgot password?
           </Link>
           <p>
-            Don’t have an account?{' '}
+            Don’t have an account?{" "}
             <Link
               href="/register"
               className="text-primary hover:underline font-bold"
@@ -156,5 +159,5 @@ export default function LoginForm() {
         </div>
       </div>
     </div>
-  )
+  );
 }
