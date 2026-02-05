@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -13,8 +13,8 @@ import { Input } from "@/components/ui/input";
 export default function RegisterPage() {
   const router = useRouter();
   const supabase = useSupabase();
+  const searchParams = useSearchParams();
 
-  // step control
   const [step, setStep] = useState<"register" | "otp">("register");
 
   // register states
@@ -35,6 +35,17 @@ export default function RegisterPage() {
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+
+  useEffect(() => {
+    const stepParam = searchParams.get("step");
+    const emailParam = searchParams.get("email");
+
+    if (stepParam === "verify_otp" && emailParam) {
+      setStep("otp");
+      setEmail(emailParam);
+      handleResendOtp(); // automatically send OTP when landing on this page
+    }
+  }, [searchParams]);
 
   // ---------------- REGISTER ----------------
   const handleRegister = async (e: React.FormEvent) => {
@@ -194,19 +205,21 @@ export default function RegisterPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary to-primary">
       {/* Logo */}
       <div className="mb-6">
-        {imageError ? (
-          <div className="text-white text-xl font-semibold">
-            SynC AI Platform
-          </div>
-        ) : (
-          <Image
-            src="/sync-ai-platform-logo.svg"
-            alt="SynC AI Platform"
-            width={250}
-            height={80}
-            onError={() => setImageError(true)}
-          />
-        )}
+        <Link href="/login">
+          {imageError ? (
+            <div className="text-white text-xl font-semibold">
+              SynC AI Platform
+            </div>
+          ) : (
+            <Image
+              src="/sync-ai-platform-logo.svg"
+              alt="SynC AI Platform"
+              width={250}
+              height={80}
+              onError={() => setImageError(true)}
+            />
+          )}
+        </Link>
       </div>
 
       {/* Card */}

@@ -33,7 +33,11 @@ export default function LoginForm() {
     );
 
     if (signInError) {
+      // console.error("error", signInError);
       setError(signInError.message);
+      if (signInError.code == "email_not_confirmed") {
+        router.push(`/register?step=verify_otp&email=${email}`);
+      }
       setLoading(false);
       return;
     }
