@@ -40,25 +40,29 @@ export default function PricingPage() {
 
     if (!user) {
       alert("Login required");
+      setLoadingPlanId(null);
       return;
     }
 
-    const res = await fetch("/api/select-plan", {
+    const res = await fetch("/api/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userId: user.id,
         planId,
+        userEmail: user.email,
       }),
     });
 
     const result = await res.json();
+    console.log("result", result);
+
     setLoadingPlanId(null);
 
-    if (result.success) {
-      router.push("/dashboard");
+    if (result.url) {
+      window.location.href = result.url;
     } else {
-      alert(result.error || "Error selecting plan");
+      alert(result.error || "Error starting checkout");
     }
   };
 
