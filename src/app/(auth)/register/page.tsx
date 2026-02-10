@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -10,7 +10,7 @@ import { useSupabase } from "@/components/supabase-provider";
 import InputIcon from "@/components/ui/inputIcon";
 import { Input } from "@/components/ui/input";
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
   const supabase = useSupabase();
   const searchParams = useSearchParams();
@@ -367,5 +367,17 @@ export default function RegisterPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-primary to-primary" />
+      }
+    >
+      <RegisterPageContent />
+    </Suspense>
   );
 }
