@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSupabase } from "@/components/supabase-provider";
 import {
   ShoppingBag,
@@ -33,9 +33,11 @@ import LowStockAlertChart from "@/components/dashboard/LowStockAlertChart";
 import ReorderForecastChart from "@/components/dashboard/ReorderForecastChart";
 import TopSellingProductsChart from "@/components/dashboard/TopSellingProductsChart";
 import { Button } from "@/components/ui/button";
+import { useSearchParams } from "next/navigation";
 
 export default function DashboardClient({ userId }: { userId: string }) {
   const supabase = useSupabase();
+  const searchParams = useSearchParams();
 
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -66,6 +68,43 @@ export default function DashboardClient({ userId }: { userId: string }) {
   } = useDashboardPreferences(userId);
 
   const [openBuilder, setOpenBuilder] = useState(false);
+  const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const showCheckoutBanner = searchParams.get("checkout") === "success";
+
+  const fetchInvoice = useCallback(async () => {
+    const checkout = searchParams.get("checkout");
+    const sessionId = searchParams.get("session_id");
+    if (checkout !== "success" || !sessionId) return;
+
+    setInvoiceLoading(true);
+    setInvoiceError(null);
+
+    try {
+      const res = await fetch(
+        `/api/stripe/invoice?session_id=${encodeURIComponent(sessionId)}`,
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to load invoice");
+      }
+      const url = data?.invoice_pdf || data?.invoice_url;
+      if (!url) {
+        throw new Error("Invoice not available yet");
+      }
+      setInvoiceUrl(url);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setInvoiceError(message);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    fetchInvoice();
+  }, [fetchInvoice]);
 
   useEffect(() => {
     async function fetchData() {
@@ -324,6 +363,41 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   return (
     <div className="p-6 space-y-6">
+      {showCheckoutBanner && (
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-indigo-900">
+              Subscription activated
+            </p>
+            <p className="text-sm text-indigo-800/80">
+              {invoiceLoading
+                ? "Preparing your invoice..."
+                : invoiceUrl
+                  ? "Your invoice is ready to download."
+                  : invoiceError || "Invoice is not ready yet."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {invoiceUrl && (
+              <Button asChild>
+                <a href={invoiceUrl} target="_blank" rel="noreferrer">
+                  Download invoice
+                </a>
+              </Button>
+            )}
+            {!invoiceUrl && (
+              <Button
+                variant="outline"
+                onClick={fetchInvoice}
+                disabled={invoiceLoading}
+              >
+                {invoiceLoading ? "Checking..." : "Try again"}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ✅ PLAN DISPLAY */}
 
       {selectedPlan && (
