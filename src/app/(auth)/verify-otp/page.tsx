@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { useSupabase } from "@/components/supabase-provider";
 
-export default function VerifyOtpPage() {
+function VerifyOtpPageContent() {
   const supabase = useSupabase();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -150,5 +150,13 @@ export default function VerifyOtpPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function VerifyOtpPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-100" />}>
+      <VerifyOtpPageContent />
+    </Suspense>
   );
 }
