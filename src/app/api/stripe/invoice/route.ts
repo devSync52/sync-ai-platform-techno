@@ -1,9 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+);
 
 export async function GET(req: NextRequest) {
   try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json(
+        { error: "Missing NEXT_PUBLIC_SUPABASE_URL" },
+        { status: 500 },
+      );
+    }
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { error: "Missing SUPABASE_SERVICE_ROLE_KEY" },
+        { status: 500 },
+      );
+    }
     if (!process.env.STRIPE_SECRET_KEY) {
       return NextResponse.json(
         { error: "Missing STRIPE_SECRET_KEY" },
@@ -23,6 +41,23 @@ export async function GET(req: NextRequest) {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["subscription.latest_invoice"],
     });
+
+    const userId = session.metadata?.userId;
+    const planId = session.metadata?.planId;
+
+    if (userId && planId) {
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({
+          plan_id: planId,
+          is_onboarding_complete: true,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        console.error("Failed to sync plan from session:", updateError.message);
+      }
+    }
 
     const subscription = session.subscription as Stripe.Subscription | null;
     const latestInvoice =
