@@ -114,7 +114,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-0 py-0 bg-gradient-to-br from-primary to-primary text-gray-900">
       <div className="mb-6">
         <Image
-          src="/sync-ai-plataform-logo.svg"
+          src="/sync-ai-platform-logo.svg"
           alt="SynC AI Logo"
           width={250}
           height={80}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useSupabase } from "@/components/supabase-provider";
@@ -77,13 +78,15 @@ export default function PricingPage() {
     <div className="space-y-6 p-8 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
-            Pricing
-          </h1>
-          <p className="text-sm text-gray-500">
-            Choose a plan or skip for now.
-          </p>
+        <div className="flex items-center">
+          <Image
+            src="/logo_SynC_purple_red.png"
+            alt="SyncAI"
+            width={160}
+            height={40}
+            className="h-10 w-auto"
+            priority
+          />
         </div>
         <div className="flex items-center gap-2">
           <Link href="/dashboard">
