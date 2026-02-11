@@ -39,10 +39,8 @@ export default function ForgotPasswordPage() {
       </div>
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
-        <h1 className="text-2xl font-bold text-center text-primary">Forgot Password</h1>
-        <p className="text-sm text-center text-gray-600">
-          Enter your email to receive a password reset link.
-        </p>
+        <h1 className="text-2xl font-bold text-center text-primary">Enter Verification Code</h1>
+        <p className="text-sm text-center text-gray-600 max-w-[200] mx-auto">Please enter the verification code that was sent to your email address ayan057@yopmail.com</p>
 
         {message && (
           <div className="text-sm text-center px-4 py-2 rounded-md font-medium 

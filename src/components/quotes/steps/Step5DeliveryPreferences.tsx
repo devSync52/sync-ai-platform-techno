@@ -400,63 +400,6 @@ export default function Step5DeliveryPreferences({
   // Derive basic geometry/weight from preferences for LTL candidacy.
   // Prefer precomputed multi-box data (per_box_* fields) when available.
   const prefsAny: any = draft.preferences || {};
-
-  // Freight override derived values
-  const shippingPriceMode: 'quoted' | 'manual' =
-    (prefsAny.shipping_price_mode === 'manual' || prefsAny.shipping_price_mode === 'quoted')
-      ? prefsAny.shipping_price_mode
-      : 'quoted'
-
-  const manualShippingTotalRaw = prefsAny.manual_shipping_total
-  const manualShippingTotal =
-    manualShippingTotalRaw === null || manualShippingTotalRaw === undefined
-      ? ''
-      : String(manualShippingTotalRaw)
-
-  const manualShippingCurrency = (prefsAny.manual_shipping_currency || 'USD') as string
-
-  const manualServiceNameRaw = prefsAny.manual_shipping_service_name
-  const manualServiceName =
-    manualServiceNameRaw === null || manualServiceNameRaw === undefined ? '' : String(manualServiceNameRaw)
-
-  const manualDeliveryDaysRaw = prefsAny.manual_shipping_delivery_days
-  const manualDeliveryDays =
-    manualDeliveryDaysRaw === null || manualDeliveryDaysRaw === undefined ? '' : String(manualDeliveryDaysRaw)
-
-  const manualDeliveryDaysNum = manualDeliveryDays ? Number(manualDeliveryDays) : null
-
-  const effectiveServiceName =
-    shippingPriceMode === 'manual'
-      ? (manualServiceName || 'Manual service')
-      : (selectedService?.carrier_service_name ||
-          selectedService?.description ||
-          selectedService?.serviceName ||
-          selectedService?.name ||
-          'Unnamed service')
-
-  const effectiveDeliveryDays =
-    shippingPriceMode === 'manual'
-      ? (manualDeliveryDaysNum !== null && Number.isFinite(manualDeliveryDaysNum)
-          ? `${manualDeliveryDaysNum} business day(s)`
-          : 'Estimated')
-      : (selectedService?.deliveryDays
-          ? `${selectedService.deliveryDays} business day(s)`
-          : 'Estimated')
-
-  const effectiveCostText =
-    shippingPriceMode === 'manual'
-      ? (manualShippingTotal !== '' && !isNaN(Number(manualShippingTotal))
-          ? `$${Number(manualShippingTotal).toFixed(2)}`
-          : 'To be calculated')
-      : (selectedService?.total !== undefined && !isNaN(Number(selectedService.total))
-          ? `$${Number(selectedService.total).toFixed(2)}`
-          : 'To be calculated')
-
-  const showActionsBar = shippingPriceMode === 'manual' || !!selectedService
-  const canSaveQuote =
-    (shippingPriceMode === 'manual'
-      ? (manualShippingTotal !== '' && !isNaN(Number(manualShippingTotal)))
-      : !!selectedService)
   const boxCount = prefsAny.box_count as number | undefined;
 
   const totalWeightRaw = Number(prefsAny.weight || 0);
@@ -576,7 +519,7 @@ export default function Step5DeliveryPreferences({
 
 
 
-          <label className="block text-sm font-medium mt-4">Size (in)</label>
+<label className="block text-sm font-medium mt-4">Size (in)</label>
 <div className="flex flex-col gap-2">
   {boxCount && boxCount > 1 && (draft.preferences as any)?.packing_strategy === 'min_boxes' && (
     <p className="text-[11px] text-amber-600">
@@ -651,182 +594,45 @@ export default function Step5DeliveryPreferences({
     />
   </div>
 
-          {/* Freight override */}
-          <div className="mt-4">
-            <label className="block text-sm font-medium">Freight</label>
-            <p className="text-[11px] text-muted-foreground">
-              Choose how the freight price should be calculated.
-            </p>
-
-            <div className="mt-2 flex gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() =>
-                  updateDraft('preferences', {
-                    ...(draft.preferences as any),
-                    shipping_price_mode: 'quoted',
-                    // keep manual values for convenience, but quoted will be used
-                    manual_shipping_currency: manualShippingCurrency || 'USD',
-                  })
-                }
-                className={cn(
-                  'flex-1 rounded border px-3 py-1 text-center',
-                  shippingPriceMode === 'quoted'
-                    ? 'border-primary bg-primary/10 font-semibold text-primary'
-                    : 'border-border bg-white text-muted-foreground',
-                )}
-              >
-                Use quoted rate
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  updateDraft('preferences', {
-                    ...(draft.preferences as any),
-                    shipping_price_mode: 'manual',
-                    manual_shipping_currency: manualShippingCurrency || 'USD',
-                    manual_shipping_total:
-                      (draft.preferences as any)?.manual_shipping_total ??
-                      (selectedService?.total ?? null),
-                    manual_shipping_service_name:
-                      (draft.preferences as any)?.manual_shipping_service_name ??
-                      (selectedService?.carrier_service_name ||
-                        selectedService?.service_name ||
-                        selectedService?.serviceName ||
-                        null),
-                    manual_shipping_delivery_days:
-                      (draft.preferences as any)?.manual_shipping_delivery_days ??
-                      (selectedService?.deliveryDays ?? null),
-                  })
-                }
-                className={cn(
-                  'flex-1 rounded border px-3 py-1 text-center',
-                  shippingPriceMode === 'manual'
-                    ? 'border-primary bg-primary/10 font-semibold text-primary'
-                    : 'border-border bg-white text-muted-foreground',
-                )}
-              >
-                Set manually
-              </button>
+        {/* LTL candidate notice + shipping mode selector */}
+        <div className="mt-4">
+          {ltlPhysicalCandidate && (
+            <div className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+              This shipment looks like a good candidate for <strong>LTL Freight</strong> based on weight,
+              dimensions or number of boxes.
             </div>
+          )}
 
-            {shippingPriceMode === 'manual' && (
-              <div className="mt-3">
-                <label className="block text-sm font-medium">Manual freight ({manualShippingCurrency})</label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={manualShippingTotal}
-                  onChange={(e) => {
-                    const raw = e.target.value
-                    const num = raw === '' ? null : Number(raw)
-                    updateDraft('preferences', {
-                      ...(draft.preferences as any),
-                      shipping_price_mode: 'manual',
-                      manual_shipping_currency: manualShippingCurrency || 'USD',
-                      manual_shipping_total: num !== null && Number.isFinite(num) ? num : null,
-                    })
-                  }}
-                />
-
-                <div className="mt-3">
-                  <label className="block text-sm font-medium">Service name</label>
-                  <Input
-                    placeholder="e.g. USPS Ground Advantage"
-                    value={manualServiceName}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      updateDraft('preferences', {
-                        ...(draft.preferences as any),
-                        shipping_price_mode: 'manual',
-                        manual_shipping_currency: manualShippingCurrency || 'USD',
-                        manual_shipping_service_name: v.trim() ? v : null,
-                      })
-                    }}
-                  />
-                </div>
-
-                <div className="mt-3">
-                  <label className="block text-sm font-medium">Delivery days</label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    step="1"
-                    min="0"
-                    placeholder="e.g. 5"
-                    value={manualDeliveryDays}
-                    onChange={(e) => {
-                      const raw = e.target.value
-                      const num = raw === '' ? null : Number(raw)
-                      updateDraft('preferences', {
-                        ...(draft.preferences as any),
-                        shipping_price_mode: 'manual',
-                        manual_shipping_currency: manualShippingCurrency || 'USD',
-                        manual_shipping_delivery_days: num !== null && Number.isFinite(num) ? num : null,
-                      })
-                    }}
-                  />
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Used for display only (e.g. “5 business day(s)”).
-                  </p>
-                </div>
-
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  This value will override any carrier quote when creating the order. Service name and delivery days are optional.
-                </p>
-              </div>
-            )}
-
-            {shippingPriceMode === 'quoted' && selectedService?.total !== undefined && (
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Current selection: <strong>${Number(selectedService.total).toFixed(2)}</strong> ({selectedService.carrier || 'Carrier'})
-              </p>
-            )}
+          <label className="block text-sm font-medium">Shipping Mode</label>
+          <div className="mt-1 flex gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setShippingMode('parcel')}
+              className={cn(
+                'flex-1 rounded border px-3 py-1 text-center',
+                shippingMode === 'parcel'
+                  ? 'border-primary bg-primary/10 font-semibold text-primary'
+                  : 'border-border bg-white text-muted-foreground',
+              )}
+            >
+              Parcel (Small Package)
+            </button>
+            <button
+              type="button"
+              onClick={() => ltlPhysicalCandidate && setShippingMode('ltl')}
+              disabled={!ltlPhysicalCandidate}
+              className={cn(
+                'flex-1 rounded border px-3 py-1 text-center',
+                shippingMode === 'ltl'
+                  ? 'border-primary bg-primary/10 font-semibold text-primary'
+                  : 'border-border bg-white text-muted-foreground',
+                !ltlPhysicalCandidate && 'opacity-50 cursor-not-allowed',
+              )}
+            >
+              LTL Freight
+            </button>
           </div>
-
-          {/* LTL candidate notice + shipping mode selector */}
-          <div className="mt-4">
-            {ltlPhysicalCandidate && (
-              <div className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                This shipment looks like a good candidate for <strong>LTL Freight</strong> based on weight,
-                dimensions or number of boxes.
-              </div>
-            )}
-
-            <label className="block text-sm font-medium">Shipping Mode</label>
-            <div className="mt-1 flex gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setShippingMode('parcel')}
-                className={cn(
-                  'flex-1 rounded border px-3 py-1 text-center',
-                  shippingMode === 'parcel'
-                    ? 'border-primary bg-primary/10 font-semibold text-primary'
-                    : 'border-border bg-white text-muted-foreground',
-                )}
-              >
-                Parcel (Small Package)
-              </button>
-              <button
-                type="button"
-                onClick={() => ltlPhysicalCandidate && setShippingMode('ltl')}
-                disabled={!ltlPhysicalCandidate}
-                className={cn(
-                  'flex-1 rounded border px-3 py-1 text-center',
-                  shippingMode === 'ltl'
-                    ? 'border-primary bg-primary/10 font-semibold text-primary'
-                    : 'border-border bg-white text-muted-foreground',
-                  !ltlPhysicalCandidate && 'opacity-50 cursor-not-allowed',
-                )}
-              >
-                LTL Freight
-              </button>
-            </div>
-          </div>
+        </div>
         </div>
         </div>
 
@@ -1083,77 +889,78 @@ export default function Step5DeliveryPreferences({
           )}
         </div>
 
-      {showActionsBar && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t bg-white/95 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-3 py-3 md:flex-row md:items-center md:justify-between md:px-4">
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Selected service</p>
-              <p className="truncate text-sm font-semibold">{effectiveServiceName}</p>
-              <p className="text-xs text-muted-foreground">Delivery: <strong>{effectiveDeliveryDays}</strong> • Cost: <strong>{effectiveCostText}</strong></p>
-            </div>
+      {selectedService && (
+        <div className="w-full lg:w-1/5 bg-white p-4 md:p-5 xl:p-6 rounded shadow border">
+          <h2 className="text-xl font-bold mb-4">Actions</h2>
 
-            <div className="flex items-center gap-2">
-              <Button
-                className="w-full md:w-auto"
-                disabled={saving || !canSaveQuote}
-                onClick={async () => {
-                  if (!canSaveQuote) {
-                    toast.error(
-                      shippingPriceMode === 'manual'
-                        ? 'Please set a valid manual freight value.'
-                        : 'Please select a service first.'
-                    )
-                    return
-                  }
+          <p className="text-sm mb-4">
+            Selected:{' '}
+            <strong>
+              {selectedService.carrier_service_name ||
+                selectedService.description ||
+                selectedService.serviceName ||
+                selectedService.name ||
+                'Unnamed service'}
+            </strong>
+            <br />
+            Delivery:{' '}
+            <strong>
+              {selectedService.deliveryDays
+                ? `${selectedService.deliveryDays} business day(s)`
+                : 'Estimated'}
+            </strong>
+            <br />
+            Cost:{' '}
+            <strong>
+              {selectedService.total !== undefined && !isNaN(Number(selectedService.total))
+                ? `$${Number(selectedService.total).toFixed(2)}`
+                : 'To be calculated'}
+            </strong>
+          </p>
 
-                  try {
-                    setSaving(true)
+          <Button
+            className="w-full mb-2"
+            disabled={saving}
+            onClick={async () => {
+              if (!selectedService) {
+                toast.error('Please select a service first.');
+                return;
+              }
 
-                    const selectedServiceToPersist =
-                      shippingPriceMode === 'manual'
-                        ? {
-                            carrier: (selectedService?.carrier || 'MANUAL'),
-                            carrier_service_code: 'manual',
-                            carrier_service_name: manualServiceName || 'Manual freight',
-                            total: Number(manualShippingTotal),
-                            currency: manualShippingCurrency || 'USD',
-                            deliveryDays:
-                              manualDeliveryDaysNum !== null && Number.isFinite(manualDeliveryDaysNum)
-                                ? manualDeliveryDaysNum
-                                : null,
-                            metadata: { source: 'manual' },
-                          }
-                        : selectedService
+              try {
+                setSaving(true)
 
-                    const next = await patchDraft({
-                      selected_service: selectedServiceToPersist,
-                      status: 'quoted',
-                      updated_at: new Date().toISOString(),
-                    })
+                const next = await patchDraft({
+                  selected_service: selectedService,
+                  status: 'quoted',
+                  updated_at: new Date().toISOString(),
+                })
 
-                    if (next) {
-                      setDraft((prev) => (prev ? { ...prev, ...next } : prev))
-                    }
+                if (next) {
+                  setDraft((prev) => (prev ? { ...prev, ...next } : prev))
+                }
 
-                    toast.success('Selection saved successfully!')
-                    router.push('/orders/quotes')
-                  } catch (err) {
-                    console.error('❌ Failed to save selection:', err)
-                    toast.error('Failed to save selection.')
-                  } finally {
-                    setSaving(false)
-                  }
-                }}
-              >
-                {saving ? 'Saving...' : 'Save quote'}
-              </Button>
-            </div>
-          </div>
+                toast.success('Selection saved successfully!')
+                router.push('/orders/quotes')
+              } catch (err) {
+                console.error('❌ Failed to save selection:', err)
+                toast.error('Failed to save selection.')
+              } finally {
+                setSaving(false)
+              }
+            }}
+          >
+            {saving ? 'Saving...' : 'Save quote'}
+          </Button>
+          <p className="text-[11px] text-muted-foreground text-center">
+            This will lock this service for this quote and return to the quotes list.
+          </p>
+
+
+
+
         </div>
       )}
-
-      {/* Spacer so content isn't hidden behind the fixed bottom bar */}
-      {showActionsBar && <div className="h-20" />}
     </div>
   )
 }
