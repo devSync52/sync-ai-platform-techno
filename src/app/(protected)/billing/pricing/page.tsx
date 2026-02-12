@@ -1,16 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { useSearchParams } from "next/navigation";
 import { useSupabase } from "@/components/supabase-provider";
 import { useEffect, useState } from "react";
 
 export default function PricingPage() {
   const supabase = useSupabase();
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const intent = searchParams.get("intent");
 
   /* ================= FETCH PLANS ================= */
 
@@ -23,6 +23,19 @@ export default function PricingPage() {
 
       if (!error && data) {
         setPlans(data);
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: userRow } = await supabase
+          .from("users")
+          .select("plan_id")
+          .eq("id", user.id)
+          .maybeSingle();
+        setCurrentPlanId(userRow?.plan_id ?? null);
       }
     };
 
@@ -40,33 +53,43 @@ export default function PricingPage() {
 
     if (!user) {
       alert("Login required");
+      setLoadingPlanId(null);
       return;
     }
 
-    const res = await fetch("/api/select-plan", {
+    const res = await fetch("/api/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userId: user.id,
         planId,
+        userEmail: user.email,
       }),
     });
 
     const result = await res.json();
     setLoadingPlanId(null);
 
-    if (result.success) {
-      router.push("/dashboard");
+    if (result.url) {
+      window.location.href = result.url;
+    } else if (result.success) {
+      alert(result.message || "Plan updated successfully");
+
+      const {
+        data: { user: refreshedUser },
+      } = await supabase.auth.getUser();
+
+      if (refreshedUser) {
+        const { data: userRow } = await supabase
+          .from("users")
+          .select("plan_id")
+          .eq("id", refreshedUser.id)
+          .maybeSingle();
+        setCurrentPlanId(userRow?.plan_id ?? null);
+      }
     } else {
-      alert(result.error || "Error selecting plan");
+      alert(result.error || "Error starting checkout");
     }
-  };
-
-  /* ================= LOGOUT ================= */
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
   };
 
   return (
@@ -78,7 +101,9 @@ export default function PricingPage() {
             Pricing
           </h1>
           <p className="text-sm text-gray-500">
-            Choose a plan or skip for now.
+            {intent === "upgrade" || intent === "downgrade"
+              ? "Change your current subscription plan."
+              : "Choose a plan or skip for now."}
           </p>
         </div>
         {/* <div className="flex items-center gap-2">
@@ -113,59 +138,52 @@ export default function PricingPage() {
             return (
               <div
                 key={plan.id}
-                className={`${
-                  isPopular
+                className={`${isPopular
                     ? "relative z-10 rounded-2xl bg-gradient-to-b from-purple-800 to-purple-600 p-8 shadow-2xl scale-105"
                     : "rounded-2xl bg-white p-8 border border-gray-200"
-                } transition-all duration-300`}
+                  } transition-all duration-300`}
               >
                 <h3
-                  className={`text-base font-semibold ${
-                    isPopular ? "text-white" : "text-purple-600"
-                  }`}
+                  className={`text-base font-semibold ${isPopular ? "text-white" : "text-purple-600"
+                    }`}
                 >
                   {plan.name}
                 </h3>
 
                 <p className="mt-4 flex items-baseline gap-x-2">
                   <span
-                    className={`text-5xl font-bold ${
-                      isPopular ? "text-white" : "text-gray-900"
-                    }`}
+                    className={`text-5xl font-bold ${isPopular ? "text-white" : "text-gray-900"
+                      }`}
                   >
                     ${plan.price}
                   </span>
                   <span
-                    className={`text-sm ${
-                      isPopular ? "text-purple-200" : "text-gray-500"
-                    }`}
+                    className={`text-sm ${isPopular ? "text-purple-200" : "text-gray-500"
+                      }`}
                   >
                     /{plan.interval}
                   </span>
                 </p>
 
                 <p
-                  className={`mt-4 text-sm ${
-                    isPopular ? "text-purple-200" : "text-gray-500"
-                  }`}
+                  className={`mt-4 text-sm ${isPopular ? "text-purple-200" : "text-gray-500"
+                    }`}
                 >
                   Dedicated support and infrastructure for your company.
                 </p>
 
                 <ul
                   role="list"
-                  className={`mt-6 space-y-3 text-sm ${
-                    isPopular ? "text-purple-100" : "text-gray-600"
-                  }`}
+                  className={`mt-6 space-y-3 text-sm ${isPopular ? "text-purple-100" : "text-gray-600"
+                    }`}
                 >
                   {plan.features?.map((feature: string, index: number) => (
                     <li key={index} className="flex gap-x-3">
                       <svg
                         viewBox="0 0 20 20"
                         fill="currentColor"
-                        className={`h-5 w-5 flex-none ${
-                          isPopular ? "text-purple-300" : "text-purple-600"
-                        }`}
+                        className={`h-5 w-5 flex-none ${isPopular ? "text-purple-300" : "text-purple-600"
+                          }`}
                       >
                         <path
                           d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
@@ -180,16 +198,17 @@ export default function PricingPage() {
 
                 <button
                   onClick={() => handleSelectPlan(plan.id)}
-                  disabled={loadingPlanId === plan.id}
-                  className={`mt-8 w-full rounded-md px-4 py-2.5 text-sm font-semibold transition ${
-                    isPopular
+                  disabled={loadingPlanId === plan.id || currentPlanId === plan.id}
+                  className={`mt-8 w-full rounded-md px-4 py-2.5 text-sm font-semibold transition ${isPopular
                       ? "bg-purple-500 text-white hover:bg-purple-400 shadow-lg"
                       : "border border-purple-600 text-purple-600 hover:bg-purple-50"
-                  }`}
+                    }`}
                 >
-                  {loadingPlanId === plan.id
-                    ? "Processing..."
-                    : "Get started today"}
+                  {currentPlanId === plan.id
+                    ? "Current plan"
+                    : loadingPlanId === plan.id
+                      ? "Processing..."
+                      : "Select plan"}
                 </button>
               </div>
             );
