@@ -106,6 +106,12 @@ export default function InvoicesPage() {
   const [cancelingDowngrade, setCancelingDowngrade] = useState(false);
   const [cancelingPlan, setCancelingPlan] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const latestPlanInvoice =
+    invoices.find(
+      (row) =>
+        !!(row.periodStart || row.periodEnd) &&
+        (!!plan?.name ? row.plan.name === plan.name : true),
+    ) ?? invoices.find((row) => !!(row.periodStart || row.periodEnd)) ?? null;
 
   useEffect(() => {
     let active = true;
@@ -249,6 +255,13 @@ export default function InvoicesPage() {
               {" · "}
               {formatCurrency(plan.amount, plan.currency)} /{" "}
               {plan.interval ?? "month"}
+            </div>
+            <div>
+              Duration:{" "}
+              {formatPeriod(
+                latestPlanInvoice?.periodStart ?? null,
+                latestPlanInvoice?.periodEnd ?? null,
+              )}
             </div>
             {upcomingDowngrade && (
               <div className="flex items-center justify-between gap-2">
