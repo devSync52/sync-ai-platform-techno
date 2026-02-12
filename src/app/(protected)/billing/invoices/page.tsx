@@ -111,7 +111,9 @@ export default function InvoicesPage() {
       (row) =>
         !!(row.periodStart || row.periodEnd) &&
         (!!plan?.name ? row.plan.name === plan.name : true),
-    ) ?? invoices.find((row) => !!(row.periodStart || row.periodEnd)) ?? null;
+    ) ??
+    invoices.find((row) => !!(row.periodStart || row.periodEnd)) ??
+    null;
 
   useEffect(() => {
     let active = true;
@@ -392,16 +394,17 @@ export default function InvoicesPage() {
                           </a>
                         )}
                         {row.downloadUrl ? (
-                          // <a
-                          //   href={row.downloadUrl}
-                          //   target="_blank"
-                          //   rel="noreferrer"
-                          // >
-                          //   <Button size="sm" variant="outline">
-                          //     Download
-                          //   </Button>
-                          // </a>
-                        ) : row.payUrl ? (
+                          <p></p>
+                        ) : // <a
+                        //   href={row.downloadUrl}
+                        //   target="_blank"
+                        //   rel="noreferrer"
+                        // >
+                        //   <Button size="sm" variant="outline">
+                        //     Download
+                        //   </Button>
+                        // </a>
+                        row.payUrl ? (
                           <a href={row.payUrl} target="_blank" rel="noreferrer">
                             <Button size="sm" variant="default">
                               Pay now
