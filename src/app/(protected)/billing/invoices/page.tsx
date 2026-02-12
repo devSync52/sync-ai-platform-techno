@@ -324,6 +324,7 @@ export default function InvoicesPage() {
           </div>
         )}
 
+
         {!loading && !error && invoices.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -396,25 +397,25 @@ export default function InvoicesPage() {
                         {row.downloadUrl ? (
                           <p></p>
                         ) : // <a
-                        //   href={row.downloadUrl}
-                        //   target="_blank"
-                        //   rel="noreferrer"
-                        // >
-                        //   <Button size="sm" variant="outline">
-                        //     Download
-                        //   </Button>
-                        // </a>
-                        row.payUrl ? (
-                          <a href={row.payUrl} target="_blank" rel="noreferrer">
-                            <Button size="sm" variant="default">
-                              Pay now
+                          //   href={row.downloadUrl}
+                          //   target="_blank"
+                          //   rel="noreferrer"
+                          // >
+                          //   <Button size="sm" variant="outline">
+                          //     Download
+                          //   </Button>
+                          // </a>
+                          row.payUrl ? (
+                            <a href={row.payUrl} target="_blank" rel="noreferrer">
+                              <Button size="sm" variant="default">
+                                Pay now
+                              </Button>
+                            </a>
+                          ) : (
+                            <Button size="sm" variant="outline" disabled>
+                              Processing
                             </Button>
-                          </a>
-                        ) : (
-                          <Button size="sm" variant="outline" disabled>
-                            Processing
-                          </Button>
-                        )}
+                          )}
                       </div>
                     </td>
                   </tr>
