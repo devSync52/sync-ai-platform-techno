@@ -318,12 +318,12 @@ export default function InvoicesPage() {
                   <th className="py-2 pr-3">Plan</th>
                   <th className="py-2 pr-3">Period</th>
                   <th className="py-2 pr-3">Created</th>
-                  <th className="py-2 pr-3">Due Date</th>
+                  {/* <th className="py-2 pr-3">Due Date</th> */}
                   <th className="py-2 pr-3">Subtotal</th>
-                  <th className="py-2 pr-3">Tax</th>
+                  {/* <th className="py-2 pr-3">Tax</th> */}
                   <th className="py-2 pr-3">Total</th>
                   <th className="py-2 pr-3">Paid</th>
-                  <th className="py-2 pr-3">Due</th>
+                  {/* <th className="py-2 pr-3">Due</th> */}
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 text-right">Actions</th>
                 </tr>
@@ -342,27 +342,27 @@ export default function InvoicesPage() {
                       {formatPeriod(row.periodStart, row.periodEnd)}
                     </td>
                     <td className="py-2 pr-3">{formatDate(row.createdAt)}</td>
-                    <td className="py-2 pr-3">{formatDate(row.dueDate)}</td>
+                    {/* <td className="py-2 pr-3">{formatDate(row.dueDate)}</td> */}
                     <td className="py-2 pr-3">
                       {formatCurrency(row.subtotal ?? 0, row.currency)}
                     </td>
-                    <td className="py-2 pr-3">
+                    {/* <td className="py-2 pr-3">
                       {formatCurrency(row.tax ?? 0, row.currency)}
-                    </td>
+                    </td> */}
                     <td className="py-2 pr-3">
                       {formatCurrency(row.total ?? 0, row.currency)}
                     </td>
                     <td className="py-2 pr-3">
                       {formatCurrency(row.amountPaid ?? 0, row.currency)}
                     </td>
-                    <td className="py-2 pr-3">
+                    {/* <td className="py-2 pr-3">
                       {formatCurrency(
                         row.status.toLowerCase() === "paid"
                           ? 0
                           : (row.amountDue ?? 0),
                         row.currency,
                       )}
-                    </td>
+                    </td> */}
                     <td className="py-2 pr-3">{statusBadge(row.status)}</td>
                     <td className="py-2 text-right">
                       <div className="flex justify-end gap-2">
