@@ -102,7 +102,7 @@ export async function POST(req: Request) {
   const syncUserPlan = async (
     userId?: string,
     planId?: string,
-    customerId?: string,
+    customerId?: string | null,
   ) => {
     if (!userId || !planId) return;
 
@@ -123,6 +123,31 @@ export async function POST(req: Request) {
     } else if (customerId) {
       // Also update the customer's metadata in Stripe with our user ID for good measure.
       await getStripe().customers.update(customerId, { metadata: { userId } });
+    }
+  };
+
+  const clearUserPlan = async (userId?: string, customerId?: string | null) => {
+    if (!userId && !customerId) return;
+
+    let query = supabase
+      .from("users")
+      .update({
+        plan_id: null,
+        is_onboarding_complete: true,
+      });
+
+    if (userId) {
+      query = query.eq("id", userId);
+    } else if (customerId) {
+      query = query.eq("stripe_customer_id", customerId);
+    }
+
+    const { error } = await query;
+    if (error) {
+      console.error(
+        "[stripe/webhook] failed to clear user plan on cancellation:",
+        error.message,
+      );
     }
   };
 
@@ -174,6 +199,14 @@ export async function POST(req: Request) {
         stripeId(subscription.customer),
       );
     }
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object as Stripe.Subscription;
+    const customerId = stripeId(
+      subscription.customer as string | { id: string } | null,
+    );
+    await clearUserPlan(subscription.metadata?.userId, customerId ?? undefined);
   }
 
   return NextResponse.json({ received: true });

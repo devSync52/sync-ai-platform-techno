@@ -107,6 +107,10 @@ type UpcomingDowngradePayload = PlanPayload & {
   effectiveAt: string | null;
 };
 
+type UpcomingCancellationPayload = {
+  effectiveAt: string | null;
+};
+
 const managedSubscriptionStatuses = new Set<Stripe.Subscription.Status>([
   "active",
   "trialing",
@@ -226,6 +230,66 @@ async function findUpcomingDowngrade(
         error,
       );
     }
+  }
+
+  return null;
+}
+
+async function findUpcomingCancellation(
+  stripe: Stripe,
+  customerIds: string[],
+  userId: string,
+): Promise<UpcomingCancellationPayload | null> {
+  const candidates: Stripe.Subscription[] = [];
+  const addCandidate = (subscription?: Stripe.Subscription | null) => {
+    if (!subscription) return;
+    if (!managedSubscriptionStatuses.has(subscription.status)) return;
+    if (candidates.some((row) => row.id === subscription.id)) return;
+    candidates.push(subscription);
+  };
+
+  for (const customerId of customerIds) {
+    try {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 20,
+      });
+      for (const subscription of subscriptions.data) {
+        addCandidate(subscription);
+      }
+    } catch (error) {
+      console.warn(
+        "[api/stripe/invoices] failed to resolve upcoming cancellation by customer:",
+        customerId,
+        error,
+      );
+    }
+  }
+
+  const subscriptionsApi = stripe.subscriptions as any;
+  if (typeof subscriptionsApi.search === "function") {
+    try {
+      const result = await subscriptionsApi.search({
+        query: `metadata['userId']:'${userId}'`,
+        limit: 20,
+      });
+      for (const subscription of result?.data ?? []) {
+        addCandidate(subscription as Stripe.Subscription);
+      }
+    } catch (error) {
+      console.warn(
+        "[api/stripe/invoices] failed to resolve upcoming cancellation by metadata search:",
+        error,
+      );
+    }
+  }
+
+  for (const subscription of candidates) {
+    if (!subscription.cancel_at_period_end) continue;
+    return {
+      effectiveAt: toIsoDate(subscription.current_period_end),
+    };
   }
 
   return null;
@@ -850,12 +914,18 @@ export async function GET() {
       supabase,
       candidateIds,
     );
+    const upcomingCancellation = await findUpcomingCancellation(
+      stripe,
+      candidateIds,
+      user.id,
+    );
 
     if (customerIdsToLoad.length === 0) {
       if (subscriptionFallback.invoices.length === 0) {
         return NextResponse.json({
           plan: localPlanPayload,
           upcomingDowngrade,
+          upcomingCancellation,
           data: [],
         });
       }
@@ -942,6 +1012,7 @@ export async function GET() {
     return NextResponse.json({
       plan: localPlanPayload ?? fallbackPlanFromInvoice,
       upcomingDowngrade,
+      upcomingCancellation,
       data,
     });
   } catch (error) {
