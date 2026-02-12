@@ -95,6 +95,142 @@ type LocalPlanLike = {
   interval?: string | null;
 };
 
+type PlanPayload = {
+  id: string;
+  name: string;
+  amount: number;
+  interval: string | null;
+  currency: string;
+};
+
+type UpcomingDowngradePayload = PlanPayload & {
+  effectiveAt: string | null;
+};
+
+const managedSubscriptionStatuses = new Set<Stripe.Subscription.Status>([
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+]);
+
+async function resolvePlanPayloadByPriceId(
+  stripe: Stripe,
+  supabase: any,
+  priceId: string,
+): Promise<PlanPayload | null> {
+  const { data: localPlan } = await supabase
+    .from("plans")
+    .select("id, name, price, interval")
+    .eq("stripe_price_id", priceId)
+    .maybeSingle();
+
+  if (localPlan) {
+    return {
+      id: localPlan.id,
+      name: localPlan.name,
+      amount: Number(localPlan.price ?? 0),
+      interval: localPlan.interval ?? null,
+      currency: "USD",
+    };
+  }
+
+  try {
+    const price = await stripe.prices.retrieve(priceId, { expand: ["product"] });
+    const productName =
+      price.product && typeof price.product === "object" && "name" in price.product
+        ? price.product.name
+        : null;
+
+    return {
+      id: price.id,
+      name: price.nickname ?? productName ?? "Planned plan",
+      amount: money(price.unit_amount),
+      interval: price.recurring?.interval ?? null,
+      currency: price.currency?.toUpperCase() ?? "USD",
+    };
+  } catch (error) {
+    console.warn(
+      "[api/stripe/invoices] failed to resolve plan by Stripe price:",
+      priceId,
+      error,
+    );
+    return null;
+  }
+}
+
+async function findUpcomingDowngrade(
+  stripe: Stripe,
+  supabase: any,
+  customerIds: string[],
+): Promise<UpcomingDowngradePayload | null> {
+  for (const customerId of customerIds) {
+    try {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 20,
+        expand: ["data.items.data.price"],
+      });
+
+      const subscription = subscriptions.data.find((row) =>
+        managedSubscriptionStatuses.has(row.status),
+      );
+      if (!subscription || !subscription.schedule) continue;
+
+      const scheduleId =
+        typeof subscription.schedule === "string"
+          ? subscription.schedule
+          : subscription.schedule.id;
+      const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
+
+      const nextPhase =
+        schedule.phases.find(
+          (phase) =>
+            typeof phase.start_date === "number" &&
+            phase.start_date >= subscription.current_period_end,
+        ) ?? null;
+
+      const currentItem = subscription.items.data[0];
+      const currentCents = currentItem?.price?.unit_amount ?? null;
+      const nextPriceRef = nextPhase?.items?.[0]?.price;
+      const nextPriceId =
+        typeof nextPriceRef === "string" ? nextPriceRef : nextPriceRef?.id;
+      if (!nextPriceId) continue;
+
+      const nextPlan = await resolvePlanPayloadByPriceId(stripe, supabase, nextPriceId);
+      if (!nextPlan) continue;
+
+      const nextCents =
+        typeof nextPlan.amount === "number" && Number.isFinite(nextPlan.amount)
+          ? Math.round(nextPlan.amount * 100)
+          : null;
+
+      const isDowngrade =
+        typeof currentCents === "number" &&
+        Number.isFinite(currentCents) &&
+        typeof nextCents === "number" &&
+        Number.isFinite(nextCents) &&
+        nextCents < currentCents;
+
+      if (!isDowngrade) continue;
+
+      return {
+        ...nextPlan,
+        effectiveAt: toIsoDate(nextPhase?.start_date ?? null),
+      };
+    } catch (error) {
+      console.warn(
+        "[api/stripe/invoices] failed to resolve upcoming downgrade:",
+        customerId,
+        error,
+      );
+    }
+  }
+
+  return null;
+}
+
 async function findCheckoutSessionByUser(
   stripe: Stripe,
   userId: string,
@@ -636,7 +772,7 @@ export async function GET() {
           .maybeSingle()
       : { data: null as any };
 
-    const localPlanPayload = localPlan
+    const localPlanPayload: PlanPayload | null = localPlan
       ? {
           id: localPlan.id,
           name: localPlan.name,
@@ -649,6 +785,7 @@ export async function GET() {
     if (!process.env.STRIPE_SECRET_KEY) {
       return NextResponse.json({
         plan: localPlanPayload,
+        upcomingDowngrade: null,
         data: [],
       });
     }
@@ -708,10 +845,17 @@ export async function GET() {
             ? [customerId]
             : [];
 
+    const upcomingDowngrade = await findUpcomingDowngrade(
+      stripe,
+      supabase,
+      candidateIds,
+    );
+
     if (customerIdsToLoad.length === 0) {
       if (subscriptionFallback.invoices.length === 0) {
         return NextResponse.json({
           plan: localPlanPayload,
+          upcomingDowngrade,
           data: [],
         });
       }
@@ -797,6 +941,7 @@ export async function GET() {
 
     return NextResponse.json({
       plan: localPlanPayload ?? fallbackPlanFromInvoice,
+      upcomingDowngrade,
       data,
     });
   } catch (error) {

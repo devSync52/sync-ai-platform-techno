@@ -72,6 +72,21 @@ export default function PricingPage() {
 
     if (result.url) {
       window.location.href = result.url;
+    } else if (result.success) {
+      alert(result.message || "Plan updated successfully");
+
+      const {
+        data: { user: refreshedUser },
+      } = await supabase.auth.getUser();
+
+      if (refreshedUser) {
+        const { data: userRow } = await supabase
+          .from("users")
+          .select("plan_id")
+          .eq("id", refreshedUser.id)
+          .maybeSingle();
+        setCurrentPlanId(userRow?.plan_id ?? null);
+      }
     } else {
       alert(result.error || "Error starting checkout");
     }

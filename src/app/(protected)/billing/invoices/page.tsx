@@ -42,6 +42,10 @@ interface PlanInfo {
   currency: string
 }
 
+interface UpcomingDowngradeInfo extends PlanInfo {
+  effectiveAt: string | null
+}
+
 function formatCurrency(v: number, currency = 'USD') {
   return v.toLocaleString('en-US', { style: 'currency', currency })
 }
@@ -86,8 +90,10 @@ function statusBadge(status: string) {
 
 export default function InvoicesPage() {
   const [plan, setPlan] = useState<PlanInfo | null>(null)
+  const [upcomingDowngrade, setUpcomingDowngrade] = useState<UpcomingDowngradeInfo | null>(null)
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [cancelingDowngrade, setCancelingDowngrade] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -103,10 +109,15 @@ export default function InvoicesPage() {
           throw new Error('Failed to load invoices')
         }
 
-        const payload: { plan: PlanInfo | null; data: InvoiceRow[] } = await res.json()
+        const payload: {
+          plan: PlanInfo | null
+          upcomingDowngrade: UpcomingDowngradeInfo | null
+          data: InvoiceRow[]
+        } = await res.json()
         if (!active) return
 
         setPlan(payload.plan ?? null)
+        setUpcomingDowngrade(payload.upcomingDowngrade ?? null)
         setInvoices(payload.data ?? [])
       } catch (err) {
         console.error('[stripe/invoices] load error:', err)
@@ -124,6 +135,26 @@ export default function InvoicesPage() {
       active = false
     }
   }, [])
+
+  const handleCancelDowngrade = async () => {
+    try {
+      setCancelingDowngrade(true)
+      const res = await fetch('/api/stripe/downgrade/cancel', {
+        method: 'POST',
+      })
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to cancel downgrade')
+      }
+
+      setUpcomingDowngrade(null)
+      alert(payload?.message || 'Scheduled downgrade canceled')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to cancel downgrade')
+    } finally {
+      setCancelingDowngrade(false)
+    }
+  }
 
   return (
     <div className="space-y-6 p-8">
@@ -158,10 +189,33 @@ export default function InvoicesPage() {
           </div>
         )}
         {plan && (
-          <div className="pt-2 text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{plan.name}</span>
-            {' · '}
-            {formatCurrency(plan.amount, plan.currency)} / {plan.interval ?? 'month'}
+          <div className="pt-2 space-y-1 text-sm text-muted-foreground">
+            <div>
+              <span className="font-medium text-foreground">{plan.name}</span>
+              {' · '}
+              {formatCurrency(plan.amount, plan.currency)} / {plan.interval ?? 'month'}
+            </div>
+            {upcomingDowngrade && (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  Upcoming downgrade to{' '}
+                  <span className="font-medium text-foreground">{upcomingDowngrade.name}</span>
+                  {' · '}
+                  {formatCurrency(upcomingDowngrade.amount, upcomingDowngrade.currency)} /{' '}
+                  {upcomingDowngrade.interval ?? 'month'}
+                  {' · '}
+                  Effective {formatDate(upcomingDowngrade.effectiveAt)}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCancelDowngrade}
+                  disabled={cancelingDowngrade}
+                >
+                  {cancelingDowngrade ? 'Canceling...' : 'Cancel downgrade'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>
