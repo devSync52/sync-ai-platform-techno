@@ -502,6 +502,29 @@ function getLinePlanDetails(invoice: Stripe.Invoice) {
   };
 }
 
+function getInvoicePeriod(invoice: Stripe.Invoice): {
+  start: string | null;
+  end: string | null;
+} {
+  const lines = invoice.lines?.data ?? [];
+  const primary =
+    lines.find((line) => line.type === "subscription") ?? lines[0] ?? null;
+
+  const linePeriodStart =
+    primary?.period && typeof primary.period.start === "number"
+      ? toIsoDate(primary.period.start)
+      : null;
+  const linePeriodEnd =
+    primary?.period && typeof primary.period.end === "number"
+      ? toIsoDate(primary.period.end)
+      : null;
+
+  return {
+    start: linePeriodStart ?? toIsoDate(invoice.period_start),
+    end: linePeriodEnd ?? toIsoDate(invoice.period_end),
+  };
+}
+
 async function mapInvoiceToRow(
   stripe: Stripe,
   invoice: Stripe.Invoice,
@@ -512,6 +535,7 @@ async function mapInvoiceToRow(
   const isPaid = isInvoicePaid(invoice);
   const hostedUrl = invoice.hosted_invoice_url ?? null;
   const invoicePdf = invoice.invoice_pdf ?? null;
+  const period = getInvoicePeriod(invoice);
   const receiptUrl = isPaid
     ? await resolveReceiptUrlForInvoice(stripe, invoice)
     : null;
@@ -528,8 +552,8 @@ async function mapInvoiceToRow(
     tax: money(invoice.tax),
     createdAt: toIsoDate(invoice.created),
     dueDate: toIsoDate(invoice.due_date),
-    periodStart: toIsoDate(invoice.period_start),
-    periodEnd: toIsoDate(invoice.period_end),
+    periodStart: period.start,
+    periodEnd: period.end,
     hostedInvoiceUrl: hostedUrl,
     invoicePdf,
     downloadUrl: isPaid ? (invoicePdf ?? hostedUrl) : null,
