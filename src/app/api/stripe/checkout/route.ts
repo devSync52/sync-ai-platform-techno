@@ -266,10 +266,20 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      const scheduleId =
+        typeof existingSubscription.schedule === "string"
+          ? existingSubscription.schedule
+          : existingSubscription.schedule?.id;
+
+      if (scheduleId) {
+        await stripe.subscriptionSchedules.release(scheduleId);
+      }
+
       const updatedSubscription = await stripe.subscriptions.update(
         existingSubscription.id,
         {
           items: [{ id: currentItem.id, price: stripePriceId }],
+          cancel_at_period_end: false,
           proration_behavior: "always_invoice",
           metadata: {
             ...existingSubscription.metadata,
