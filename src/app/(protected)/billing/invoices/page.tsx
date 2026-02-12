@@ -386,20 +386,21 @@ export default function InvoicesPage() {
                             rel="noreferrer"
                           >
                             <Button size="sm" variant="outline">
-                              Receipt
+                              {/* Receipt */}
+                              Download
                             </Button>
                           </a>
                         )}
                         {row.downloadUrl ? (
-                          <a
-                            href={row.downloadUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <Button size="sm" variant="outline">
-                              Download
-                            </Button>
-                          </a>
+                          // <a
+                          //   href={row.downloadUrl}
+                          //   target="_blank"
+                          //   rel="noreferrer"
+                          // >
+                          //   <Button size="sm" variant="outline">
+                          //     Download
+                          //   </Button>
+                          // </a>
                         ) : row.payUrl ? (
                           <a href={row.payUrl} target="_blank" rel="noreferrer">
                             <Button size="sm" variant="default">
