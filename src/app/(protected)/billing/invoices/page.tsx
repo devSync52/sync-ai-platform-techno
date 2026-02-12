@@ -221,11 +221,17 @@ export default function InvoicesPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-medium">Current Plan</div>
           <div className="flex items-center gap-2">
-            <Link href="/billing/pricing?intent=upgrade&from=invoices">
-              <Button size="sm" variant="default">
+            {upcomingCancellation ? (
+              <Button size="sm" variant="default" disabled>
                 Upgrade Plan
               </Button>
-            </Link>
+            ) : (
+              <Link href="/billing/pricing?intent=upgrade&from=invoices">
+                <Button size="sm" variant="default">
+                  Upgrade Plan
+                </Button>
+              </Link>
+            )}
             {/* <Link href="/billing/pricing?intent=downgrade&from=invoices">
               <Button size="sm" variant="outline">
                 Downgrade Plan

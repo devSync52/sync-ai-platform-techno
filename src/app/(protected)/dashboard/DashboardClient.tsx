@@ -407,9 +407,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <div>
               <p className="text-sm opacity-80">Your Current Plan</p>
               <h2 className="text-2xl font-bold">{selectedPlan.name}</h2>
-              <p className="text-sm">
-                ${selectedPlan.price} / {selectedPlan.billing_cycle}
-              </p>
+              <p className="text-sm">${selectedPlan.price} / monthly</p>
             </div>
           </div>
 
