@@ -1,16 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { useSearchParams } from "next/navigation";
 import { useSupabase } from "@/components/supabase-provider";
 import { useEffect, useState } from "react";
 
 export default function PricingPage() {
   const supabase = useSupabase();
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const intent = searchParams.get("intent");
 
   /* ================= FETCH PLANS ================= */
 
@@ -23,6 +23,19 @@ export default function PricingPage() {
 
       if (!error && data) {
         setPlans(data);
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: userRow } = await supabase
+          .from("users")
+          .select("plan_id")
+          .eq("id", user.id)
+          .maybeSingle();
+        setCurrentPlanId(userRow?.plan_id ?? null);
       }
     };
 
@@ -40,33 +53,28 @@ export default function PricingPage() {
 
     if (!user) {
       alert("Login required");
+      setLoadingPlanId(null);
       return;
     }
 
-    const res = await fetch("/api/select-plan", {
+    const res = await fetch("/api/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userId: user.id,
         planId,
+        userEmail: user.email,
       }),
     });
 
     const result = await res.json();
     setLoadingPlanId(null);
 
-    if (result.success) {
-      router.push("/dashboard");
+    if (result.url) {
+      window.location.href = result.url;
     } else {
-      alert(result.error || "Error selecting plan");
+      alert(result.error || "Error starting checkout");
     }
-  };
-
-  /* ================= LOGOUT ================= */
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
   };
 
   return (
@@ -78,7 +86,9 @@ export default function PricingPage() {
             Pricing
           </h1>
           <p className="text-sm text-gray-500">
-            Choose a plan or skip for now.
+            {intent === "upgrade" || intent === "downgrade"
+              ? "Change your current subscription plan."
+              : "Choose a plan or skip for now."}
           </p>
         </div>
         {/* <div className="flex items-center gap-2">
@@ -180,16 +190,18 @@ export default function PricingPage() {
 
                 <button
                   onClick={() => handleSelectPlan(plan.id)}
-                  disabled={loadingPlanId === plan.id}
+                  disabled={loadingPlanId === plan.id || currentPlanId === plan.id}
                   className={`mt-8 w-full rounded-md px-4 py-2.5 text-sm font-semibold transition ${
                     isPopular
                       ? "bg-purple-500 text-white hover:bg-purple-400 shadow-lg"
                       : "border border-purple-600 text-purple-600 hover:bg-purple-50"
                   }`}
                 >
-                  {loadingPlanId === plan.id
-                    ? "Processing..."
-                    : "Get started today"}
+                  {currentPlanId === plan.id
+                    ? "Current plan"
+                    : loadingPlanId === plan.id
+                      ? "Processing..."
+                      : "Select plan"}
                 </button>
               </div>
             );
