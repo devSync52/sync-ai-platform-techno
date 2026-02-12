@@ -22,6 +22,7 @@ type StripeInvoiceRow = {
   invoicePdf: string | null;
   downloadUrl: string | null;
   payUrl: string | null;
+  receiptUrl: string | null;
   isPaid: boolean;
   plan: {
     id: string | null;
@@ -31,6 +32,48 @@ type StripeInvoiceRow = {
     currency: string | null;
   };
 };
+
+async function resolveReceiptUrlForInvoice(
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+): Promise<string | null> {
+  try {
+    const chargeRef = invoice.charge;
+    if (chargeRef) {
+      if (typeof chargeRef === "string") {
+        const charge = await stripe.charges.retrieve(chargeRef);
+        return charge.receipt_url ?? null;
+      }
+      return chargeRef.receipt_url ?? null;
+    }
+
+    const paymentIntentRef = invoice.payment_intent;
+    if (paymentIntentRef) {
+      const paymentIntent =
+        typeof paymentIntentRef === "string"
+          ? await stripe.paymentIntents.retrieve(paymentIntentRef, {
+              expand: ["latest_charge"],
+            })
+          : paymentIntentRef;
+
+      const latestCharge = paymentIntent.latest_charge;
+      if (!latestCharge) return null;
+      if (typeof latestCharge === "string") {
+        const charge = await stripe.charges.retrieve(latestCharge);
+        return charge.receipt_url ?? null;
+      }
+      return latestCharge.receipt_url ?? null;
+    }
+  } catch (error) {
+    console.warn(
+      "[api/stripe/invoices] failed to resolve receipt url:",
+      invoice.id,
+      error,
+    );
+  }
+
+  return null;
+}
 
 const toIsoDate = (unix?: number | null) =>
   typeof unix === "number" && Number.isFinite(unix)
@@ -459,15 +502,19 @@ function getLinePlanDetails(invoice: Stripe.Invoice) {
   };
 }
 
-function mapInvoiceToRow(
+async function mapInvoiceToRow(
+  stripe: Stripe,
   invoice: Stripe.Invoice,
   localPlan: LocalPlanLike | null | undefined,
-): StripeInvoiceRow {
+): Promise<StripeInvoiceRow> {
   const linePlan = getLinePlanDetails(invoice);
   const planName = linePlan.name ?? localPlan?.name ?? null;
   const isPaid = isInvoicePaid(invoice);
   const hostedUrl = invoice.hosted_invoice_url ?? null;
   const invoicePdf = invoice.invoice_pdf ?? null;
+  const receiptUrl = isPaid
+    ? await resolveReceiptUrlForInvoice(stripe, invoice)
+    : null;
 
   return {
     id: invoice.id,
@@ -487,6 +534,7 @@ function mapInvoiceToRow(
     invoicePdf,
     downloadUrl: isPaid ? (invoicePdf ?? hostedUrl) : null,
     payUrl: !isPaid ? hostedUrl : null,
+    receiptUrl,
     isPaid,
     plan: {
       id: linePlan.id ?? localPlan?.id ?? null,
@@ -660,16 +708,16 @@ export async function GET() {
     }
 
     const mapped: StripeInvoiceRow[] = [];
-    const pushUnique = (invoice?: Stripe.Invoice | null) => {
+    const pushUnique = async (invoice?: Stripe.Invoice | null) => {
       if (!invoice) return;
       if (mapped.some((row) => row.id === invoice.id)) return;
-      mapped.push(mapInvoiceToRow(invoice, localPlan));
+      mapped.push(await mapInvoiceToRow(stripe, invoice, localPlan));
     };
 
     for (const customerIdToLoad of customerIdsToLoad) {
       const invoices = await listInvoicesForCustomer(stripe, customerIdToLoad);
       for (const invoice of invoices) {
-        pushUnique(invoice);
+        await pushUnique(invoice);
       }
     }
 
@@ -678,19 +726,19 @@ export async function GET() {
       if (customerId) {
         const latestSubscriptionInvoice =
           await latestSubscriptionInvoiceForCustomer(stripe, customerId);
-        pushUnique(latestSubscriptionInvoice);
+        await pushUnique(latestSubscriptionInvoice);
       }
     }
 
     if (mapped.length === 0) {
       for (const invoice of subscriptionFallback.invoices) {
-        pushUnique(invoice);
+        await pushUnique(invoice);
       }
     }
 
     const emailInvoices = await searchInvoicesByEmail(stripe, user.email);
     for (const invoice of emailInvoices) {
-      pushUnique(invoice);
+      await pushUnique(invoice);
     }
 
     const globalFallbackInvoices = await listInvoicesGlobalFallback(
@@ -700,7 +748,7 @@ export async function GET() {
       user.id,
     );
     for (const invoice of globalFallbackInvoices) {
-      pushUnique(invoice);
+      await pushUnique(invoice);
     }
 
     const data: StripeInvoiceRow[] = mapped.sort((a, b) => {

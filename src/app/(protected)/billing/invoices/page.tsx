@@ -28,6 +28,7 @@ interface InvoiceRow {
   dueDate: string | null
   downloadUrl: string | null
   payUrl: string | null
+  receiptUrl: string | null
   isPaid: boolean
   hostedInvoiceUrl: string | null
   invoicePdf: string | null
@@ -240,23 +241,32 @@ export default function InvoicesPage() {
                       {statusBadge(row.status)}
                     </td>
                     <td className="py-2 text-right">
-                      {row.downloadUrl ? (
-                        <a href={row.downloadUrl} target="_blank" rel="noreferrer">
-                          <Button size="sm" variant="outline">
-                            Download
+                      <div className="flex justify-end gap-2">
+                        {row.receiptUrl && (
+                          <a href={row.receiptUrl} target="_blank" rel="noreferrer">
+                            <Button size="sm" variant="outline">
+                              Receipt
+                            </Button>
+                          </a>
+                        )}
+                        {row.downloadUrl ? (
+                          <a href={row.downloadUrl} target="_blank" rel="noreferrer">
+                            <Button size="sm" variant="outline">
+                              Download
+                            </Button>
+                          </a>
+                        ) : row.payUrl ? (
+                          <a href={row.payUrl} target="_blank" rel="noreferrer">
+                            <Button size="sm" variant="default">
+                              Pay now
+                            </Button>
+                          </a>
+                        ) : (
+                          <Button size="sm" variant="outline" disabled>
+                            Processing
                           </Button>
-                        </a>
-                      ) : row.payUrl ? (
-                        <a href={row.payUrl} target="_blank" rel="noreferrer">
-                          <Button size="sm" variant="default">
-                            Pay now
-                          </Button>
-                        </a>
-                      ) : (
-                        <Button size="sm" variant="outline" disabled>
-                          Processing
-                        </Button>
-                      )}
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
