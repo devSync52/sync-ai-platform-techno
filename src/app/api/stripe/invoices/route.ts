@@ -95,43 +95,63 @@ async function findCheckoutSessionByUser(
   return null;
 }
 
-async function findCustomerIdByEmail(
+async function listCustomerIdsByEmail(
   stripe: Stripe,
   email?: string | null,
-): Promise<string | null> {
-  if (!email) return null;
+): Promise<string[]> {
+  if (!email) return [];
+  const ids: string[] = [];
 
   try {
-    const customers = await stripe.customers.list({
-      email,
-      limit: 10,
-    });
+    let startingAfter: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const customers = await stripe.customers.list({
+        email,
+        limit: 100,
+        starting_after: startingAfter,
+      });
 
-    const active = customers.data.find((customer) => !("deleted" in customer));
-    return active?.id ?? null;
+      for (const customer of customers.data) {
+        if (!("deleted" in customer) && !ids.includes(customer.id)) {
+          ids.push(customer.id);
+        }
+      }
+
+      if (!customers.has_more || customers.data.length === 0) break;
+      startingAfter = customers.data[customers.data.length - 1].id;
+    }
   } catch (error) {
     console.warn(
       "[api/stripe/invoices] customer lookup by email failed:",
       error,
     );
-    return null;
   }
+
+  return ids;
 }
 
-async function findCustomerIdByUserMetadata(
+async function listCustomerIdsByUserMetadata(
   stripe: Stripe,
   userId: string,
-): Promise<string | null> {
+): Promise<string[]> {
+  const ids: string[] = [];
   const customersApi = stripe.customers as any;
 
   if (typeof customersApi.search === "function") {
     try {
       const result = await customersApi.search({
         query: `metadata['userId']:'${userId}'`,
-        limit: 1,
+        limit: 100,
       });
-      const found = result?.data?.[0];
-      if (found && !("deleted" in found)) return found.id as string;
+      for (const found of result?.data ?? []) {
+        if (
+          found &&
+          !("deleted" in found) &&
+          !ids.includes(found.id as string)
+        ) {
+          ids.push(found.id as string);
+        }
+      }
     } catch (error) {
       console.warn(
         "[api/stripe/invoices] customer lookup by metadata failed:",
@@ -140,7 +160,7 @@ async function findCustomerIdByUserMetadata(
     }
   }
 
-  return null;
+  return ids;
 }
 
 async function firstInvoiceForCustomer(stripe: Stripe, customerId: string) {
@@ -173,7 +193,6 @@ async function listInvoicesForCustomer(
         customer: customerId,
         limit: 100,
         starting_after: startingAfter,
-        expand: ["data.lines.data.price.product", "data.subscription"],
       });
       invoices.push(...response.data);
       if (!response.has_more || response.data.length === 0) break;
@@ -231,7 +250,6 @@ async function searchInvoicesByEmail(stripe: Stripe, email?: string | null) {
         const response = await stripe.invoices.list({
           limit: 100,
           starting_after: startingAfter,
-          expand: ["data.lines.data.price.product", "data.subscription"],
         });
         for (const invoice of response.data) {
           if (
@@ -256,7 +274,6 @@ async function searchInvoicesByEmail(stripe: Stripe, email?: string | null) {
     const result = await invoicesApi.search({
       query: `customer_email:'${email}'`,
       limit: 100,
-      expand: ["data.lines.data.price.product", "data.subscription"],
     });
 
     return (result?.data ?? []) as Stripe.Invoice[];
@@ -351,6 +368,65 @@ async function listSubscriptionFallbacksByUser(
   }
 
   return { customerIds, invoices };
+}
+
+async function listInvoicesGlobalFallback(
+  stripe: Stripe,
+  customerIds: string[],
+  emails: string[],
+  userId: string,
+): Promise<Stripe.Invoice[]> {
+  const invoices: Stripe.Invoice[] = [];
+  const customerSet = new Set(customerIds.filter(Boolean));
+  const emailSet = new Set(
+    emails.map((value) => value.trim().toLowerCase()).filter(Boolean),
+  );
+
+  if (customerSet.size === 0 && emailSet.size === 0 && !userId) return invoices;
+
+  try {
+    let startingAfter: string | undefined;
+    for (let page = 0; page < 20; page++) {
+      const response = await stripe.invoices.list({
+        limit: 100,
+        starting_after: startingAfter,
+      });
+
+      for (const invoice of response.data) {
+        const invoiceCustomerId =
+          typeof invoice.customer === "string"
+            ? invoice.customer
+            : invoice.customer?.id;
+        const invoiceEmail = (invoice.customer_email ?? "").toLowerCase();
+        const subscriptionUserId =
+          invoice.subscription &&
+          typeof invoice.subscription === "object" &&
+          "metadata" in invoice.subscription
+            ? (invoice.subscription.metadata?.userId ?? "")
+            : "";
+
+        if (
+          customerSet.has(invoiceCustomerId ?? "") ||
+          emailSet.has(invoiceEmail) ||
+          subscriptionUserId === userId
+        ) {
+          if (!invoices.some((row) => row.id === invoice.id)) {
+            invoices.push(invoice);
+          }
+        }
+      }
+
+      if (!response.has_more || response.data.length === 0) break;
+      startingAfter = response.data[response.data.length - 1].id;
+    }
+  } catch (error) {
+    console.warn(
+      "[api/stripe/invoices] global invoice fallback failed:",
+      error,
+    );
+  }
+
+  return invoices;
 }
 
 function getLinePlanDetails(invoice: Stripe.Invoice) {
@@ -525,8 +601,14 @@ export async function GET() {
       addCandidate(session.customer.id);
     }
 
-    addCandidate(await findCustomerIdByUserMetadata(stripe, user.id));
-    addCandidate(await findCustomerIdByEmail(stripe, user.email));
+    const customersByMetadata = await listCustomerIdsByUserMetadata(
+      stripe,
+      user.id,
+    );
+    for (const id of customersByMetadata) addCandidate(id);
+
+    const customersByEmail = await listCustomerIdsByEmail(stripe, user.email);
+    for (const id of customersByEmail) addCandidate(id);
     const subscriptionFallback = await listSubscriptionFallbacksByUser(
       stripe,
       user.id,
@@ -608,6 +690,16 @@ export async function GET() {
 
     const emailInvoices = await searchInvoicesByEmail(stripe, user.email);
     for (const invoice of emailInvoices) {
+      pushUnique(invoice);
+    }
+
+    const globalFallbackInvoices = await listInvoicesGlobalFallback(
+      stripe,
+      candidateIds,
+      [user.email ?? ""],
+      user.id,
+    );
+    for (const invoice of globalFallbackInvoices) {
       pushUnique(invoice);
     }
 

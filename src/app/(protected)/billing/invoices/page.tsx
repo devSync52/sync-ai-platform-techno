@@ -97,7 +97,7 @@ export default function InvoicesPage() {
         setLoading(true)
         setError(null)
 
-        const res = await fetch('/api/stripe/invoices')
+        const res = await fetch('/api/stripe/invoices', { cache: 'no-store' })
         if (!res.ok) {
           throw new Error('Failed to load invoices')
         }
