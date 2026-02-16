@@ -23,7 +23,7 @@ export default function TicketDetail({ ticketId }: TicketDetailProps) {
   const session = useSession()
   const user = session?.user
   const role = user?.user_metadata?.role
-  const isStaff = ['staff-user', 'staff-admin', 'admin'].includes(role)
+  const isStaff = ['staff-user', 'staff-admin', 'admin', 'superadmin'].includes(role)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)

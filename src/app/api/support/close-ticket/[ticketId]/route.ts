@@ -26,17 +26,17 @@ export async function POST(req: Request) {
   }
 
   const userId = user.id
-  const role = user.user_metadata?.role
-
-  if (!['admin', 'staff-admin', 'staff-user'].includes(role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
 
   const { data: userRecord } = await supabase
     .from('users')
-    .select('account_id')
+    .select('account_id, role')
     .eq('id', userId)
     .single()
+
+  const role = userRecord?.role
+  if (!['admin', 'staff-admin', 'staff-user', 'superadmin'].includes(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { data: ticket, error: ticketError } = await supabase
     .from('saip_support_tickets')
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     .eq('id', ticketId)
     .maybeSingle()
 
-  const isStaff = ['admin', 'staff-admin'].includes(role)
+  const isStaff = ['admin', 'staff-admin', 'superadmin'].includes(role)
 
   if (ticketError || !ticket || (!isStaff && ticket.account_id !== userRecord?.account_id)) {
     return NextResponse.json({ error: 'Ticket not found or not allowed' }, { status: 404 })

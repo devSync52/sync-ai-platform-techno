@@ -39,7 +39,7 @@ export default function ChatPage() {
         return
       }
 
-      if (['admin', 'staff-admin', 'staff-user'].includes(role)) {
+      if (['superadmin', 'admin', 'staff-admin', 'staff-user'].includes(role)) {
         setUserType('owner')
       } else if (role === 'client') {
         setUserType('client')

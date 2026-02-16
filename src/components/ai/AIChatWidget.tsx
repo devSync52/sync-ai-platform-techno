@@ -34,7 +34,7 @@ export default function AIChatWidget() {
       }
       setAccountId(data?.account_id ?? null)
       const role = data?.role
-      if (['admin', 'staff-admin', 'staff-user'].includes(role)) setUserType('owner')
+      if (['superadmin', 'admin', 'staff-admin', 'staff-user'].includes(role)) setUserType('owner')
       else if (role === 'client') setUserType('client')
       else if (role === 'customer') setUserType('end_client')
       else console.warn('[AIChatWidget] ⚠️ Unknown role:', role)

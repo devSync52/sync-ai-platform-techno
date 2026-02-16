@@ -9,6 +9,7 @@ import { useSession } from "@/components/supabase-provider";
 import {
   LayoutDashboard,
   Users,
+  FileText,
   Settings,
   LogOut,
   Building2,
@@ -24,7 +25,6 @@ import {
   TicketIcon,
   TicketPlus,
   Wallet,
-  FileText,
   BarChart3,
 } from "lucide-react";
 
@@ -63,14 +63,16 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         if (data?.account_id) {
           const { data: accountData, error: accountError } = await supabase
             .from("accounts")
-            .select('"logo-main"')
+            .select("logo, logo_main")
             .eq("id", data.account_id)
             .single();
 
           if (accountError) {
             console.error("Error fetching account logo:", accountError.message);
           } else {
-            setAccountLogo((accountData as any)?.["logo-main"] ?? null);
+            const resolvedLogo =
+              (accountData as any)?.logo_main ?? (accountData as any)?.logo ?? null;
+            setAccountLogo(resolvedLogo);
           }
         } else {
           setAccountLogo(null);
@@ -92,6 +94,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
     if (pathname.startsWith("/billing")) setBillingOpen(true);
     else setBillingOpen(false);
+
   }, [pathname]);
 
   async function handleLogout() {
@@ -101,6 +104,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/users", label: "Users", icon: Users },
+    { href: "/plans", label: "Plans", icon: FileText },
     {
       label: "Orders",
       icon: ShoppingBag,
@@ -138,6 +143,10 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       "/staff",
       "/channels",
     ];
+
+    if (item.href === "/users" || item.href === "/plans") {
+      return userRole === "superadmin";
+    }
 
     if (userRole === "staff-client") {
       // staff-client can see only: Orders (Quotations), Inventory, Support
