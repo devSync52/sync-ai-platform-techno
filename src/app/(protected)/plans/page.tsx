@@ -24,6 +24,11 @@ type PlanFormState = {
   status: "active" | "inactive";
 };
 
+type PlanFormErrors = {
+  name?: string;
+  price?: string;
+};
+
 const EMPTY_FORM: PlanFormState = {
   name: "",
   price: "",
@@ -61,6 +66,7 @@ export default function SuperadminPlansPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [form, setForm] = useState<PlanFormState>(EMPTY_FORM);
+  const [formErrors, setFormErrors] = useState<PlanFormErrors>({});
 
   const [saving, setSaving] = useState(false);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
@@ -96,12 +102,14 @@ export default function SuperadminPlansPage() {
   const openCreateModal = () => {
     setEditingPlanId(null);
     setForm(EMPTY_FORM);
+    setFormErrors({});
     setIsModalOpen(true);
   };
 
   const openEditModal = (plan: PlanRow) => {
     setEditingPlanId(plan.id);
     setForm(toFormState(plan));
+    setFormErrors({});
     setIsModalOpen(true);
   };
 
@@ -110,16 +118,33 @@ export default function SuperadminPlansPage() {
     setIsModalOpen(false);
     setEditingPlanId(null);
     setForm(EMPTY_FORM);
+    setFormErrors({});
+  };
+
+  const validateForm = () => {
+    const nextErrors: PlanFormErrors = {};
+    const price = Number(form.price);
+
+    if (!form.name.trim()) {
+      nextErrors.name = "Plan name is required";
+    }
+
+    if (!form.price.trim()) {
+      nextErrors.price = "Price is required";
+    } else if (!Number.isFinite(price) || price <= 0) {
+      nextErrors.price = "Price must be greater than 0";
+    }
+
+    setFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const submitForm = async () => {
     setError(null);
-    const price = Number(form.price);
-
-    if (!form.name.trim() || !Number.isFinite(price) || price <= 0) {
-      setError("Plan name and a valid price greater than 0 are required");
+    if (!validateForm()) {
       return;
     }
+    const price = Number(form.price);
 
     setSaving(true);
     try {
@@ -294,19 +319,44 @@ export default function SuperadminPlansPage() {
             <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
               <input
                 value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setForm((prev) => ({ ...prev, name: value }));
+                  if (formErrors.name && value.trim()) {
+                    setFormErrors((prev) => ({ ...prev, name: undefined }));
+                  }
+                }}
                 placeholder="Plan name"
-                className="border rounded-md px-3 py-2 text-sm"
+                className={`border rounded-md px-3 py-2 text-sm ${
+                  formErrors.name ? "border-red-500" : ""
+                }`}
               />
+              {formErrors.name ? (
+                <p className="md:col-span-1 -mt-1 text-xs text-red-600">{formErrors.name}</p>
+              ) : null}
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={form.price}
-                onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setForm((prev) => ({ ...prev, price: value }));
+                  if (formErrors.price) {
+                    const num = Number(value);
+                    if (value.trim() && Number.isFinite(num) && num > 0) {
+                      setFormErrors((prev) => ({ ...prev, price: undefined }));
+                    }
+                  }
+                }}
                 placeholder="Price (e.g. 49.99)"
-                className="border rounded-md px-3 py-2 text-sm"
+                className={`border rounded-md px-3 py-2 text-sm ${
+                  formErrors.price ? "border-red-500" : ""
+                }`}
               />
+              {formErrors.price ? (
+                <p className="md:col-span-1 -mt-1 text-xs text-red-600">{formErrors.price}</p>
+              ) : null}
               <select
                 value={form.interval}
                 onChange={(e) => setForm((prev) => ({ ...prev, interval: e.target.value }))}
