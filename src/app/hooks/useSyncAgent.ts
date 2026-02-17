@@ -51,7 +51,7 @@ export function useSyncAgent({ question, accountId, sessionId, enabled = true }:
 
       const role = data?.role
 
-      if (['admin', 'staff-admin', 'staff-user'].includes(role)) {
+      if (['superadmin', 'admin', 'staff-admin', 'staff-user'].includes(role)) {
         setUserType('owner')
       } else if (role === 'client') {
         setUserType('client')

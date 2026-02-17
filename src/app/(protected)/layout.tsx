@@ -41,7 +41,7 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
 
   const { data: accountData } = await supabase
     .from('accounts')
-    .select('logo, template, "logo-main"')
+    .select('logo, template, logo_main')
     .eq('id', userData?.account_id)
     .single()
 
@@ -63,7 +63,7 @@ export default async function ProtectedLayout({ children }: PropsWithChildren) {
     avatarLetter: userData?.name?.charAt(0).toUpperCase() ?? 'U',
     avatarUrl: userDetails?.avatar_url ?? undefined,
     logoUrl: accountData?.logo ?? undefined,
-    logoMain: (accountData as any)?.['logo-main'] ?? undefined,
+    logoMain: (accountData as any)?.logo_main ?? undefined,
   }
 
   const themeStyle = accountData?.template
