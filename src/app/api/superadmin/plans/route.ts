@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireSuperadmin } from "@/lib/superadmin";
-import { isMissingPlanFeaturesTableError, loadPlansWithFeatures } from "@/lib/planFeatures";
+import {
+  isMissingPlanFeaturesTableError,
+  isMissingPlanStatusColumnError,
+  loadPlansWithFeatures,
+} from "@/lib/planFeatures";
+import { syncStripePriceForPlan } from "@/lib/stripePlans";
 
 type PlanPayload = {
   name?: string;
@@ -10,6 +15,7 @@ type PlanPayload = {
   stripe_price_id?: string | null;
   features?: string[] | null;
   is_popular?: boolean | null;
+  status?: "active" | "inactive" | null;
 };
 
 export async function GET() {
@@ -20,7 +26,28 @@ export async function GET() {
 
   try {
     const plans = await loadPlansWithFeatures();
-    return NextResponse.json({ plans });
+    const { data: usersWithPlan, error: usersError } = await supabaseAdmin
+      .from("users")
+      .select("plan_id")
+      .not("plan_id", "is", null);
+
+    if (usersError) {
+      throw new Error(usersError.message);
+    }
+
+    const usageCount = new Map<string, number>();
+    for (const user of usersWithPlan ?? []) {
+      const planId = (user as { plan_id: string | null }).plan_id;
+      if (!planId) continue;
+      usageCount.set(planId, (usageCount.get(planId) ?? 0) + 1);
+    }
+
+    const plansWithUsage = plans.map((plan) => ({
+      ...plan,
+      active_user_count: usageCount.get(plan.id) ?? 0,
+    }));
+
+    return NextResponse.json({ plans: plansWithUsage });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to load plans" },
@@ -45,26 +72,49 @@ export async function POST(req: NextRequest) {
   if (!body.name || typeof body.price !== "number") {
     return NextResponse.json({ error: "name and price are required" }, { status: 400 });
   }
+  if (body.price <= 0) {
+    return NextResponse.json({ error: "price must be greater than 0" }, { status: 400 });
+  }
+
+  const features = (body.features ?? []).filter((feature) => feature.trim().length > 0);
+  const status = body.status === "inactive" ? "inactive" : "active";
 
   const payload = {
     name: body.name.trim(),
     price: body.price,
     interval: body.interval ?? "month",
-    stripe_price_id: body.stripe_price_id ?? null,
+    stripe_price_id: body.stripe_price_id?.trim() || null,
     is_popular: body.is_popular ?? false,
+    status,
+    features,
   };
 
-  const { data, error } = await supabaseAdmin
+  let insertedPlan: any = null;
+  let error: any = null;
+  const firstInsert = await supabaseAdmin
     .from("plans")
     .insert(payload)
     .select("*")
     .single();
+  insertedPlan = firstInsert.data;
+  error = firstInsert.error;
+
+  if (error && isMissingPlanStatusColumnError(error)) {
+    const { status: _status, ...payloadWithoutStatus } = payload;
+    const fallbackInsert = await supabaseAdmin
+      .from("plans")
+      .insert(payloadWithoutStatus)
+      .select("*")
+      .single();
+    insertedPlan = fallbackInsert.data;
+    error = fallbackInsert.error;
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const features = (body.features ?? []).filter((feature) => feature.trim().length > 0);
+  let data = insertedPlan;
   if (features.length > 0) {
     const { error: featuresError } = await supabaseAdmin.from("plan_features").insert(
       features.map((feature, index) => ({
@@ -88,11 +138,48 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  let stripePriceId = data.stripe_price_id ?? null;
+  if (!stripePriceId) {
+    try {
+      stripePriceId = await syncStripePriceForPlan({
+        planId: data.id,
+        name: payload.name,
+        price: payload.price,
+        interval: payload.interval,
+      });
+    } catch (stripeError) {
+      await supabaseAdmin.from("plans").delete().eq("id", data.id);
+      return NextResponse.json(
+        {
+          error:
+            stripeError instanceof Error
+              ? stripeError.message
+              : "Failed to sync plan to Stripe",
+        },
+        { status: 500 },
+      );
+    }
+
+    const { data: syncedPlan, error: stripeUpdateError } = await supabaseAdmin
+      .from("plans")
+      .update({ stripe_price_id: stripePriceId })
+      .eq("id", data.id)
+      .select("*")
+      .single();
+
+    if (stripeUpdateError) {
+      return NextResponse.json({ error: stripeUpdateError.message }, { status: 500 });
+    }
+    data = syncedPlan;
+  }
+
   return NextResponse.json({
     success: true,
     plan: {
       ...data,
+      status: data.status ?? status,
       features,
+      active_user_count: 0,
     },
   });
 }

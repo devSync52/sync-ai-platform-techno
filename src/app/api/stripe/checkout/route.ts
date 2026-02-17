@@ -14,6 +14,14 @@ type CheckoutPayload = {
   userEmail?: string | null;
 };
 
+type CheckoutPlan = {
+  id: string;
+  name: string;
+  price: number;
+  stripe_price_id: string | null;
+  status?: "active" | "inactive" | null;
+};
+
 const managedSubscriptionStatuses = new Set<Stripe.Subscription.Status>([
   "active",
   "trialing",
@@ -88,14 +96,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data: plan, error: planError } = await supabase
+    let plan: CheckoutPlan | null = null;
+    let planError: any = null;
+    const withStatus = await supabase
       .from("plans")
-      .select("id, name, price, stripe_price_id")
+      .select("id, name, price, stripe_price_id, status")
       .eq("id", planId)
       .single();
+    if (withStatus.error) {
+      const message = withStatus.error.message?.toLowerCase?.() ?? "";
+      if (
+        withStatus.error.code === "42703" ||
+        withStatus.error.code === "PGRST204" ||
+        (message.includes("column") && message.includes("status") && message.includes("plans"))
+      ) {
+        const withoutStatus = await supabase
+          .from("plans")
+          .select("id, name, price, stripe_price_id")
+          .eq("id", planId)
+          .single();
+        plan = withoutStatus.data as CheckoutPlan | null;
+        planError = withoutStatus.error;
+      } else {
+        plan = withStatus.data as CheckoutPlan | null;
+        planError = withStatus.error;
+      }
+    } else {
+      plan = withStatus.data as CheckoutPlan | null;
+      planError = null;
+    }
 
     if (planError || !plan) {
       return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+    }
+    if ((plan.status ?? "active") !== "active") {
+      return NextResponse.json(
+        { error: "This plan is inactive and cannot be purchased." },
+        { status: 400 },
+      );
     }
 
     const stripePriceId = plan.stripe_price_id ?? undefined;

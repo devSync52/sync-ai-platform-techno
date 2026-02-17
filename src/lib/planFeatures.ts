@@ -7,6 +7,7 @@ type PlanBase = {
   interval: string | null;
   stripe_price_id: string | null;
   is_popular: boolean | null;
+  status?: "active" | "inactive" | null;
   features?: string[] | null;
 };
 
@@ -57,10 +58,25 @@ export function getDefaultFeaturesForPlan(planName: string) {
 }
 
 export async function loadPlansWithFeatures() {
-  const { data: plans, error: plansError } = await supabaseAdmin
+  let plans: any[] | null = null;
+  let plansError: any = null;
+
+  const withStatus = await supabaseAdmin
     .from("plans")
-    .select("id, name, price, interval, stripe_price_id, is_popular, features")
+    .select("id, name, price, interval, stripe_price_id, is_popular, status, features")
     .order("price", { ascending: true });
+
+  if (withStatus.error && isMissingPlanStatusColumnError(withStatus.error)) {
+    const withoutStatus = await supabaseAdmin
+      .from("plans")
+      .select("id, name, price, interval, stripe_price_id, is_popular, features")
+      .order("price", { ascending: true });
+    plans = withoutStatus.data as any[] | null;
+    plansError = withoutStatus.error;
+  } else {
+    plans = withStatus.data as any[] | null;
+    plansError = withStatus.error;
+  }
 
   if (plansError) {
     throw new Error(plansError.message);
@@ -98,6 +114,7 @@ export async function loadPlansWithFeatures() {
 
   return planRows.map((plan) => ({
     ...plan,
+    status: plan.status ?? "active",
     features:
       (featureMap.get(plan.id) ?? []).length > 0
         ? featureMap.get(plan.id) ?? []
@@ -112,5 +129,15 @@ export function isMissingPlanFeaturesTableError(error: unknown) {
     err?.code === "42P01" ||
     err?.code === "PGRST205" ||
     (message.includes("plan_features") && message.includes("does not exist"))
+  );
+}
+
+export function isMissingPlanStatusColumnError(error: unknown) {
+  const err = error as { code?: string; message?: string } | null;
+  const message = err?.message?.toLowerCase() ?? "";
+  return (
+    err?.code === "42703" ||
+    err?.code === "PGRST204" ||
+    (message.includes("column") && message.includes("status") && message.includes("plans"))
   );
 }
