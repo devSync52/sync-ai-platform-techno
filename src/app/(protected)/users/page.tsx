@@ -431,7 +431,7 @@ export default function SuperadminUsersPage() {
                 placeholder="Name"
                 className="border rounded-md px-3 py-2 text-sm"
               />
-              <input
+              {/* <input
                 value={editingUser.email}
                 onChange={(e) =>
                   setEditingUser((prev) =>
@@ -441,8 +441,8 @@ export default function SuperadminUsersPage() {
                 disabled
                 placeholder="Email"
                 className="border rounded-md px-3 py-2 text-sm"
-              />
-              <div className="w-full">
+              /> */}
+              {/* <div className="w-full">
                 <PhoneInput
                   country="us"
                   value={editingUser.phone}
@@ -458,7 +458,7 @@ export default function SuperadminUsersPage() {
                     autoFocus: false,
                   }}
                 />
-              </div>
+              </div> */}
               <GenderSelect
                 value={editingUser.gender}
                 onChange={(value) =>
@@ -603,20 +603,28 @@ export default function SuperadminUsersPage() {
                     prev ? { ...prev, account_email: e.target.value } : prev,
                   )
                 }
+                disabled
                 placeholder="Account email"
                 className="border rounded-md px-3 py-2 text-sm"
               />
-              <input
-                value={editingUser.account_phone}
-                onChange={(e) =>
-                  setEditingUser((prev) =>
-                    prev ? { ...prev, account_phone: e.target.value } : prev,
-                  )
-                }
-                placeholder="Account phone"
-                className="border rounded-md px-3 py-2 text-sm"
-              />
-              <input
+              <div className="w-full">
+                <PhoneInput
+                  country="us"
+                  value={editingUser.account_phone}
+                  onChange={(value) =>
+                    setEditingUser((prev) =>
+                      prev ? { ...prev, account_phone: value } : prev,
+                    )
+                  }
+                  inputClass="!w-full !h-10 !text-sm"
+                  containerClass="w-full"
+                  inputProps={{
+                    name: "account_phone",
+                    autoFocus: false,
+                  }}
+                />
+              </div>
+              {/* <input
                 value={editingUser.account_website}
                 onChange={(e) =>
                   setEditingUser((prev) =>
@@ -635,8 +643,8 @@ export default function SuperadminUsersPage() {
                 }
                 placeholder="Tax ID"
                 className="border rounded-md px-3 py-2 text-sm"
-              />
-              <input
+              /> */}
+              {/* <input
                 value={editingUser.account_status}
                 onChange={(e) =>
                   setEditingUser((prev) =>
@@ -645,7 +653,7 @@ export default function SuperadminUsersPage() {
                 }
                 placeholder="Account status"
                 className="border rounded-md px-3 py-2 text-sm"
-              />
+              /> */}
               <input
                 value={editingUser.account_address_line_1}
                 onChange={(e) =>
