@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import PhoneInput from "react-phone-input-2";
+import "react-phone-input-2/lib/style.css";
+import { GenderSelect } from "@/components/ui/genderSelect";
 
 type UserStatus = "active" | "disabled";
 
@@ -435,28 +438,34 @@ export default function SuperadminUsersPage() {
                     prev ? { ...prev, email: e.target.value } : prev,
                   )
                 }
+                disabled
                 placeholder="Email"
                 className="border rounded-md px-3 py-2 text-sm"
               />
-              <input
-                value={editingUser.phone}
-                onChange={(e) =>
-                  setEditingUser((prev) =>
-                    prev ? { ...prev, phone: e.target.value } : prev,
-                  )
-                }
-                placeholder="Phone"
-                className="border rounded-md px-3 py-2 text-sm"
-              />
-              <input
+              <div className="w-full">
+                <PhoneInput
+                  country="us"
+                  value={editingUser.phone}
+                  onChange={(value) =>
+                    setEditingUser((prev) =>
+                      prev ? { ...prev, phone: value } : prev,
+                    )
+                  }
+                  inputClass="!w-full !h-10 !text-sm"
+                  containerClass="w-full"
+                  inputProps={{
+                    name: "phone",
+                    autoFocus: false,
+                  }}
+                />
+              </div>
+              <GenderSelect
                 value={editingUser.gender}
-                onChange={(e) =>
+                onChange={(value) =>
                   setEditingUser((prev) =>
-                    prev ? { ...prev, gender: e.target.value } : prev,
+                    prev ? { ...prev, gender: value } : prev,
                   )
                 }
-                placeholder="Gender"
-                className="border rounded-md px-3 py-2 text-sm"
               />
               <input
                 type="date"
@@ -504,6 +513,7 @@ export default function SuperadminUsersPage() {
                     prev ? { ...prev, planId: e.target.value } : prev,
                   )
                 }
+                disabled
                 className="border rounded-md px-3 py-2 text-sm"
               >
                 <option value="">No plan</option>
@@ -513,7 +523,7 @@ export default function SuperadminUsersPage() {
                   </option>
                 ))}
               </select>
-              <input
+              {/* <input
                 value={editingUser.address_line_1}
                 onChange={(e) =>
                   setEditingUser((prev) =>
@@ -572,7 +582,7 @@ export default function SuperadminUsersPage() {
                 }
                 placeholder="Postal code"
                 className="border rounded-md px-3 py-2 text-sm"
-              />
+              /> */}
               <div className="md:col-span-2 mt-2 text-sm font-medium text-gray-700">
                 Account Details
               </div>
