@@ -1,20 +1,27 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireSuperadmin } from "@/lib/superadmin";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const auth = await requireSuperadmin();
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { data: users, error: usersError } = await supabaseAdmin
+  const role = req.nextUrl.searchParams.get("role");
+
+  let usersQuery = supabaseAdmin
     .from("users")
     .select(
-      "id, name, email, phone, role, account_id, plan_id, created_at, last_login_at, has_logged_in",
+      "id, name, email, phone, role, account_id, plan_id, created_by_user_id, created_at, last_login_at, has_logged_in",
     )
-    .eq("role", "admin")
     .order("created_at", { ascending: false });
+
+  if (role) {
+    usersQuery = usersQuery.eq("role", role);
+  }
+
+  const { data: users, error: usersError } = await usersQuery;
 
   if (usersError) {
     return NextResponse.json({ error: usersError.message }, { status: 500 });

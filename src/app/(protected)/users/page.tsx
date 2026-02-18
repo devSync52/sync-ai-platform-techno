@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import { GenderSelect } from "@/components/ui/genderSelect";
+import { Eye } from "lucide-react";
 
 type UserStatus = "active" | "disabled";
 
@@ -388,6 +390,13 @@ export default function SuperadminUsersPage() {
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex gap-2">
+                        <Link
+                          href={`/users/${user.id}`}
+                          className="px-3 py-1.5 rounded-md border border-primary text-primary flex items-center gap-1.5"
+                        >
+                          <Eye size={16} />
+                          View
+                        </Link>
                         <button
                           onClick={() => setEditingUser(toEditableUser(user))}
                           className="px-3 py-1.5 rounded-md bg-primary text-white"
