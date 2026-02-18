@@ -13,6 +13,7 @@ export async function GET() {
     .select(
       "id, name, email, phone, role, account_id, plan_id, created_at, last_login_at, has_logged_in",
     )
+    .eq("role", "admin")
     .order("created_at", { ascending: false });
 
   if (usersError) {

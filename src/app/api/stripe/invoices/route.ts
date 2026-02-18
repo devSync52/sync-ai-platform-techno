@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type StripeInvoiceRow = {
   id: string;
@@ -24,6 +25,11 @@ type StripeInvoiceRow = {
   payUrl: string | null;
   receiptUrl: string | null;
   isPaid: boolean;
+  user: {
+    id: string | null;
+    name: string | null;
+    email: string | null;
+  } | null;
   plan: {
     id: string | null;
     name: string | null;
@@ -452,6 +458,27 @@ async function listInvoicesForCustomer(
   return invoices;
 }
 
+async function listAllInvoices(stripe: Stripe): Promise<Stripe.Invoice[]> {
+  const invoices: Stripe.Invoice[] = [];
+
+  try {
+    let startingAfter: string | undefined;
+    for (let page = 0; page < 20; page++) {
+      const response = await stripe.invoices.list({
+        limit: 100,
+        starting_after: startingAfter,
+      });
+      invoices.push(...response.data);
+      if (!response.has_more || response.data.length === 0) break;
+      startingAfter = response.data[response.data.length - 1].id;
+    }
+  } catch (error) {
+    console.warn("[api/stripe/invoices] global invoices list failed:", error);
+  }
+
+  return invoices;
+}
+
 async function latestSubscriptionInvoiceForCustomer(
   stripe: Stripe,
   customerId: string,
@@ -760,6 +787,7 @@ async function mapInvoiceToRow(
     payUrl: !isPaid ? hostedUrl : null,
     receiptUrl,
     isPaid,
+    user: null,
     plan: {
       id: linePlan.id ?? localPlan?.id ?? null,
       name: planName,
@@ -821,12 +849,17 @@ export async function GET() {
 
     const { data: userRow } = await supabase
       .from("users")
-      .select("plan_id, stripe_customer_id")
+      .select("role, plan_id, stripe_customer_id")
       .eq("id", user.id)
       .maybeSingle();
 
-    const { plan_id: planId, stripe_customer_id: stripeCustomerId } =
+    const {
+      role: currentRole,
+      plan_id: planId,
+      stripe_customer_id: stripeCustomerId,
+    } =
       userRow ?? {};
+    const isSuperadmin = currentRole === "superadmin";
 
     const { data: localPlan } = planId
       ? await supabase
@@ -850,11 +883,93 @@ export async function GET() {
       return NextResponse.json({
         plan: localPlanPayload,
         upcomingDowngrade: null,
+        upcomingCancellation: null,
+        isSuperadmin,
         data: [],
       });
     }
 
     const stripe = getStripe();
+
+    if (isSuperadmin) {
+      const { data: usersData } = await supabaseAdmin
+        .from("users")
+        .select("id, name, email, stripe_customer_id");
+
+      const users = (usersData ??
+        []) as Array<{
+        id: string;
+        name: string | null;
+        email: string | null;
+        stripe_customer_id: string | null;
+      }>;
+
+      const userByCustomerId = new Map<
+        string,
+        { id: string; name: string | null; email: string | null }
+      >();
+      const userByEmail = new Map<
+        string,
+        { id: string; name: string | null; email: string | null }
+      >();
+
+      for (const row of users) {
+        if (row.stripe_customer_id) {
+          userByCustomerId.set(row.stripe_customer_id, {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+          });
+        }
+        if (row.email) {
+          userByEmail.set(row.email.toLowerCase(), {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+          });
+        }
+      }
+
+      const invoices = await listAllInvoices(stripe);
+      const mapped: StripeInvoiceRow[] = [];
+      for (const invoice of invoices) {
+        if (mapped.some((row) => row.id === invoice.id)) continue;
+        const mappedRow = await mapInvoiceToRow(stripe, invoice, null);
+        const customerId =
+          typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+        const invoiceEmail = (invoice.customer_email ?? "").toLowerCase();
+        const matchedUser =
+          (customerId ? userByCustomerId.get(customerId) : null) ??
+          (invoiceEmail ? userByEmail.get(invoiceEmail) : null) ??
+          null;
+
+        mapped.push({
+          ...mappedRow,
+          user: matchedUser
+            ? {
+                id: matchedUser.id,
+                name: matchedUser.name,
+                email: matchedUser.email,
+              }
+            : null,
+        });
+      }
+
+      const data: StripeInvoiceRow[] = mapped.sort((a, b) => {
+        const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTs - aTs;
+      });
+
+      return NextResponse.json({
+        plan: null,
+        upcomingDowngrade: null,
+        upcomingCancellation: null,
+        isSuperadmin: true,
+        data,
+      });
+    }
+
     const candidateIds: string[] = [];
     const addCandidate = (value?: string | null) => {
       if (!value) return;
@@ -926,6 +1041,7 @@ export async function GET() {
           plan: localPlanPayload,
           upcomingDowngrade,
           upcomingCancellation,
+          isSuperadmin: false,
           data: [],
         });
       }
@@ -1013,6 +1129,7 @@ export async function GET() {
       plan: localPlanPayload ?? fallbackPlanFromInvoice,
       upcomingDowngrade,
       upcomingCancellation,
+      isSuperadmin: false,
       data,
     });
   } catch (error) {

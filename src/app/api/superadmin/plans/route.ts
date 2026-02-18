@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireSuperadmin } from "@/lib/superadmin";
 import {
+  isMissingFeaturesTableError,
+  isMissingPlanFeatureIdColumnError,
   isMissingPlanFeaturesTableError,
   isMissingPlanStatusColumnError,
   loadPlansWithFeatures,
@@ -14,6 +16,7 @@ type PlanPayload = {
   interval?: string | null;
   stripe_price_id?: string | null;
   features?: string[] | null;
+  feature_ids?: string[] | null;
   is_popular?: boolean | null;
   status?: "active" | "inactive" | null;
 };
@@ -76,7 +79,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "price must be greater than 0" }, { status: 400 });
   }
 
-  const features = (body.features ?? []).filter((feature) => feature.trim().length > 0);
+  const featureIds = Array.from(
+    new Set((body.feature_ids ?? []).map((featureId) => featureId.trim()).filter(Boolean)),
+  );
+  let features = (body.features ?? []).filter((feature) => feature.trim().length > 0);
+
+  if (featureIds.length > 0) {
+    const { data: featureRows, error: featureRowsError } = await supabaseAdmin
+      .from("features")
+      .select("id, name")
+      .in("id", featureIds);
+
+    if (featureRowsError) {
+      if (isMissingFeaturesTableError(featureRowsError)) {
+        return NextResponse.json(
+          { error: "Features table is missing. Run latest migrations." },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ error: featureRowsError.message }, { status: 500 });
+    }
+
+    const namesById = new Map(
+      ((featureRows ?? []) as Array<{ id: string; name: string }>).map((row) => [row.id, row.name]),
+    );
+    const missingFeatureIds = featureIds.filter((id) => !namesById.has(id));
+    if (missingFeatureIds.length > 0) {
+      return NextResponse.json(
+        { error: "One or more selected features were not found" },
+        { status: 400 },
+      );
+    }
+    features = featureIds.map((id) => namesById.get(id) as string);
+  }
+
   const status = body.status === "inactive" ? "inactive" : "active";
 
   const payload = {
@@ -115,16 +151,37 @@ export async function POST(req: NextRequest) {
   }
 
   let data = insertedPlan;
-  if (features.length > 0) {
-    const { error: featuresError } = await supabaseAdmin.from("plan_features").insert(
-      features.map((feature, index) => ({
-        plan_id: data.id,
-        feature: feature.trim(),
-        sort_order: index,
-      })),
-    );
+  if (featureIds.length > 0 || features.length > 0) {
+    const rows = features.map((feature, index) => ({
+      plan_id: data.id,
+      feature_id: featureIds[index] ?? null,
+      feature: feature.trim(),
+      sort_order: index,
+    }));
+    const { error: featuresError } = await supabaseAdmin.from("plan_features").insert(rows);
     if (featuresError) {
-      if (isMissingPlanFeaturesTableError(featuresError)) {
+      if (isMissingPlanFeatureIdColumnError(featuresError)) {
+        const { error: fallbackInsertError } = await supabaseAdmin.from("plan_features").insert(
+          features.map((feature, index) => ({
+            plan_id: data.id,
+            feature: feature.trim(),
+            sort_order: index,
+          })),
+        );
+        if (fallbackInsertError) {
+          if (isMissingPlanFeaturesTableError(fallbackInsertError)) {
+            const { error: fallbackError } = await supabaseAdmin
+              .from("plans")
+              .update({ features })
+              .eq("id", data.id);
+            if (fallbackError) {
+              return NextResponse.json({ error: fallbackError.message }, { status: 500 });
+            }
+          } else {
+            return NextResponse.json({ error: fallbackInsertError.message }, { status: 500 });
+          }
+        }
+      } else if (isMissingPlanFeaturesTableError(featuresError)) {
         const { error: fallbackError } = await supabaseAdmin
           .from("plans")
           .update({ features })
@@ -173,13 +230,19 @@ export async function POST(req: NextRequest) {
     data = syncedPlan;
   }
 
+  const plans = await loadPlansWithFeatures();
+  const createdPlan = plans.find((plan) => plan.id === data.id);
+
   return NextResponse.json({
     success: true,
-    plan: {
-      ...data,
-      status: data.status ?? status,
-      features,
-      active_user_count: 0,
-    },
+    plan:
+      createdPlan ??
+      ({
+        ...data,
+        status: data.status ?? status,
+        features,
+        feature_ids: featureIds,
+        active_user_count: 0,
+      } as Record<string, unknown>),
   });
 }

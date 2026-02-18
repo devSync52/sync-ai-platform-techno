@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireSuperadmin } from "@/lib/superadmin";
 import {
+  isMissingFeaturesTableError,
+  isMissingPlanFeatureIdColumnError,
   isMissingPlanFeaturesTableError,
   isMissingPlanStatusColumnError,
+  loadPlansWithFeatures,
 } from "@/lib/planFeatures";
 import { syncStripePriceForPlan } from "@/lib/stripePlans";
 
@@ -13,6 +16,7 @@ type PlanPayload = {
   interval?: string | null;
   stripe_price_id?: string | null;
   features?: string[] | null;
+  feature_ids?: string[] | null;
   is_popular?: boolean | null;
   status?: "active" | "inactive" | null;
 };
@@ -73,11 +77,43 @@ export async function PATCH(
     updates.status = body.status === "inactive" ? "inactive" : "active";
   }
 
-  const hasFeatureUpdate = "features" in body;
-  const nextFeatures = hasFeatureUpdate
+  const hasFeatureUpdate = "features" in body || "feature_ids" in body;
+  const nextFeatureIds = "feature_ids" in body
+    ? Array.from(new Set((body.feature_ids ?? []).map((featureId) => featureId.trim()).filter(Boolean)))
+    : [];
+  let nextFeatures = hasFeatureUpdate
     ? (body.features ?? []).filter((feature) => feature.trim().length > 0)
-    : null;
-  if (nextFeatures) {
+    : [];
+
+  if ("feature_ids" in body && nextFeatureIds.length > 0) {
+    const { data: featureRows, error: featureRowsError } = await supabaseAdmin
+      .from("features")
+      .select("id, name")
+      .in("id", nextFeatureIds);
+
+    if (featureRowsError) {
+      if (isMissingFeaturesTableError(featureRowsError)) {
+        return NextResponse.json(
+          { error: "Features table is missing. Run latest migrations." },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ error: featureRowsError.message }, { status: 500 });
+    }
+
+    const namesById = new Map(
+      ((featureRows ?? []) as Array<{ id: string; name: string }>).map((row) => [row.id, row.name]),
+    );
+    const missingFeatureIds = nextFeatureIds.filter((id) => !namesById.has(id));
+    if (missingFeatureIds.length > 0) {
+      return NextResponse.json(
+        { error: "One or more selected features were not found" },
+        { status: 400 },
+      );
+    }
+    nextFeatures = nextFeatureIds.map((id) => namesById.get(id) as string);
+  }
+  if (hasFeatureUpdate) {
     updates.features = nextFeatures;
   }
   const hasPlanPricingUpdate =
@@ -148,7 +184,7 @@ export async function PATCH(
     data = existingPlan;
   }
 
-  if (nextFeatures) {
+  if (hasFeatureUpdate) {
     const { error: deleteFeaturesError } = await supabaseAdmin
       .from("plan_features")
       .delete()
@@ -165,16 +201,37 @@ export async function PATCH(
       } else {
         return NextResponse.json({ error: deleteFeaturesError.message }, { status: 500 });
       }
-    } else if (nextFeatures.length > 0) {
-      const { error: insertFeaturesError } = await supabaseAdmin.from("plan_features").insert(
-        nextFeatures.map((feature, index) => ({
-          plan_id: planId,
-          feature: feature.trim(),
-          sort_order: index,
-        })),
-      );
+    } else if (nextFeatures.length > 0 || nextFeatureIds.length > 0) {
+      const rows = nextFeatures.map((feature, index) => ({
+        plan_id: planId,
+        feature_id: nextFeatureIds[index] ?? null,
+        feature: feature.trim(),
+        sort_order: index,
+      }));
+      const { error: insertFeaturesError } = await supabaseAdmin.from("plan_features").insert(rows);
       if (insertFeaturesError) {
-        if (isMissingPlanFeaturesTableError(insertFeaturesError)) {
+        if (isMissingPlanFeatureIdColumnError(insertFeaturesError)) {
+          const { error: fallbackInsertError } = await supabaseAdmin.from("plan_features").insert(
+            nextFeatures.map((feature, index) => ({
+              plan_id: planId,
+              feature: feature.trim(),
+              sort_order: index,
+            })),
+          );
+          if (fallbackInsertError) {
+            if (isMissingPlanFeaturesTableError(fallbackInsertError)) {
+              const { error: fallbackError } = await supabaseAdmin
+                .from("plans")
+                .update({ features: nextFeatures })
+                .eq("id", planId);
+              if (fallbackError) {
+                return NextResponse.json({ error: fallbackError.message }, { status: 500 });
+              }
+            } else {
+              return NextResponse.json({ error: fallbackInsertError.message }, { status: 500 });
+            }
+          }
+        } else if (isMissingPlanFeaturesTableError(insertFeaturesError)) {
           const { error: fallbackError } = await supabaseAdmin
             .from("plans")
             .update({ features: nextFeatures })
@@ -189,33 +246,19 @@ export async function PATCH(
     }
   }
 
-  const { data: features, error: featuresError } = await supabaseAdmin
-    .from("plan_features")
-    .select("feature")
-    .eq("plan_id", planId)
-    .order("sort_order", { ascending: true })
-    .order("id", { ascending: true });
-  if (featuresError) {
-    if (isMissingPlanFeaturesTableError(featuresError)) {
-      return NextResponse.json({
-        success: true,
-        plan: {
-          ...data,
-          status: data.status ?? "active",
-          features: data.features ?? [],
-        },
-      });
-    }
-    return NextResponse.json({ error: featuresError.message }, { status: 500 });
-  }
+  const plans = await loadPlansWithFeatures();
+  const refreshedPlan = plans.find((plan) => plan.id === planId);
 
   return NextResponse.json({
     success: true,
-    plan: {
-      ...data,
-      status: data.status ?? "active",
-      features: (features ?? []).map((row: any) => row.feature),
-    },
+    plan:
+      refreshedPlan ??
+      ({
+        ...data,
+        status: data.status ?? "active",
+        features: nextFeatures,
+        feature_ids: nextFeatureIds,
+      } as Record<string, unknown>),
   });
 }
 

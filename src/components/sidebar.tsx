@@ -106,6 +106,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/users", label: "Users", icon: Users },
     { href: "/plans", label: "Plans", icon: FileText },
+    { href: "/features", label: "Features", icon: BarChart3 },
+    { href: "/billing/invoices", label: "Invoices", icon: Wallet },
     {
       label: "Orders",
       icon: ShoppingBag,
@@ -136,6 +138,16 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: "/support", label: "Support", icon: TicketPlus },
   ];
   const filteredNavItems = navItems.filter((item) => {
+    if (userRole === "superadmin") {
+      return (
+        item.href === "/dashboard" ||
+        item.href === "/users" ||
+        item.href === "/plans" ||
+        item.href === "/features" ||
+        item.href === "/billing/invoices"
+      );
+    }
+
     const clientExclusions = ["/bot-training", "/ai-settings", "/channels"];
     const staffExclusions = [
       "/bot-training",
@@ -144,8 +156,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       "/channels",
     ];
 
-    if (item.href === "/users" || item.href === "/plans") {
-      return userRole === "superadmin";
+    if (item.href === "/users" || item.href === "/plans" || item.href === "/features") {
+      return false;
     }
 
     if (userRole === "staff-client") {
@@ -199,6 +211,10 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   ];
 
   const filteredSettingsItems = baseSettingsItems.filter((item) => {
+    if (userRole === "superadmin") {
+      return false;
+    }
+
     // staff-client: only "My profile"
     if (userRole === "staff-client") {
       return item.href === "/settings/profile";
@@ -320,48 +336,50 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         })}
 
         {/* SETTINGS DROPDOWN */}
-        <div>
-          <button
-            onClick={() => setSettingsOpen((prev) => !prev)}
-            className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#0000001c] transition text-white"
-          >
-            <span className="flex items-center gap-3">
-              <Settings size={18} />
-              <span>Settings</span>
-            </span>
-            <ChevronDown
-              size={16}
-              className={`transition-transform duration-200 ${
-                settingsOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
+        {filteredSettingsItems.length > 0 && (
+          <div>
+            <button
+              onClick={() => setSettingsOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#0000001c] transition text-white"
+            >
+              <span className="flex items-center gap-3">
+                <Settings size={18} />
+                <span>Settings</span>
+              </span>
+              <ChevronDown
+                size={16}
+                className={`transition-transform duration-200 ${
+                  settingsOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
 
-          <div
-            className={`pl-8 mt-1 space-y-1 overflow-hidden transition-all duration-200 ease-in-out ${
-              settingsOpen ? "max-h-40" : "max-h-0"
-            }`}
-          >
-            {filteredSettingsItems.map(({ href, label, icon: Icon }) => {
-              const isActive = pathname === href;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={onLinkClick}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
-                    isActive
-                      ? "bg-white text-primary font-semibold"
-                      : "text-white hover:bg-[#0000001c]"
-                  }`}
-                >
-                  <Icon size={16} />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
+            <div
+              className={`pl-8 mt-1 space-y-1 overflow-hidden transition-all duration-200 ease-in-out ${
+                settingsOpen ? "max-h-40" : "max-h-0"
+              }`}
+            >
+              {filteredSettingsItems.map(({ href, label, icon: Icon }) => {
+                const isActive = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onLinkClick}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
+                      isActive
+                        ? "bg-white text-primary font-semibold"
+                        : "text-white hover:bg-[#0000001c]"
+                    }`}
+                  >
+                    <Icon size={16} />
+                    <span>{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </nav>
 
       {/* FOOTER */}
