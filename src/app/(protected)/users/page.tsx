@@ -352,7 +352,7 @@ export default function SuperadminUsersPage() {
             <thead className="bg-gray-50 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium text-gray-600">User</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Role</th>
+                {/* <th className="px-4 py-3 font-medium text-gray-600">Role</th> */}
                 <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Plan</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Account</th>
@@ -376,7 +376,7 @@ export default function SuperadminUsersPage() {
                         Created: {formatDate(user.created_at)}
                       </div>
                     </td>
-                    <td className="px-4 py-3 align-top">{user.role}</td>
+                    {/* <td className="px-4 py-3 align-top">{user.role}</td> */}
                     <td className="px-4 py-3 align-top">{user.status}</td>
                     <td className="px-4 py-3 align-top">
                       {plans.find((p) => p.id === user.plan_id)?.name ??
