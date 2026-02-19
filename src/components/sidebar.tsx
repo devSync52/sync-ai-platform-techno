@@ -138,6 +138,11 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: "/support", label: "Support", icon: TicketPlus },
   ];
   const filteredNavItems = navItems.filter((item) => {
+    // Customer users should only see Dashboard + Orders module
+    if (userRole === "client") {
+      return item.href === "/dashboard" || item.label === "Orders";
+    }
+
     if (userRole === "superadmin") {
       return (
         item.href === "/dashboard" ||
@@ -173,25 +178,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       return false;
     }
 
-    if (item.label === "Billing" && userRole === "client") {
-      return false;
-    }
-
-    if (userRole === "client") {
-      if (
-        (item.href && clientExclusions.includes(item.href)) ||
-        (item.label === "Orders" &&
-          item.items &&
-          item.items.some((subItem) =>
-            clientExclusions.includes(subItem.href || ""),
-          ))
-      ) {
-        if (item.label === "Orders") {
-          return true;
-        }
-        return false;
-      }
-    } else if (userRole === "staff-user") {
+    if (userRole === "staff-user") {
       if (
         (item.href && staffExclusions.includes(item.href)) ||
         (item.label === "Orders" &&
@@ -217,6 +204,11 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
   const filteredSettingsItems = baseSettingsItems.filter((item) => {
     if (userRole === "superadmin") {
+      return false;
+    }
+
+    // Customer users should not see settings in sidebar
+    if (userRole === "client") {
       return false;
     }
 

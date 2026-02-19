@@ -69,8 +69,10 @@ export default function LoginForm() {
       setLoading(false);
       return;
     }
-    console.log("userRecord", userRecord);
-    if (userRecord?.role === "staff-user") {
+    const role = userRecord?.role ?? "";
+    const customerRoles = new Set(["client", "staff-client"]);
+
+    if (role === "staff-user" || customerRoles.has(role)) {
       router.push("/dashboard");
     } else if (userRecord?.account_id && userRecord?.plan_id) {
       router.push("/dashboard");
