@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireSuperadmin } from "@/lib/superadmin";
-import {
-  isMissingFeaturesTableError,
-  isMissingPlanFeatureIdColumnError,
-  isMissingPlanFeaturesTableError,
-  isMissingPlanStatusColumnError,
-  loadPlansWithFeatures,
-} from "@/lib/planFeatures";
+import { isMissingFeaturesTableError, isMissingPlanFeatureIdColumnError, isMissingPlanFeaturesTableError, isMissingPlanStatusColumnError, loadPlansWithFeatures, } from "@/lib/planFeatures";
 import { syncStripePriceForPlan } from "@/lib/stripePlans";
 
 type PlanPayload = {
