@@ -148,6 +148,11 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       );
     }
 
+    // Keep the root "Invoices" entry exclusive to superadmin.
+    if (item.href === "/billing/invoices") {
+      return false;
+    }
+
     const clientExclusions = ["/bot-training", "/ai-settings", "/channels"];
     const staffExclusions = [
       "/bot-training",
