@@ -9,6 +9,11 @@ import { Badge } from "@/components/ui/badge";
 interface InvoiceRow {
   id: string;
   number: string | null;
+  user?: {
+    id: string | null;
+    name: string | null;
+    email: string | null;
+  } | null;
   plan: {
     name: string | null;
     interval: string | null;
@@ -96,6 +101,7 @@ function statusBadge(status: string) {
 }
 
 export default function InvoicesPage() {
+  const [isSuperadmin, setIsSuperadmin] = useState<boolean | null>(null);
   const [plan, setPlan] = useState<PlanInfo | null>(null);
   const [upcomingDowngrade, setUpcomingDowngrade] =
     useState<UpcomingDowngradeInfo | null>(null);
@@ -132,10 +138,12 @@ export default function InvoicesPage() {
           plan: PlanInfo | null;
           upcomingDowngrade: UpcomingDowngradeInfo | null;
           upcomingCancellation: UpcomingCancellationInfo | null;
+          isSuperadmin?: boolean;
           data: InvoiceRow[];
         } = await res.json();
         if (!active) return;
 
+        setIsSuperadmin(payload.isSuperadmin === true);
         setPlan(payload.plan ?? null);
         setUpcomingDowngrade(payload.upcomingDowngrade ?? null);
         setUpcomingCancellation(payload.upcomingCancellation ?? null);
@@ -212,12 +220,17 @@ export default function InvoicesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Invoices</h1>
           <p className="text-sm text-muted-foreground">
-            Subscription invoices from your selected pricing plan.
+            {isSuperadmin
+              ? "All users subscription invoices."
+              : isSuperadmin === false
+                ? "Subscription invoices from your selected pricing plan."
+                : "Loading invoices..."}
           </p>
         </div>
       </div>
 
-      <Card className="p-4">
+      {isSuperadmin === false && (
+        <Card className="p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-medium">Current Plan</div>
           <div className="flex items-center gap-2">
@@ -305,7 +318,8 @@ export default function InvoicesPage() {
             )}
           </div>
         )}
-      </Card>
+        </Card>
+      )}
 
       <Card className="p-4">
         <div className="mb-3 flex items-center justify-between">
@@ -337,6 +351,7 @@ export default function InvoicesPage() {
               <thead className="text-muted-foreground">
                 <tr className="border-b text-left">
                   <th className="py-2 pr-3">Invoice #</th>
+                  {isSuperadmin && <th className="py-2 pr-3">User</th>}
                   <th className="py-2 pr-3">Plan</th>
                   <th className="py-2 pr-3">Period</th>
                   <th className="py-2 pr-3">Created</th>
@@ -356,6 +371,16 @@ export default function InvoicesPage() {
                     <td className="py-2 pr-3 font-medium">
                       {row.number ?? row.id}
                     </td>
+                    {isSuperadmin && (
+                      <td className="py-2 pr-3">
+                        <div className="font-medium">
+                          {row.user?.name?.trim() || "Unnamed"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {row.user?.email || "-"}
+                        </div>
+                      </td>
+                    )}
                     <td className="py-2 pr-3">
                       {row.plan.name ?? "-"}
                       {row.plan.interval ? ` (${row.plan.interval})` : ""}

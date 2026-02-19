@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import { GenderSelect } from "@/components/ui/genderSelect";
+import { Eye } from "lucide-react";
 
 type UserStatus = "active" | "disabled";
 
@@ -158,7 +160,11 @@ export default function SuperadminUsersPage() {
         throw new Error(plansPayload?.error || "Failed to load plans");
       }
 
-      setUsers((usersPayload.users ?? []) as UserRow[]);
+      setUsers(
+        ((usersPayload.users ?? []) as UserRow[]).filter(
+          (user) => user.role === "admin",
+        ),
+      );
       setPlans((plansPayload.plans ?? []) as PlanRow[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error");
@@ -229,58 +235,60 @@ export default function SuperadminUsersPage() {
       }
 
       setUsers((prev) =>
-        prev.map((row) =>
-          row.id === editingUser.id
-            ? {
-                ...row,
-                name: editingUser.name || null,
-                email: editingUser.email,
-                phone: editingUser.phone || null,
-                role: editingUser.role,
-                plan_id: editingUser.planId || null,
-                status: editingUser.status,
-                user_details: {
-                  ...(row.user_details ?? {
-                    gender: null,
-                    birth_date: null,
-                    address_line_1: null,
-                    address_line_2: null,
-                    city: null,
-                    state: null,
-                    country: null,
-                    postal_code: null,
-                  }),
-                  gender: editingUser.gender || null,
-                  birth_date: editingUser.birth_date || null,
-                  address_line_1: editingUser.address_line_1 || null,
-                  address_line_2: editingUser.address_line_2 || null,
-                  city: editingUser.city || null,
-                  state: editingUser.state || null,
-                  country: editingUser.country || null,
-                  postal_code: editingUser.postal_code || null,
-                },
-                account: row.account
-                  ? {
-                      ...row.account,
-                      name: editingUser.account_name || null,
-                      email: editingUser.account_email || null,
-                      phone: editingUser.account_phone || null,
-                      website: editingUser.account_website || null,
-                      tax_id: editingUser.account_tax_id || null,
-                      address_line_1:
-                        editingUser.account_address_line_1 || null,
-                      address_line_2:
-                        editingUser.account_address_line_2 || null,
-                      city: editingUser.account_city || null,
-                      state: editingUser.account_state || null,
-                      zip_code: editingUser.account_zip_code || null,
-                      country: editingUser.account_country || null,
-                      status: editingUser.account_status || null,
-                    }
-                  : null,
-              }
-            : row,
-        ),
+        prev
+          .map((row) =>
+            row.id === editingUser.id
+              ? {
+                  ...row,
+                  name: editingUser.name || null,
+                  email: editingUser.email,
+                  phone: editingUser.phone || null,
+                  role: editingUser.role,
+                  plan_id: editingUser.planId || null,
+                  status: editingUser.status,
+                  user_details: {
+                    ...(row.user_details ?? {
+                      gender: null,
+                      birth_date: null,
+                      address_line_1: null,
+                      address_line_2: null,
+                      city: null,
+                      state: null,
+                      country: null,
+                      postal_code: null,
+                    }),
+                    gender: editingUser.gender || null,
+                    birth_date: editingUser.birth_date || null,
+                    address_line_1: editingUser.address_line_1 || null,
+                    address_line_2: editingUser.address_line_2 || null,
+                    city: editingUser.city || null,
+                    state: editingUser.state || null,
+                    country: editingUser.country || null,
+                    postal_code: editingUser.postal_code || null,
+                  },
+                  account: row.account
+                    ? {
+                        ...row.account,
+                        name: editingUser.account_name || null,
+                        email: editingUser.account_email || null,
+                        phone: editingUser.account_phone || null,
+                        website: editingUser.account_website || null,
+                        tax_id: editingUser.account_tax_id || null,
+                        address_line_1:
+                          editingUser.account_address_line_1 || null,
+                        address_line_2:
+                          editingUser.account_address_line_2 || null,
+                        city: editingUser.account_city || null,
+                        state: editingUser.account_state || null,
+                        zip_code: editingUser.account_zip_code || null,
+                        country: editingUser.account_country || null,
+                        status: editingUser.account_status || null,
+                      }
+                    : null,
+                }
+              : row,
+          )
+          .filter((row) => row.role === "admin"),
       );
 
       setEditingUser(null);
@@ -316,8 +324,8 @@ export default function SuperadminUsersPage() {
   return (
     <div className="p-6 space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-primary">All Users</h1>
-        <p className="text-sm text-gray-500">Manage users</p>
+        <h1 className="text-2xl font-semibold text-primary">Admin Users</h1>
+        <p className="text-sm text-gray-500">Manage admin users</p>
       </div>
 
       {error && (
@@ -344,7 +352,7 @@ export default function SuperadminUsersPage() {
             <thead className="bg-gray-50 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium text-gray-600">User</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Role</th>
+                {/* <th className="px-4 py-3 font-medium text-gray-600">Role</th> */}
                 <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Plan</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Account</th>
@@ -368,7 +376,7 @@ export default function SuperadminUsersPage() {
                         Created: {formatDate(user.created_at)}
                       </div>
                     </td>
-                    <td className="px-4 py-3 align-top">{user.role}</td>
+                    {/* <td className="px-4 py-3 align-top">{user.role}</td> */}
                     <td className="px-4 py-3 align-top">{user.status}</td>
                     <td className="px-4 py-3 align-top">
                       {plans.find((p) => p.id === user.plan_id)?.name ??
@@ -382,6 +390,13 @@ export default function SuperadminUsersPage() {
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex gap-2">
+                        <Link
+                          href={`/users/${user.id}`}
+                          className="px-3 py-1.5 rounded-md border border-primary text-primary flex items-center gap-1.5"
+                        >
+                          <Eye size={16} />
+                          View
+                        </Link>
                         <button
                           onClick={() => setEditingUser(toEditableUser(user))}
                           className="px-3 py-1.5 rounded-md bg-primary text-white"

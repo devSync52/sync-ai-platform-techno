@@ -9,9 +9,17 @@ type PlanRow = {
   interval: string | null;
   stripe_price_id: string | null;
   features: string[] | null;
+  feature_ids?: string[] | null;
   is_popular: boolean | null;
   status?: "active" | "inactive" | null;
   active_user_count?: number;
+};
+
+type FeatureRow = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
 };
 
 type PlanFormState = {
@@ -19,7 +27,7 @@ type PlanFormState = {
   price: string;
   interval: string;
   stripePriceId: string;
-  features: string;
+  selectedFeatureIds: string[];
   isPopular: boolean;
   status: "active" | "inactive";
 };
@@ -34,25 +42,25 @@ const EMPTY_FORM: PlanFormState = {
   price: "",
   interval: "month",
   stripePriceId: "",
-  features: "",
+  selectedFeatureIds: [],
   isPopular: false,
   status: "active",
 };
 
-function parseFeatureLines(value: string) {
-  return value
-    .split("\n")
-    .map((feature) => feature.trim())
-    .filter(Boolean);
-}
+function toFormState(plan: PlanRow, allFeatures: FeatureRow[]): PlanFormState {
+  const selectedFeatureIds =
+    (plan.feature_ids ?? []).length > 0
+      ? (plan.feature_ids ?? [])
+      : (plan.features ?? [])
+          .map((featureName) => allFeatures.find((feature) => feature.name === featureName)?.id)
+          .filter((featureId): featureId is string => !!featureId);
 
-function toFormState(plan: PlanRow): PlanFormState {
   return {
     name: plan.name,
     price: String(plan.price ?? ""),
     interval: plan.interval ?? "month",
     stripePriceId: plan.stripe_price_id ?? "",
-    features: (plan.features ?? []).join("\n"),
+    selectedFeatureIds,
     isPopular: !!plan.is_popular,
     status: plan.status === "inactive" ? "inactive" : "active",
   };
@@ -60,6 +68,7 @@ function toFormState(plan: PlanRow): PlanFormState {
 
 export default function SuperadminPlansPage() {
   const [plans, setPlans] = useState<PlanRow[]>([]);
+  const [allFeatures, setAllFeatures] = useState<FeatureRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,12 +86,22 @@ export default function SuperadminPlansPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/superadmin/plans", { cache: "no-store" });
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(payload?.error || "Failed to load plans");
+      const [plansRes, featuresRes] = await Promise.all([
+        fetch("/api/superadmin/plans", { cache: "no-store" }),
+        fetch("/api/superadmin/features", { cache: "no-store" }),
+      ]);
+      const [plansPayload, featuresPayload] = await Promise.all([
+        plansRes.json(),
+        featuresRes.json(),
+      ]);
+      if (!plansRes.ok) {
+        throw new Error(plansPayload?.error || "Failed to load plans");
       }
-      setPlans((payload.plans ?? []) as PlanRow[]);
+      if (!featuresRes.ok) {
+        throw new Error(featuresPayload?.error || "Failed to load features");
+      }
+      setPlans((plansPayload.plans ?? []) as PlanRow[]);
+      setAllFeatures((featuresPayload.features ?? []) as FeatureRow[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
@@ -108,7 +127,7 @@ export default function SuperadminPlansPage() {
 
   const openEditModal = (plan: PlanRow) => {
     setEditingPlanId(plan.id);
-    setForm(toFormState(plan));
+    setForm(toFormState(plan, allFeatures));
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -161,7 +180,7 @@ export default function SuperadminPlansPage() {
           price,
           interval: form.interval || "month",
           stripe_price_id: form.stripePriceId || null,
-          features: parseFeatureLines(form.features),
+          feature_ids: form.selectedFeatureIds,
           is_popular: form.isPopular,
           status: form.status,
         }),
@@ -385,11 +404,53 @@ export default function SuperadminPlansPage() {
                 <option value="inactive">Inactive</option>
               </select>
               <textarea
-                value={form.features}
-                onChange={(e) => setForm((prev) => ({ ...prev, features: e.target.value }))}
-                placeholder="Features (one per line)"
-                className="border rounded-md px-3 py-2 text-sm min-h-[140px] md:col-span-2"
+                value={
+                  form.selectedFeatureIds
+                    .map((featureId) => allFeatures.find((feature) => feature.id === featureId)?.name)
+                    .filter((name): name is string => !!name)
+                    .join(", ")
+                }
+                readOnly
+                placeholder="Selected features"
+                className="border rounded-md px-3 py-2 text-sm md:col-span-2 bg-gray-50"
               />
+              <div className="border rounded-md px-3 py-2 text-sm min-h-[140px] md:col-span-2 space-y-2">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Feature Library</p>
+                {allFeatures.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No features found. Create them from the Features page first.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
+                    {allFeatures.map((feature) => {
+                      const checked = form.selectedFeatureIds.includes(feature.id);
+                      return (
+                        <label
+                          key={feature.id}
+                          className="inline-flex items-start gap-2 rounded-md border px-2 py-2"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                selectedFeatureIds: e.target.checked
+                                  ? [...prev.selectedFeatureIds, feature.id]
+                                  : prev.selectedFeatureIds.filter((id) => id !== feature.id),
+                              }))
+                            }
+                          />
+                          <span>
+                            <span className="block font-medium text-gray-900">{feature.name}</span>
+                            <span className="block text-xs text-gray-500">{feature.slug}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <label className="inline-flex items-center gap-2 text-sm md:col-span-2">
                 <input
                   type="checkbox"
