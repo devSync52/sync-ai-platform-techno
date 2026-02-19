@@ -32,6 +32,8 @@ type FormState = {
   status: CustomerStatus
 }
 
+type FormErrors = Partial<Record<keyof FormState, string>>
+
 interface ChannelsClientProps {
   accountId: string
 }
@@ -56,6 +58,10 @@ function getAuthTypeLabel(authType: AuthType) {
   return 'Extensive WMS-based'
 }
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
+
 export default function ChannelsClient({ accountId }: ChannelsClientProps) {
   const [customers, setCustomers] = useState<CustomerUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -65,6 +71,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<CustomerUser | null>(null)
   const [form, setForm] = useState<FormState>(defaultForm)
+  const [formErrors, setFormErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -103,6 +110,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
   const openCreateModal = () => {
     setEditingCustomer(null)
     setForm(defaultForm)
+    setFormErrors({})
     setModalOpen(true)
   }
 
@@ -117,6 +125,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
       wmsUserIdentifier: customer.wms_user_identifier ?? '',
       status: customer.status ?? 'active',
     })
+    setFormErrors({})
     setModalOpen(true)
   }
 
@@ -124,30 +133,42 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
     setModalOpen(false)
     setEditingCustomer(null)
     setForm(defaultForm)
+    setFormErrors({})
   }
 
   const validateForm = () => {
+    const nextErrors: FormErrors = {}
+
     if (!form.name.trim()) {
-      toast.error('Name is required')
-      return false
+      nextErrors.name = 'Name is required.'
+    } else if (form.name.trim().length < 2) {
+      nextErrors.name = 'Name must be at least 2 characters.'
     }
 
     if (!form.email.trim()) {
-      toast.error('Email is required')
-      return false
+      nextErrors.email = 'Email is required.'
+    } else if (!isValidEmail(form.email.trim())) {
+      nextErrors.email = 'Enter a valid email address.'
     }
 
-    if (form.authType === 'local' && !editingCustomer && form.temporaryPassword.trim().length < 8) {
-      toast.error('Temporary Password must be at least 8 characters')
-      return false
+    if (form.authType === 'local') {
+      if (!editingCustomer && !form.temporaryPassword.trim()) {
+        nextErrors.temporaryPassword = 'Temporary Password is required for Local auth.'
+      } else if (form.temporaryPassword.trim() && form.temporaryPassword.trim().length < 8) {
+        nextErrors.temporaryPassword = 'Temporary Password must be at least 8 characters.'
+      }
     }
 
-    if (form.authType === 'wms_extensiv' && !form.wmsUserIdentifier.trim()) {
-      toast.error('WMS User Identifier is required for Extensive WMS-based auth')
-      return false
+    if (form.authType === 'wms_extensiv') {
+      if (!form.wmsUserIdentifier.trim()) {
+        nextErrors.wmsUserIdentifier = 'WMS User Identifier is required for WMS auth.'
+      } else if (form.wmsUserIdentifier.trim().length < 3) {
+        nextErrors.wmsUserIdentifier = 'WMS User Identifier must be at least 3 characters.'
+      }
     }
 
-    return true
+    setFormErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
   }
 
   const saveCustomer = async () => {
@@ -349,10 +370,21 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                 <input
                   type="text"
                   value={form.name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setForm((prev) => ({ ...prev, name: value }))
+                    if (formErrors.name) {
+                      setFormErrors((prev) => ({ ...prev, name: undefined }))
+                    }
+                  }}
+                  className={`w-full rounded-md border px-3 py-2 text-sm ${
+                    formErrors.name ? 'border-red-500' : ''
+                  }`}
                   placeholder="Enter customer name"
                 />
+                {formErrors.name && (
+                  <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>
+                )}
               </div>
 
               <div>
@@ -360,10 +392,21 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                 <input
                   type="email"
                   value={form.email}
-                  onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setForm((prev) => ({ ...prev, email: value }))
+                    if (formErrors.email) {
+                      setFormErrors((prev) => ({ ...prev, email: undefined }))
+                    }
+                  }}
+                  className={`w-full rounded-md border px-3 py-2 text-sm ${
+                    formErrors.email ? 'border-red-500' : ''
+                  }`}
                   placeholder="customer@example.com"
                 />
+                {formErrors.email && (
+                  <p className="mt-1 text-xs text-red-600">{formErrors.email}</p>
+                )}
               </div>
 
               <div>
@@ -402,10 +445,21 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                   <input
                     type="text"
                     value={form.temporaryPassword}
-                    onChange={(e) => setForm((prev) => ({ ...prev, temporaryPassword: e.target.value }))}
-                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setForm((prev) => ({ ...prev, temporaryPassword: value }))
+                      if (formErrors.temporaryPassword) {
+                        setFormErrors((prev) => ({ ...prev, temporaryPassword: undefined }))
+                      }
+                    }}
+                    className={`w-full rounded-md border px-3 py-2 text-sm ${
+                      formErrors.temporaryPassword ? 'border-red-500' : ''
+                    }`}
                     placeholder={editingCustomer ? 'Optional: enter to reset password' : 'Minimum 8 characters'}
                   />
+                  {formErrors.temporaryPassword && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.temporaryPassword}</p>
+                  )}
                   <p className="mt-1 text-xs text-gray-500">
                     {editingCustomer
                       ? 'Leave empty to keep existing password.'
@@ -420,10 +474,21 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                   <input
                     type="text"
                     value={form.wmsUserIdentifier}
-                    onChange={(e) => setForm((prev) => ({ ...prev, wmsUserIdentifier: e.target.value }))}
-                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setForm((prev) => ({ ...prev, wmsUserIdentifier: value }))
+                      if (formErrors.wmsUserIdentifier) {
+                        setFormErrors((prev) => ({ ...prev, wmsUserIdentifier: undefined }))
+                      }
+                    }}
+                    className={`w-full rounded-md border px-3 py-2 text-sm ${
+                      formErrors.wmsUserIdentifier ? 'border-red-500' : ''
+                    }`}
                     placeholder="Enter WMS user identifier"
                   />
+                  {formErrors.wmsUserIdentifier && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.wmsUserIdentifier}</p>
+                  )}
                 </div>
               )}
 

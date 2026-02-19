@@ -14,6 +14,10 @@ function normalizeAuthType(value: unknown): AuthType | null {
   return null
 }
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
+
 function generateSecurePassword(length = 12) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()'
   let password = ''
@@ -155,6 +159,9 @@ export async function POST(req: NextRequest) {
 
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+  }
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: 'Invalid email format' }, { status: 400 })
   }
 
   if (!authType) {
