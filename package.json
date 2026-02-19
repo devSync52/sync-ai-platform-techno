@@ -69,6 +69,7 @@
     "resend": "^4.6.0",
     "sonner": "^2.0.3",
     "stripe": "^14.25.0",
+    "swiper": "^12.1.2",
     "tailwind-merge": "^3.2.0",
     "tailwind-variants": "^1.0.0",
     "tailwindcss-animate": "^1.0.7",
