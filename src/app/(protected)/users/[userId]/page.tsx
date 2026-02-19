@@ -252,21 +252,21 @@ export default function SuperadminUserDetailsPage() {
   );
 
   const currentPlan = useMemo(() => {
-    if (!selectedUser?.plan_id) return null;
-    return plans.find((plan) => plan.id === selectedUser.plan_id) ?? null;
+    const rawPlanId = selectedUser?.plan_id;
+    const planId = typeof rawPlanId === "string" ? rawPlanId.trim() : "";
+    if (!planId) return null;
+    return plans.find((plan) => plan.id === planId) ?? null;
   }, [plans, selectedUser]);
+  const hasAssignedPlanId = Boolean(
+    selectedUser?.plan_id && String(selectedUser.plan_id).trim(),
+  );
+  const hasActivePlan = hasAssignedPlanId && Boolean(currentPlan);
 
   const userInvoices = useMemo(() => {
     if (!selectedUser) return [];
-    return invoices.filter((invoice) => {
-      const invoiceUserId = invoice.user?.id;
-      const invoiceUserEmail = (invoice.user?.email ?? "").toLowerCase();
-      return (
-        invoiceUserId === selectedUser.id ||
-        (!!selectedUser.email && invoiceUserEmail === selectedUser.email.toLowerCase())
-      );
-    });
-  }, [invoices, selectedUser]);
+    if (!hasActivePlan) return [];
+    return invoices.filter((invoice) => invoice.user?.id === selectedUser.id);
+  }, [invoices, selectedUser, hasActivePlan]);
 
   const currentPlanDuration = useMemo(() => {
     if (!currentPlan) return "-";
@@ -559,75 +559,81 @@ export default function SuperadminUserDetailsPage() {
 
       <div>
         <h3 className="text-xl font-semibold mb-3">Billing History</h3>
-        <div className="bg-white border rounded-xl overflow-x-auto">
-          <table className="w-full min-w-[980px] text-sm">
-            <thead className="bg-gray-50 text-left">
-              <tr>
-                <th className="px-4 py-3 font-medium text-gray-600">Plan Name</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Price</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Payment Date</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Renewal Date</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Invoice</th>
-              </tr>
-            </thead>
-            <tbody>
-              {userInvoices.length === 0 && (
-                <tr className="border-t">
-                  <td className="px-4 py-3 text-gray-500" colSpan={6}>
-                    No billing history found.
-                  </td>
+        {hasActivePlan ? (
+          <div className="bg-white border rounded-xl overflow-x-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="bg-gray-50 text-left">
+                <tr>
+                  <th className="px-4 py-3 font-medium text-gray-600">Plan Name</th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Price</th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Payment Date</th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Renewal Date</th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Status</th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Invoice</th>
                 </tr>
-              )}
-              {userInvoices.map((invoice) => {
-                const invoiceStatus = invoice.status.toLowerCase();
-                const isPaid = invoiceStatus === "paid";
-                const downloadLink = invoice.receiptUrl || invoice.downloadUrl;
-                return (
-                  <tr key={invoice.id} className="border-t">
-                    <td className="px-4 py-3 align-middle">
-                      <div className="font-medium text-gray-900">{invoice.plan.name || "-"}</div>
-                    </td>
-                    <td className="px-4 py-3 align-middle">
-                      <p className="flex items-baseline gap-x-2">
-                        <span className="text-sm font-bold">
-                          {formatCurrency(invoice.plan.amount, invoice.currency)}
-                        </span>
-                        <span className="text-sm">/{invoice.plan.interval || "month"}</span>
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 align-middle">{formatShortDate(invoice.createdAt)}</td>
-                    <td className="px-4 py-3 align-middle text-gray-600">
-                      {formatShortDate(invoice.periodEnd)}
-                    </td>
-                    <td className="px-4 py-3 align-middle text-gray-600">
-                      <span
-                        className={`inline-flex rounded-lg px-[24px] py-1.5 text-sm font-medium ${
-                          isPaid ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {isPaid ? "Paid" : invoice.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 align-middle w-[208px]">
-                      {downloadLink ? (
-                        <a href={downloadLink} target="_blank" rel="noreferrer">
-                          <button className="px-3 py-1.5 rounded-md bg-primary text-white flex gap-3 items-center justify-center w-[130px]">
-                            <DownloadIcon size={18} /> Download
-                          </button>
-                        </a>
-                      ) : (
-                        <button className="px-3 py-1.5 rounded-md bg-gray-200 text-gray-500 flex gap-3 items-center justify-center w-[130px]" disabled>
-                          <DownloadIcon size={18} /> Not ready
-                        </button>
-                      )}
+              </thead>
+              <tbody>
+                {userInvoices.length === 0 && (
+                  <tr className="border-t">
+                    <td className="px-4 py-3 text-gray-500" colSpan={6}>
+                      No billing history found.
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                )}
+                {userInvoices.map((invoice) => {
+                  const invoiceStatus = invoice.status.toLowerCase();
+                  const isPaid = invoiceStatus === "paid";
+                  const downloadLink = invoice.receiptUrl || invoice.downloadUrl;
+                  return (
+                    <tr key={invoice.id} className="border-t">
+                      <td className="px-4 py-3 align-middle">
+                        <div className="font-medium text-gray-900">{invoice.plan.name || "-"}</div>
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <p className="flex items-baseline gap-x-2">
+                          <span className="text-sm font-bold">
+                            {formatCurrency(invoice.plan.amount, invoice.currency)}
+                          </span>
+                          <span className="text-sm">/{invoice.plan.interval || "month"}</span>
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-middle">{formatShortDate(invoice.createdAt)}</td>
+                      <td className="px-4 py-3 align-middle text-gray-600">
+                        {formatShortDate(invoice.periodEnd)}
+                      </td>
+                      <td className="px-4 py-3 align-middle text-gray-600">
+                        <span
+                          className={`inline-flex rounded-lg px-[24px] py-1.5 text-sm font-medium ${
+                            isPaid ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {isPaid ? "Paid" : invoice.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 align-middle w-[208px]">
+                        {downloadLink ? (
+                          <a href={downloadLink} target="_blank" rel="noreferrer">
+                            <button className="px-3 py-1.5 rounded-md bg-primary text-white flex gap-3 items-center justify-center w-[130px]">
+                              <DownloadIcon size={18} /> Download
+                            </button>
+                          </a>
+                        ) : (
+                          <button className="px-3 py-1.5 rounded-md bg-gray-200 text-gray-500 flex gap-3 items-center justify-center w-[130px]" disabled>
+                            <DownloadIcon size={18} /> Not ready
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-sm text-gray-500 border bg-white rounded-xl p-4">
+            No billing history found because this user has no active plan.
+          </div>
+        )}
       </div>
 
       <div>

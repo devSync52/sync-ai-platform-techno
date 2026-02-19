@@ -339,7 +339,7 @@ export default function SuperadminUsersPage() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by email, name, or role"
+          placeholder="Search by email, name"
           className="w-full border rounded-md px-3 py-2 text-sm"
         />
       </div>

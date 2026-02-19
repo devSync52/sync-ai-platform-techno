@@ -894,7 +894,7 @@ export async function GET() {
     if (isSuperadmin) {
       const { data: usersData } = await supabaseAdmin
         .from("users")
-        .select("id, name, email, stripe_customer_id");
+        .select("id, name, email, stripe_customer_id, plan_id");
 
       const users = (usersData ??
         []) as Array<{
@@ -902,27 +902,19 @@ export async function GET() {
         name: string | null;
         email: string | null;
         stripe_customer_id: string | null;
+        plan_id: string | null;
       }>;
 
       const userByCustomerId = new Map<
         string,
         { id: string; name: string | null; email: string | null }
       >();
-      const userByEmail = new Map<
-        string,
-        { id: string; name: string | null; email: string | null }
-      >();
 
       for (const row of users) {
-        if (row.stripe_customer_id) {
+        // Only map users with an assigned plan and a Stripe customer id.
+        // This avoids attaching invoices to no-plan users by weak email matching.
+        if (row.plan_id && row.stripe_customer_id) {
           userByCustomerId.set(row.stripe_customer_id, {
-            id: row.id,
-            name: row.name,
-            email: row.email,
-          });
-        }
-        if (row.email) {
-          userByEmail.set(row.email.toLowerCase(), {
             id: row.id,
             name: row.name,
             email: row.email,
@@ -937,11 +929,7 @@ export async function GET() {
         const mappedRow = await mapInvoiceToRow(stripe, invoice, null);
         const customerId =
           typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
-        const invoiceEmail = (invoice.customer_email ?? "").toLowerCase();
-        const matchedUser =
-          (customerId ? userByCustomerId.get(customerId) : null) ??
-          (invoiceEmail ? userByEmail.get(invoiceEmail) : null) ??
-          null;
+        const matchedUser = customerId ? userByCustomerId.get(customerId) : null;
 
         mapped.push({
           ...mappedRow,
