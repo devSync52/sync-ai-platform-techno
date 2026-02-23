@@ -94,6 +94,19 @@ const ROLE_OPTIONS = [
   "client",
 ];
 
+function formatRoleLabel(role: string | null | undefined) {
+  if (!role) return "-";
+  const map: Record<string, string> = {
+    superadmin: "Super Admin",
+    admin: "Admin",
+    "staff-admin": "Staff Admin",
+    "staff-user": "Staff User",
+    "staff-client": "Staff Customer User",
+    client: "Customer User",
+  };
+  return map[role] ?? role;
+}
+
 function formatDate(value: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleString();
@@ -503,7 +516,7 @@ export default function SuperadminUsersPage() {
               >
                 {ROLE_OPTIONS.map((role) => (
                   <option key={role} value={role}>
-                    {role}
+                    {formatRoleLabel(role)}
                   </option>
                 ))}
               </select>
