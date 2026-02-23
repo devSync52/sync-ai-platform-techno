@@ -117,6 +117,8 @@ type EditableUser = {
   status: UserStatus;
 };
 
+type UserListTab = "staff" | "customer";
+
 const ROLE_OPTIONS = [
   "superadmin",
   "admin",
@@ -125,6 +127,19 @@ const ROLE_OPTIONS = [
   "staff-client",
   "client",
 ];
+
+function formatRoleLabel(role: string | null | undefined) {
+  if (!role) return "-";
+  const map: Record<string, string> = {
+    superadmin: "Super Admin",
+    admin: "Admin",
+    "staff-admin": "Staff Admin",
+    "staff-user": "Staff User",
+    "staff-client": "Staff Customer User",
+    client: "Customer User",
+  };
+  return map[role] ?? role;
+}
 
 function formatDate(value: string | null) {
   if (!value) return "-";
@@ -200,8 +215,11 @@ export default function SuperadminUserDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [cancelingSubscription, setCancelingSubscription] = useState(false);
+  const [cancelSubscriptionMessage, setCancelSubscriptionMessage] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [activeUserTab, setActiveUserTab] = useState<UserListTab>("staff");
 
   useEffect(() => {
     if (!userId) return;
@@ -301,6 +319,20 @@ export default function SuperadminUserDetailsPage() {
         user.created_by_user_id === selectedUser.id && user.id !== selectedUser.id,
     );
   }, [users, selectedUser]);
+  const staffUsers = useMemo(
+    () => relatedUsers.filter((user) => user.role !== "client"),
+    [relatedUsers],
+  );
+  const customerUsers = useMemo(
+    () => relatedUsers.filter((user) => user.role === "client"),
+    [relatedUsers],
+  );
+  const visibleRelatedUsers = activeUserTab === "staff" ? staffUsers : customerUsers;
+  const showAdminSections = selectedUser?.role === "admin";
+
+  useEffect(() => {
+    setActiveUserTab("staff");
+  }, [selectedUser?.id]);
 
   const deleteUser = async () => {
     if (!selectedUser) return;
@@ -322,6 +354,40 @@ export default function SuperadminUserDetailsPage() {
       setError(err instanceof Error ? err.message : "Failed to delete user");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const cancelSubscription = async () => {
+    if (!selectedUser) return;
+    const confirmed = window.confirm(
+      `Cancel subscription for ${selectedUser.email} at period end?`,
+    );
+    if (!confirmed) return;
+
+    setCancelingSubscription(true);
+    setError(null);
+    setCancelSubscriptionMessage(null);
+    try {
+      const res = await fetch(
+        `/api/superadmin/users/${selectedUser.id}/subscription/cancel`,
+        {
+          method: "POST",
+        },
+      );
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.error || "Failed to cancel subscription");
+      }
+      const effectiveAt = payload?.effectiveAt ? formatShortDate(payload.effectiveAt) : null;
+      setCancelSubscriptionMessage(
+        effectiveAt
+          ? `Cancellation scheduled for ${effectiveAt}.`
+          : payload?.message || "Cancellation scheduled.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cancel subscription");
+    } finally {
+      setCancelingSubscription(false);
     }
   };
 
@@ -487,7 +553,9 @@ export default function SuperadminUserDetailsPage() {
             </div>
             <div>
               <h4 className="text-lg font-bold">{selectedUser.name || "Unnamed"}</h4>
-              <p className="text-sm font-medium text-gray-500">Role : {selectedUser.role}</p>
+              <p className="text-sm font-medium text-gray-500">
+                Role : {formatRoleLabel(selectedUser.role)}
+              </p>
               <p className="text-sm font-medium text-gray-500">Email : {selectedUser.email}</p>
               <p className="text-sm font-medium text-gray-500">
                 Account : {selectedUser.account?.name || selectedUser.account_id || "-"}
@@ -517,178 +585,218 @@ export default function SuperadminUserDetailsPage() {
         </div>
       </div>
 
-      <div>
-        <h3 className="text-xl font-semibold mb-3">Your Current Subscription Plan</h3>
-        <div className="border bg-white rounded-xl p-4 mt-2">
-          {currentPlan ? (
-            <div className="flex justify-between items-center gap-4">
-              <div className="flex gap-3 items-center">
-                <div className="w-[70px] h-[70px] rounded-full flex items-center justify-center bg-primary text-white text-2xl font-medium">
-                  <Crown size={35} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold">{currentPlan.name}</h3>
-                  <p className="mt-2 flex items-baseline gap-x-2">
-                    <span className="text-2xl font-bold">
-                      {formatCurrency(currentPlan.price, "USD")}
-                    </span>
-                    <span className="text-sm">/{currentPlan.interval || "month"}</span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end">
-                <span
-                  className={`inline-flex rounded-full px-[24px] py-1.5 text-sm font-medium ${
-                    (currentPlan.status ?? "active") === "active"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-700"
-                  }`}
-                >
-                  {(currentPlan.status ?? "active") === "active" ? "Active" : "Inactive"}
-                </span>
-                <p className="text-sm font-medium text-gray-500 mt-3">
-                  Duration : {currentPlanDuration}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-gray-500">No active plan found.</div>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-xl font-semibold mb-3">Billing History</h3>
-        {hasActivePlan ? (
-          <div className="bg-white border rounded-xl overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
-              <thead className="bg-gray-50 text-left">
-                <tr>
-                  <th className="px-4 py-3 font-medium text-gray-600">Plan Name</th>
-                  <th className="px-4 py-3 font-medium text-gray-600">Price</th>
-                  <th className="px-4 py-3 font-medium text-gray-600">Payment Date</th>
-                  <th className="px-4 py-3 font-medium text-gray-600">Renewal Date</th>
-                  <th className="px-4 py-3 font-medium text-gray-600">Status</th>
-                  <th className="px-4 py-3 font-medium text-gray-600">Invoice</th>
-                </tr>
-              </thead>
-              <tbody>
-                {userInvoices.length === 0 && (
-                  <tr className="border-t">
-                    <td className="px-4 py-3 text-gray-500" colSpan={6}>
-                      No billing history found.
-                    </td>
-                  </tr>
-                )}
-                {userInvoices.map((invoice) => {
-                  const invoiceStatus = invoice.status.toLowerCase();
-                  const isPaid = invoiceStatus === "paid";
-                  const downloadLink = invoice.receiptUrl || invoice.downloadUrl;
-                  return (
-                    <tr key={invoice.id} className="border-t">
-                      <td className="px-4 py-3 align-middle">
-                        <div className="font-medium text-gray-900">{invoice.plan.name || "-"}</div>
-                      </td>
-                      <td className="px-4 py-3 align-middle">
-                        <p className="flex items-baseline gap-x-2">
-                          <span className="text-sm font-bold">
-                            {formatCurrency(invoice.plan.amount, invoice.currency)}
-                          </span>
-                          <span className="text-sm">/{invoice.plan.interval || "month"}</span>
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 align-middle">{formatShortDate(invoice.createdAt)}</td>
-                      <td className="px-4 py-3 align-middle text-gray-600">
-                        {formatShortDate(invoice.periodEnd)}
-                      </td>
-                      <td className="px-4 py-3 align-middle text-gray-600">
-                        <span
-                          className={`inline-flex rounded-lg px-[24px] py-1.5 text-sm font-medium ${
-                            isPaid ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {isPaid ? "Paid" : invoice.status}
+      {showAdminSections && (
+        <>
+          <div>
+            <h3 className="text-xl font-semibold mb-3">Your Current Subscription Plan</h3>
+            <div className="border bg-white rounded-xl p-4 mt-2">
+              {currentPlan ? (
+                <div className="flex justify-between items-center gap-4">
+                  <div className="flex gap-3 items-center">
+                    <div className="w-[70px] h-[70px] rounded-full flex items-center justify-center bg-primary text-white text-2xl font-medium">
+                      <Crown size={35} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold">{currentPlan.name}</h3>
+                      <p className="mt-2 flex items-baseline gap-x-2">
+                        <span className="text-2xl font-bold">
+                          {formatCurrency(currentPlan.price, "USD")}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 align-middle w-[208px]">
-                        {downloadLink ? (
-                          <a href={downloadLink} target="_blank" rel="noreferrer">
-                            <button className="px-3 py-1.5 rounded-md bg-primary text-white flex gap-3 items-center justify-center w-[130px]">
-                              <DownloadIcon size={18} /> Download
-                            </button>
-                          </a>
-                        ) : (
-                          <button className="px-3 py-1.5 rounded-md bg-gray-200 text-gray-500 flex gap-3 items-center justify-center w-[130px]" disabled>
-                            <DownloadIcon size={18} /> Not ready
-                          </button>
-                        )}
+                        <span className="text-sm">/{currentPlan.interval || "month"}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span
+                      className={`inline-flex rounded-full px-[24px] py-1.5 text-sm font-medium ${
+                        (currentPlan.status ?? "active") === "active"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {(currentPlan.status ?? "active") === "active" ? "Active" : "Inactive"}
+                    </span>
+                    <p className="text-sm font-medium text-gray-500 mt-3">
+                      Duration : {currentPlanDuration}
+                    </p>
+                    <button
+                      onClick={cancelSubscription}
+                      disabled={cancelingSubscription}
+                      className="mt-3 px-3 py-1.5 rounded-md bg-red-600 text-white disabled:opacity-50"
+                    >
+                      {cancelingSubscription ? "Canceling..." : "Cancel Subscription"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">No active plan found.</div>
+              )}
+              {cancelSubscriptionMessage && (
+                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                  {cancelSubscriptionMessage}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xl font-semibold mb-3">Billing History</h3>
+            {hasActivePlan ? (
+              <div className="bg-white border rounded-xl overflow-x-auto">
+                <table className="w-full min-w-[980px] text-sm">
+                  <thead className="bg-gray-50 text-left">
+                    <tr>
+                      <th className="px-4 py-3 font-medium text-gray-600">Plan Name</th>
+                      <th className="px-4 py-3 font-medium text-gray-600">Price</th>
+                      <th className="px-4 py-3 font-medium text-gray-600">Payment Date</th>
+                      <th className="px-4 py-3 font-medium text-gray-600">Renewal Date</th>
+                      <th className="px-4 py-3 font-medium text-gray-600">Status</th>
+                      <th className="px-4 py-3 font-medium text-gray-600">Invoice</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userInvoices.length === 0 && (
+                      <tr className="border-t">
+                        <td className="px-4 py-3 text-gray-500" colSpan={6}>
+                          No billing history found.
+                        </td>
+                      </tr>
+                    )}
+                    {userInvoices.map((invoice) => {
+                      const invoiceStatus = invoice.status.toLowerCase();
+                      const isPaid = invoiceStatus === "paid";
+                      const downloadLink = invoice.receiptUrl || invoice.downloadUrl;
+                      return (
+                        <tr key={invoice.id} className="border-t">
+                          <td className="px-4 py-3 align-middle">
+                            <div className="font-medium text-gray-900">{invoice.plan.name || "-"}</div>
+                          </td>
+                          <td className="px-4 py-3 align-middle">
+                            <p className="flex items-baseline gap-x-2">
+                              <span className="text-sm font-bold">
+                                {formatCurrency(invoice.plan.amount, invoice.currency)}
+                              </span>
+                              <span className="text-sm">/{invoice.plan.interval || "month"}</span>
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 align-middle">{formatShortDate(invoice.createdAt)}</td>
+                          <td className="px-4 py-3 align-middle text-gray-600">
+                            {formatShortDate(invoice.periodEnd)}
+                          </td>
+                          <td className="px-4 py-3 align-middle text-gray-600">
+                            <span
+                              className={`inline-flex rounded-lg px-[24px] py-1.5 text-sm font-medium ${
+                                isPaid ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                              }`}
+                            >
+                              {isPaid ? "Paid" : invoice.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 align-middle w-[208px]">
+                            {downloadLink ? (
+                              <a href={downloadLink} target="_blank" rel="noreferrer">
+                                <button className="px-3 py-1.5 rounded-md bg-primary text-white flex gap-3 items-center justify-center w-[130px]">
+                                  <DownloadIcon size={18} /> Download
+                                </button>
+                              </a>
+                            ) : (
+                              <button className="px-3 py-1.5 rounded-md bg-gray-200 text-gray-500 flex gap-3 items-center justify-center w-[130px]" disabled>
+                                <DownloadIcon size={18} /> Not ready
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 border bg-white rounded-xl p-4">
+                No billing history found because this user has no active plan.
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-xl font-semibold mb-3">List of users</h3>
+            <div className="mb-3 flex items-center gap-2">
+              <button
+                onClick={() => setActiveUserTab("staff")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  activeUserTab === "staff"
+                    ? "bg-primary text-white"
+                    : "border border-gray-300 bg-white text-gray-700"
+                }`}
+              >
+                Staff Management
+              </button>
+              <button
+                onClick={() => setActiveUserTab("customer")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  activeUserTab === "customer"
+                    ? "bg-primary text-white"
+                    : "border border-gray-300 bg-white text-gray-700"
+                }`}
+              >
+                Customer Management
+              </button>
+            </div>
+            <div className="bg-white border rounded-xl overflow-x-auto">
+              <table className="w-full min-w-[980px] text-sm">
+                <thead className="bg-gray-50 text-left">
+                  <tr>
+                    <th className="px-4 py-3 font-medium text-gray-600">User</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Role</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Status</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Account</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Last Login</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRelatedUsers.length === 0 && (
+                    <tr className="border-t">
+                      <td className="px-4 py-3 text-gray-500" colSpan={6}>
+                        {activeUserTab === "staff"
+                          ? "No staff users created by this admin."
+                          : "No customer users created by this admin."}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  )}
+                  {visibleRelatedUsers.map((user) => (
+                    <tr key={user.id} className="border-t">
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-medium text-gray-900">{user.name || "Unnamed"}</div>
+                        <div className="text-gray-600">{user.email}</div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Created: {formatDate(user.created_at)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top">{formatRoleLabel(user.role)}</td>
+                      <td className="px-4 py-3 align-top">{user.status}</td>
+                      <td className="px-4 py-3 align-top text-gray-600">
+                        {user.account?.name || user.account_id || "-"}
+                      </td>
+                      <td className="px-4 py-3 align-top text-gray-600">{formatDate(user.last_login_at)}</td>
+                      <td className="px-4 py-3 align-top w-[208px]">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => router.push(`/users/${user.id}`)}
+                            className="px-3 py-1.5 rounded-md border border-primary text-primary flex gap-2 items-center justify-center w-[100px]"
+                          >
+                            <Eye size={16} /> View
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        ) : (
-          <div className="text-sm text-gray-500 border bg-white rounded-xl p-4">
-            No billing history found because this user has no active plan.
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h3 className="text-xl font-semibold mb-3">List of users</h3>
-        <div className="bg-white border rounded-xl overflow-x-auto">
-          <table className="w-full min-w-[980px] text-sm">
-            <thead className="bg-gray-50 text-left">
-              <tr>
-                <th className="px-4 py-3 font-medium text-gray-600">User</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Role</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Account</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Last Login</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {relatedUsers.length === 0 && (
-                <tr className="border-t">
-                  <td className="px-4 py-3 text-gray-500" colSpan={6}>
-                    No users created by this admin.
-                  </td>
-                </tr>
-              )}
-              {relatedUsers.map((user) => (
-                <tr key={user.id} className="border-t">
-                  <td className="px-4 py-3 align-top">
-                    <div className="font-medium text-gray-900">{user.name || "Unnamed"}</div>
-                    <div className="text-gray-600">{user.email}</div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      Created: {formatDate(user.created_at)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top">{user.role}</td>
-                  <td className="px-4 py-3 align-top">{user.status}</td>
-                  <td className="px-4 py-3 align-top text-gray-600">
-                    {user.account?.name || user.account_id || "-"}
-                  </td>
-                  <td className="px-4 py-3 align-top text-gray-600">{formatDate(user.last_login_at)}</td>
-                  <td className="px-4 py-3 align-top w-[208px]">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => router.push(`/users/${user.id}`)}
-                        className="px-3 py-1.5 rounded-md border border-primary text-primary flex gap-2 items-center justify-center w-[100px]"
-                      >
-                        <Eye size={16} /> View
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </>
+      )}
 
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
@@ -745,7 +853,7 @@ export default function SuperadminUserDetailsPage() {
               >
                 {ROLE_OPTIONS.map((role) => (
                   <option key={role} value={role}>
-                    {role}
+                    {formatRoleLabel(role)}
                   </option>
                 ))}
               </select>

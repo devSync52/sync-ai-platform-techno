@@ -1,5 +1,7 @@
 'use server'
 
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
+
 export async function sendStaffInviteAction({
   email,
   role,
@@ -36,6 +38,19 @@ export async function sendStaffInviteAction({
 
     const result = await response.json()
     if (!response.ok) throw new Error(result.error || 'Unknown error')
+
+    // Best-effort: if user row already exists, ensure lineage is set.
+    // (Newly accepted users are handled by the accept-invite finalization step.)
+    const normalizedEmail = email.trim().toLowerCase()
+    const { error: lineageError } = await supabaseAdmin
+      .from('users')
+      .update({ created_by_user_id: invitedBy })
+      .eq('email', normalizedEmail)
+      .is('created_by_user_id', null)
+
+    if (lineageError) {
+      console.warn('[sendStaffInviteAction] lineage backfill warning:', lineageError.message)
+    }
 
     return { success: true }
   } catch (err: any) {
