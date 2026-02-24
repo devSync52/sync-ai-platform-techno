@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Table from '@/components/ui/table'
 import { toast } from 'sonner'
-import { Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Eye, EyeOff, Pencil, Plus, Trash2, X } from 'lucide-react'
 
 type AuthType = 'local' | 'wms_extensiv'
 type CustomerRole = 'client'
@@ -72,8 +72,10 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
   const [editingCustomer, setEditingCustomer] = useState<CustomerUser | null>(null)
   const [form, setForm] = useState<FormState>(defaultForm)
   const [formErrors, setFormErrors] = useState<FormErrors>({})
+  const [modalError, setModalError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showTemporaryPassword, setShowTemporaryPassword] = useState(false)
 
   const loadCustomers = async () => {
     setLoading(true)
@@ -111,6 +113,8 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
     setEditingCustomer(null)
     setForm(defaultForm)
     setFormErrors({})
+    setModalError(null)
+    setShowTemporaryPassword(false)
     setModalOpen(true)
   }
 
@@ -126,6 +130,8 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
       status: customer.status ?? 'active',
     })
     setFormErrors({})
+    setModalError(null)
+    setShowTemporaryPassword(false)
     setModalOpen(true)
   }
 
@@ -134,6 +140,8 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
     setEditingCustomer(null)
     setForm(defaultForm)
     setFormErrors({})
+    setModalError(null)
+    setShowTemporaryPassword(false)
   }
 
   const validateForm = () => {
@@ -176,6 +184,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
 
     setSaving(true)
     setError(null)
+    setModalError(null)
 
     try {
       const isEdit = Boolean(editingCustomer)
@@ -217,7 +226,8 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
 
       closeModal()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save customer')
+      const message = err instanceof Error ? err.message : 'Failed to save customer'
+      setModalError(message)
     } finally {
       setSaving(false)
     }
@@ -261,7 +271,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
         </button>
       </div>
 
-      {error && (
+      {error && !modalOpen && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
@@ -364,6 +374,12 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
               </button>
             </div>
 
+            {modalError && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {modalError}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Customer User Name</label>
@@ -373,6 +389,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                   onChange={(e) => {
                     const value = e.target.value
                     setForm((prev) => ({ ...prev, name: value }))
+                    if (modalError) setModalError(null)
                     if (formErrors.name) {
                       setFormErrors((prev) => ({ ...prev, name: undefined }))
                     }
@@ -395,6 +412,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                   onChange={(e) => {
                     const value = e.target.value
                     setForm((prev) => ({ ...prev, email: value }))
+                    if (modalError) setModalError(null)
                     if (formErrors.email) {
                       setFormErrors((prev) => ({ ...prev, email: undefined }))
                     }
@@ -424,14 +442,16 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                 <label className="mb-1 block text-sm font-medium text-gray-700">Authentication Type</label>
                 <select
                   value={form.authType}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setForm((prev) => ({
                       ...prev,
                       authType: e.target.value as AuthType,
                       temporaryPassword: '',
                       wmsUserIdentifier: '',
                     }))
-                  }
+                    if (modalError) setModalError(null)
+                    setShowTemporaryPassword(false)
+                  }}
                   className="w-full rounded-md border px-3 py-2 text-sm"
                 >
                   <option value="local">Local (Platform-managed credentials)</option>
@@ -442,21 +462,32 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
               {form.authType === 'local' && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Temporary Password</label>
-                  <input
-                    type="text"
-                    value={form.temporaryPassword}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setForm((prev) => ({ ...prev, temporaryPassword: value }))
-                      if (formErrors.temporaryPassword) {
-                        setFormErrors((prev) => ({ ...prev, temporaryPassword: undefined }))
-                      }
-                    }}
-                    className={`w-full rounded-md border px-3 py-2 text-sm ${
-                      formErrors.temporaryPassword ? 'border-red-500' : ''
-                    }`}
-                    placeholder={editingCustomer ? 'Optional: enter to reset password' : 'Minimum 8 characters'}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showTemporaryPassword ? 'text' : 'password'}
+                      value={form.temporaryPassword}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setForm((prev) => ({ ...prev, temporaryPassword: value }))
+                        if (modalError) setModalError(null)
+                        if (formErrors.temporaryPassword) {
+                          setFormErrors((prev) => ({ ...prev, temporaryPassword: undefined }))
+                        }
+                      }}
+                      className={`w-full rounded-md border px-3 py-2 pr-10 text-sm ${
+                        formErrors.temporaryPassword ? 'border-red-500' : ''
+                      }`}
+                      placeholder={editingCustomer ? 'Optional: enter to reset password' : 'Minimum 8 characters'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTemporaryPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+                      aria-label={showTemporaryPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showTemporaryPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                   {formErrors.temporaryPassword && (
                     <p className="mt-1 text-xs text-red-600">{formErrors.temporaryPassword}</p>
                   )}
@@ -477,6 +508,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                     onChange={(e) => {
                       const value = e.target.value
                       setForm((prev) => ({ ...prev, wmsUserIdentifier: value }))
+                      if (modalError) setModalError(null)
                       if (formErrors.wmsUserIdentifier) {
                         setFormErrors((prev) => ({ ...prev, wmsUserIdentifier: undefined }))
                       }

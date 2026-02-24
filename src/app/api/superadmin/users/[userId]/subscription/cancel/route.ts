@@ -16,6 +16,108 @@ const toIsoDate = (unix?: number | null) =>
     ? new Date(unix * 1000).toISOString()
     : null;
 
+async function resolveManagedSubscriptions(
+  stripe: Stripe,
+  userId: string,
+  customerId: string | null,
+): Promise<Stripe.Subscription[]> {
+  const candidates: Stripe.Subscription[] = [];
+  const addCandidate = (subscription?: Stripe.Subscription | null) => {
+    if (!subscription) return;
+    if (!managedSubscriptionStatuses.has(subscription.status)) return;
+    if (candidates.some((row) => row.id === subscription.id)) return;
+    candidates.push(subscription);
+  };
+
+  if (customerId) {
+    const byCustomer = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 20,
+    });
+    for (const subscription of byCustomer.data) {
+      addCandidate(subscription);
+    }
+  }
+
+  const subscriptionsApi = stripe.subscriptions as any;
+  if (typeof subscriptionsApi.search === "function") {
+    const byUserMetadata = await subscriptionsApi.search({
+      query: `metadata['userId']:'${userId}'`,
+      limit: 20,
+    });
+    for (const subscription of byUserMetadata?.data ?? []) {
+      addCandidate(subscription as Stripe.Subscription);
+    }
+  }
+
+  return candidates;
+}
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ userId: string }> },
+) {
+  const auth = await requireSuperadmin();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json({ error: "Missing Stripe configuration" }, { status: 500 });
+  }
+
+  const { userId } = await params;
+  if (!userId) {
+    return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+  }
+
+  const { data: userRow, error: userError } = await supabaseAdmin
+    .from("users")
+    .select("id, stripe_customer_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userError) {
+    return NextResponse.json({ error: userError.message }, { status: 500 });
+  }
+  if (!userRow) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  try {
+    const stripe = getStripe();
+    const candidates = await resolveManagedSubscriptions(
+      stripe,
+      userId,
+      userRow.stripe_customer_id ?? null,
+    );
+    const existingCancellation = candidates.find(
+      (subscription) => subscription.cancel_at_period_end,
+    );
+
+    return NextResponse.json({
+      success: true,
+      cancellationScheduled: Boolean(existingCancellation),
+      effectiveAt: existingCancellation
+        ? toIsoDate(existingCancellation.current_period_end)
+        : null,
+    });
+  } catch (error) {
+    console.error(
+      "[api/superadmin/users/:userId/subscription/cancel][GET] error:",
+      error,
+    );
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "Unexpected error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ userId: string }> },
@@ -49,36 +151,11 @@ export async function POST(
 
   try {
     const stripe = getStripe();
-    const candidates: Stripe.Subscription[] = [];
-    const addCandidate = (subscription?: Stripe.Subscription | null) => {
-      if (!subscription) return;
-      if (!managedSubscriptionStatuses.has(subscription.status)) return;
-      if (candidates.some((row) => row.id === subscription.id)) return;
-      candidates.push(subscription);
-    };
-
-    const customerId = userRow.stripe_customer_id ?? null;
-    if (customerId) {
-      const byCustomer = await stripe.subscriptions.list({
-        customer: customerId,
-        status: "all",
-        limit: 20,
-      });
-      for (const subscription of byCustomer.data) {
-        addCandidate(subscription);
-      }
-    }
-
-    const subscriptionsApi = stripe.subscriptions as any;
-    if (typeof subscriptionsApi.search === "function") {
-      const byUserMetadata = await subscriptionsApi.search({
-        query: `metadata['userId']:'${userId}'`,
-        limit: 20,
-      });
-      for (const subscription of byUserMetadata?.data ?? []) {
-        addCandidate(subscription as Stripe.Subscription);
-      }
-    }
+    const candidates = await resolveManagedSubscriptions(
+      stripe,
+      userId,
+      userRow.stripe_customer_id ?? null,
+    );
 
     const existingCancellation = candidates.find(
       (subscription) => subscription.cancel_at_period_end,
@@ -86,6 +163,7 @@ export async function POST(
     if (existingCancellation) {
       return NextResponse.json({
         success: true,
+        cancellationScheduled: true,
         message: "Cancellation is already scheduled for this user.",
         effectiveAt: toIsoDate(existingCancellation.current_period_end),
       });
@@ -116,6 +194,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
+      cancellationScheduled: true,
       message: "Subscription cancellation scheduled at period end.",
       effectiveAt: toIsoDate(updatedSubscription.current_period_end),
     });
