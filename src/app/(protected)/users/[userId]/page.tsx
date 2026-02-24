@@ -208,6 +208,7 @@ export default function SuperadminUserDetailsPage() {
   const router = useRouter();
   const params = useParams<{ userId: string }>();
   const userId = params?.userId;
+  const [hasBrowserHistory, setHasBrowserHistory] = useState(false);
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [plans, setPlans] = useState<PlanRow[]>([]);
@@ -217,9 +218,16 @@ export default function SuperadminUserDetailsPage() {
   const [deleting, setDeleting] = useState(false);
   const [cancelingSubscription, setCancelingSubscription] = useState(false);
   const [cancelSubscriptionMessage, setCancelSubscriptionMessage] = useState<string | null>(null);
+  const [cancelSubscriptionScheduled, setCancelSubscriptionScheduled] = useState(false);
   const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [activeUserTab, setActiveUserTab] = useState<UserListTab>("staff");
+  const [refreshingRelatedUsers, setRefreshingRelatedUsers] = useState(false);
+  const [relatedUsersError, setRelatedUsersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setHasBrowserHistory(window.history.length > 1);
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -254,6 +262,36 @@ export default function SuperadminUserDetailsPage() {
         setUsers((usersPayload.users ?? []) as UserRow[]);
         setPlans((plansPayload.plans ?? []) as PlanRow[]);
         setInvoices((invoicesPayload.data ?? []) as InvoiceRow[]);
+
+        try {
+          const subscriptionStatusRes = await fetch(
+            `/api/superadmin/users/${userId}/subscription/cancel`,
+            {
+              cache: "no-store",
+            },
+          );
+          const subscriptionStatusPayload = await subscriptionStatusRes.json();
+          if (subscriptionStatusRes.ok) {
+            const effectiveAt = subscriptionStatusPayload?.effectiveAt ?? null;
+            const scheduled = Boolean(
+              subscriptionStatusPayload?.cancellationScheduled || effectiveAt,
+            );
+            setCancelSubscriptionScheduled(scheduled);
+            setCancelSubscriptionMessage(
+              scheduled
+                ? effectiveAt
+                  ? `Cancellation scheduled for ${formatShortDate(effectiveAt)}.`
+                  : "Cancellation already scheduled."
+                : null,
+            );
+          } else {
+            setCancelSubscriptionScheduled(false);
+            setCancelSubscriptionMessage(null);
+          }
+        } catch {
+          setCancelSubscriptionScheduled(false);
+          setCancelSubscriptionMessage(null);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unexpected error");
       } finally {
@@ -357,6 +395,38 @@ export default function SuperadminUserDetailsPage() {
     }
   };
 
+  const goBack = () => {
+    if (hasBrowserHistory) {
+      router.back();
+      return;
+    }
+    router.push("/users");
+  };
+
+  const refreshUsersList = async () => {
+    setRefreshingRelatedUsers(true);
+    setRelatedUsersError(null);
+    try {
+      const res = await fetch("/api/superadmin/users", { cache: "no-store" });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.error || "Failed to refresh users");
+      }
+      setUsers((payload.users ?? []) as UserRow[]);
+    } catch (err) {
+      setRelatedUsersError(
+        err instanceof Error ? err.message : "Failed to refresh users",
+      );
+    } finally {
+      setRefreshingRelatedUsers(false);
+    }
+  };
+
+  const handleUserTabChange = async (tab: UserListTab) => {
+    setActiveUserTab(tab);
+    await refreshUsersList();
+  };
+
   const cancelSubscription = async () => {
     if (!selectedUser) return;
     const confirmed = window.confirm(
@@ -384,6 +454,7 @@ export default function SuperadminUserDetailsPage() {
           ? `Cancellation scheduled for ${effectiveAt}.`
           : payload?.message || "Cancellation scheduled.",
       );
+      setCancelSubscriptionScheduled(Boolean(payload?.cancellationScheduled ?? true));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to cancel subscription");
     } finally {
@@ -505,7 +576,7 @@ export default function SuperadminUserDetailsPage() {
     return (
       <div className="p-6 space-y-4">
         <button
-          onClick={() => router.push("/users")}
+          onClick={goBack}
           className="inline-flex items-center gap-2 text-sm text-primary"
         >
           <ChevronLeft size={16} /> Back to users
@@ -521,7 +592,7 @@ export default function SuperadminUserDetailsPage() {
     return (
       <div className="p-6 space-y-4">
         <button
-          onClick={() => router.push("/users")}
+          onClick={goBack}
           className="inline-flex items-center gap-2 text-sm text-primary"
         >
           <ChevronLeft size={16} /> Back to users
@@ -537,7 +608,7 @@ export default function SuperadminUserDetailsPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center gap-2">
         <button
-          onClick={() => router.push("/users")}
+          onClick={goBack}
           className="w-10 h-10 flex items-center justify-center bg-white border rounded-xl"
         >
           <ChevronLeft />
@@ -619,13 +690,15 @@ export default function SuperadminUserDetailsPage() {
                     <p className="text-sm font-medium text-gray-500 mt-3">
                       Duration : {currentPlanDuration}
                     </p>
-                    <button
-                      onClick={cancelSubscription}
-                      disabled={cancelingSubscription}
-                      className="mt-3 px-3 py-1.5 rounded-md bg-red-600 text-white disabled:opacity-50"
-                    >
-                      {cancelingSubscription ? "Canceling..." : "Cancel Subscription"}
-                    </button>
+                    {!cancelSubscriptionScheduled && (
+                      <button
+                        onClick={cancelSubscription}
+                        disabled={cancelingSubscription}
+                        className="mt-3 px-3 py-1.5 rounded-md bg-red-600 text-white disabled:opacity-50"
+                      >
+                        {cancelingSubscription ? "Canceling..." : "Cancel Subscription"}
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -722,26 +795,41 @@ export default function SuperadminUserDetailsPage() {
             <h3 className="text-xl font-semibold mb-3">List of users</h3>
             <div className="mb-3 flex items-center gap-2">
               <button
-                onClick={() => setActiveUserTab("staff")}
+                onClick={() => {
+                  void handleUserTabChange("staff");
+                }}
+                disabled={refreshingRelatedUsers}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                   activeUserTab === "staff"
                     ? "bg-primary text-white"
                     : "border border-gray-300 bg-white text-gray-700"
-                }`}
+                } disabled:opacity-60`}
               >
-                Staff Management
+                {refreshingRelatedUsers && activeUserTab === "staff"
+                  ? "Refreshing..."
+                  : "Staff Management"}
               </button>
               <button
-                onClick={() => setActiveUserTab("customer")}
+                onClick={() => {
+                  void handleUserTabChange("customer");
+                }}
+                disabled={refreshingRelatedUsers}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                   activeUserTab === "customer"
                     ? "bg-primary text-white"
                     : "border border-gray-300 bg-white text-gray-700"
-                }`}
+                } disabled:opacity-60`}
               >
-                Customer Management
+                {refreshingRelatedUsers && activeUserTab === "customer"
+                  ? "Refreshing..."
+                  : "Customer Management"}
               </button>
             </div>
+            {relatedUsersError && (
+              <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {relatedUsersError}
+              </div>
+            )}
             <div className="bg-white border rounded-xl overflow-x-auto">
               <table className="w-full min-w-[980px] text-sm">
                 <thead className="bg-gray-50 text-left">
