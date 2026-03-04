@@ -122,7 +122,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       const userRole = userRecord.role;
       setUserRole(userRole);
       // ✅ FETCH PLAN DETAILS
-      if (userRecord.plan_id) {
+      if (userRole !== "superadmin" && userRecord.plan_id) {
         const { data: planData } = await supabase
           .from("plans")
           .select("*")
@@ -132,6 +132,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
         if (planData) {
           setSelectedPlan(planData);
         }
+      } else {
+        setSelectedPlan(null);
       }
 
       const userAccountId = userRecord.account_id;
@@ -400,16 +402,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
       {/* ✅ PLAN DISPLAY */}
 
-      {selectedPlan && (
+      {userRole !== "superadmin" && selectedPlan && (
         <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white p-6 rounded-2xl shadow-xl flex justify-between items-center">
           <div className="flex items-center gap-4">
             <Crown className="w-8 h-8" />
             <div>
               <p className="text-sm opacity-80">Your Current Plan</p>
               <h2 className="text-2xl font-bold">{selectedPlan.name}</h2>
-              <p className="text-sm">
-                ${selectedPlan.price} / {selectedPlan.billing_cycle}
-              </p>
+              <p className="text-sm">${selectedPlan.price} / monthly</p>
             </div>
           </div>
 

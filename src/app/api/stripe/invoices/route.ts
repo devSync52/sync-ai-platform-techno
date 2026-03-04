@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type StripeInvoiceRow = {
   id: string;
@@ -24,6 +25,11 @@ type StripeInvoiceRow = {
   payUrl: string | null;
   receiptUrl: string | null;
   isPaid: boolean;
+  user: {
+    id: string | null;
+    name: string | null;
+    email: string | null;
+  } | null;
   plan: {
     id: string | null;
     name: string | null;
@@ -33,46 +39,22 @@ type StripeInvoiceRow = {
   };
 };
 
-async function resolveReceiptUrlForInvoice(
-  stripe: Stripe,
-  invoice: Stripe.Invoice,
-): Promise<string | null> {
-  try {
-    const chargeRef = invoice.charge;
-    if (chargeRef) {
-      if (typeof chargeRef === "string") {
-        const charge = await stripe.charges.retrieve(chargeRef);
-        return charge.receipt_url ?? null;
-      }
-      return chargeRef.receipt_url ?? null;
-    }
-
-    const paymentIntentRef = invoice.payment_intent;
-    if (paymentIntentRef) {
-      const paymentIntent =
-        typeof paymentIntentRef === "string"
-          ? await stripe.paymentIntents.retrieve(paymentIntentRef, {
-              expand: ["latest_charge"],
-            })
-          : paymentIntentRef;
-
-      const latestCharge = paymentIntent.latest_charge;
-      if (!latestCharge) return null;
-      if (typeof latestCharge === "string") {
-        const charge = await stripe.charges.retrieve(latestCharge);
-        return charge.receipt_url ?? null;
-      }
-      return latestCharge.receipt_url ?? null;
-    }
-  } catch (error) {
-    console.warn(
-      "[api/stripe/invoices] failed to resolve receipt url:",
-      invoice.id,
-      error,
-    );
+function resolveReceiptUrlForInvoice(invoice: Stripe.Invoice): string | null {
+  const chargeRef = invoice.charge;
+  if (chargeRef && typeof chargeRef === "object") {
+    return chargeRef.receipt_url ?? null;
   }
 
-  return null;
+  const paymentIntentRef = invoice.payment_intent;
+  if (paymentIntentRef && typeof paymentIntentRef === "object") {
+    const latestCharge = paymentIntentRef.latest_charge;
+    if (latestCharge && typeof latestCharge === "object") {
+      return latestCharge.receipt_url ?? null;
+    }
+  }
+
+  // Prefer invoice artifacts so list rendering does not trigger per-invoice Stripe calls.
+  return invoice.invoice_pdf ?? invoice.hosted_invoice_url ?? null;
 }
 
 const toIsoDate = (unix?: number | null) =>
@@ -104,6 +86,10 @@ type PlanPayload = {
 };
 
 type UpcomingDowngradePayload = PlanPayload & {
+  effectiveAt: string | null;
+};
+
+type UpcomingCancellationPayload = {
   effectiveAt: string | null;
 };
 
@@ -226,6 +212,66 @@ async function findUpcomingDowngrade(
         error,
       );
     }
+  }
+
+  return null;
+}
+
+async function findUpcomingCancellation(
+  stripe: Stripe,
+  customerIds: string[],
+  userId: string,
+): Promise<UpcomingCancellationPayload | null> {
+  const candidates: Stripe.Subscription[] = [];
+  const addCandidate = (subscription?: Stripe.Subscription | null) => {
+    if (!subscription) return;
+    if (!managedSubscriptionStatuses.has(subscription.status)) return;
+    if (candidates.some((row) => row.id === subscription.id)) return;
+    candidates.push(subscription);
+  };
+
+  for (const customerId of customerIds) {
+    try {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 20,
+      });
+      for (const subscription of subscriptions.data) {
+        addCandidate(subscription);
+      }
+    } catch (error) {
+      console.warn(
+        "[api/stripe/invoices] failed to resolve upcoming cancellation by customer:",
+        customerId,
+        error,
+      );
+    }
+  }
+
+  const subscriptionsApi = stripe.subscriptions as any;
+  if (typeof subscriptionsApi.search === "function") {
+    try {
+      const result = await subscriptionsApi.search({
+        query: `metadata['userId']:'${userId}'`,
+        limit: 20,
+      });
+      for (const subscription of result?.data ?? []) {
+        addCandidate(subscription as Stripe.Subscription);
+      }
+    } catch (error) {
+      console.warn(
+        "[api/stripe/invoices] failed to resolve upcoming cancellation by metadata search:",
+        error,
+      );
+    }
+  }
+
+  for (const subscription of candidates) {
+    if (!subscription.cancel_at_period_end) continue;
+    return {
+      effectiveAt: toIsoDate(subscription.current_period_end),
+    };
   }
 
   return null;
@@ -383,6 +429,27 @@ async function listInvoicesForCustomer(
       customerId,
       error,
     );
+  }
+
+  return invoices;
+}
+
+async function listAllInvoices(stripe: Stripe): Promise<Stripe.Invoice[]> {
+  const invoices: Stripe.Invoice[] = [];
+
+  try {
+    let startingAfter: string | undefined;
+    for (let page = 0; page < 20; page++) {
+      const response = await stripe.invoices.list({
+        limit: 100,
+        starting_after: startingAfter,
+      });
+      invoices.push(...response.data);
+      if (!response.has_more || response.data.length === 0) break;
+      startingAfter = response.data[response.data.length - 1].id;
+    }
+  } catch (error) {
+    console.warn("[api/stripe/invoices] global invoices list failed:", error);
   }
 
   return invoices;
@@ -662,7 +729,6 @@ function getInvoicePeriod(invoice: Stripe.Invoice): {
 }
 
 async function mapInvoiceToRow(
-  stripe: Stripe,
   invoice: Stripe.Invoice,
   localPlan: LocalPlanLike | null | undefined,
 ): Promise<StripeInvoiceRow> {
@@ -672,9 +738,7 @@ async function mapInvoiceToRow(
   const hostedUrl = invoice.hosted_invoice_url ?? null;
   const invoicePdf = invoice.invoice_pdf ?? null;
   const period = getInvoicePeriod(invoice);
-  const receiptUrl = isPaid
-    ? await resolveReceiptUrlForInvoice(stripe, invoice)
-    : null;
+  const receiptUrl = isPaid ? resolveReceiptUrlForInvoice(invoice) : null;
 
   return {
     id: invoice.id,
@@ -696,6 +760,7 @@ async function mapInvoiceToRow(
     payUrl: !isPaid ? hostedUrl : null,
     receiptUrl,
     isPaid,
+    user: null,
     plan: {
       id: linePlan.id ?? localPlan?.id ?? null,
       name: planName,
@@ -757,12 +822,17 @@ export async function GET() {
 
     const { data: userRow } = await supabase
       .from("users")
-      .select("plan_id, stripe_customer_id")
+      .select("role, plan_id, stripe_customer_id")
       .eq("id", user.id)
       .maybeSingle();
 
-    const { plan_id: planId, stripe_customer_id: stripeCustomerId } =
+    const {
+      role: currentRole,
+      plan_id: planId,
+      stripe_customer_id: stripeCustomerId,
+    } =
       userRow ?? {};
+    const isSuperadmin = currentRole === "superadmin";
 
     const { data: localPlan } = planId
       ? await supabase
@@ -786,80 +856,159 @@ export async function GET() {
       return NextResponse.json({
         plan: localPlanPayload,
         upcomingDowngrade: null,
+        upcomingCancellation: null,
+        isSuperadmin,
         data: [],
       });
     }
 
     const stripe = getStripe();
+
+    if (isSuperadmin) {
+      const { data: usersData } = await supabaseAdmin
+        .from("users")
+        .select("id, name, email, stripe_customer_id, plan_id");
+
+      const users = (usersData ??
+        []) as Array<{
+        id: string;
+        name: string | null;
+        email: string | null;
+        stripe_customer_id: string | null;
+        plan_id: string | null;
+      }>;
+
+      const userByCustomerId = new Map<
+        string,
+        { id: string; name: string | null; email: string | null }
+      >();
+
+      for (const row of users) {
+        // Only map users with an assigned plan and a Stripe customer id.
+        // This avoids attaching invoices to no-plan users by weak email matching.
+        if (row.plan_id && row.stripe_customer_id) {
+          userByCustomerId.set(row.stripe_customer_id, {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+          });
+        }
+      }
+
+      const invoices = await listAllInvoices(stripe);
+      const mapped: StripeInvoiceRow[] = [];
+      for (const invoice of invoices) {
+        if (mapped.some((row) => row.id === invoice.id)) continue;
+        const mappedRow = await mapInvoiceToRow(invoice, null);
+        const customerId =
+          typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+        const matchedUser = customerId ? userByCustomerId.get(customerId) : null;
+
+        mapped.push({
+          ...mappedRow,
+          user: matchedUser
+            ? {
+                id: matchedUser.id,
+                name: matchedUser.name,
+                email: matchedUser.email,
+              }
+            : null,
+        });
+      }
+
+      const data: StripeInvoiceRow[] = mapped.sort((a, b) => {
+        const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTs - aTs;
+      });
+
+      return NextResponse.json({
+        plan: null,
+        upcomingDowngrade: null,
+        upcomingCancellation: null,
+        isSuperadmin: true,
+        data,
+      });
+    }
+
     const candidateIds: string[] = [];
     const addCandidate = (value?: string | null) => {
       if (!value) return;
       if (!candidateIds.includes(value)) candidateIds.push(value);
     };
 
+    let subscriptionFallback: { customerIds: string[]; invoices: Stripe.Invoice[] } = {
+      customerIds: [],
+      invoices: [],
+    };
+    let didBroadDiscovery = false;
+
+    const runBroadDiscovery = async () => {
+      if (didBroadDiscovery) return;
+      didBroadDiscovery = true;
+
+      const [session, customersByMetadata, customersByEmail, fallback] =
+        await Promise.all([
+          findCheckoutSessionByUser(stripe, user.id),
+          listCustomerIdsByUserMetadata(stripe, user.id),
+          listCustomerIdsByEmail(stripe, user.email),
+          listSubscriptionFallbacksByUser(stripe, user.id),
+        ]);
+
+      if (typeof session?.customer === "string") {
+        addCandidate(session.customer);
+      } else if (
+        session?.customer &&
+        typeof session.customer === "object" &&
+        "id" in session.customer
+      ) {
+        addCandidate(session.customer.id);
+      }
+
+      for (const id of customersByMetadata) addCandidate(id);
+      for (const id of customersByEmail) addCandidate(id);
+
+      subscriptionFallback = fallback;
+      for (const customer of fallback.customerIds) addCandidate(customer);
+    };
+
+    // Fast path: rely on backfilled stripe_customer_id first, then only scan Stripe broadly if needed.
     addCandidate(stripeCustomerId ?? null);
-
-    const session = await findCheckoutSessionByUser(stripe, user.id);
-    if (typeof session?.customer === "string") {
-      addCandidate(session.customer);
-    } else if (
-      session?.customer &&
-      typeof session.customer === "object" &&
-      "id" in session.customer
-    ) {
-      addCandidate(session.customer.id);
+    if (candidateIds.length === 0) {
+      await runBroadDiscovery();
     }
 
-    const customersByMetadata = await listCustomerIdsByUserMetadata(
-      stripe,
-      user.id,
-    );
-    for (const id of customersByMetadata) addCandidate(id);
-
-    const customersByEmail = await listCustomerIdsByEmail(stripe, user.email);
-    for (const id of customersByEmail) addCandidate(id);
-    const subscriptionFallback = await listSubscriptionFallbacksByUser(
-      stripe,
-      user.id,
-    );
-    for (const customer of subscriptionFallback.customerIds) {
-      addCandidate(customer);
-    }
-
-    let customerId: string | null = candidateIds[0] ?? null;
-    const customersWithInvoices: string[] = [];
-    for (const candidateId of candidateIds) {
-      const probeInvoice = await firstInvoiceForCustomer(stripe, candidateId);
-      if (probeInvoice) {
-        customersWithInvoices.push(candidateId);
-        if (!customerId) customerId = candidateId;
+    const resolveCustomerSelection = async () => {
+      let customerId: string | null = candidateIds[0] ?? null;
+      const customersWithInvoices: string[] = [];
+      if (candidateIds.length > 0) {
+        const probeResults = await Promise.all(
+          candidateIds.map(async (candidateId) => ({
+            candidateId,
+            probeInvoice: await firstInvoiceForCustomer(stripe, candidateId),
+          })),
+        );
+        for (const result of probeResults) {
+          if (result.probeInvoice) {
+            customersWithInvoices.push(result.candidateId);
+            if (!customerId) customerId = result.candidateId;
+          }
+        }
       }
-    }
 
-    const customerIdsToLoad =
-      customersWithInvoices.length > 0
-        ? customersWithInvoices
-        : candidateIds.length > 0
-          ? candidateIds
-          : customerId
-            ? [customerId]
-            : [];
+      const customerIdsToLoad =
+        customersWithInvoices.length > 0
+          ? customersWithInvoices
+          : candidateIds.length > 0
+            ? candidateIds
+            : customerId
+              ? [customerId]
+              : [];
 
-    const upcomingDowngrade = await findUpcomingDowngrade(
-      stripe,
-      supabase,
-      candidateIds,
-    );
+      return { customerId, customerIdsToLoad };
+    };
 
-    if (customerIdsToLoad.length === 0) {
-      if (subscriptionFallback.invoices.length === 0) {
-        return NextResponse.json({
-          plan: localPlanPayload,
-          upcomingDowngrade,
-          data: [],
-        });
-      }
-    }
+    let { customerId, customerIdsToLoad } = await resolveCustomerSelection();
 
     // Best-effort backfill so future requests do not depend on Stripe fallbacks.
     if (!stripeCustomerId && customerId) {
@@ -879,13 +1028,50 @@ export async function GET() {
     const pushUnique = async (invoice?: Stripe.Invoice | null) => {
       if (!invoice) return;
       if (mapped.some((row) => row.id === invoice.id)) return;
-      mapped.push(await mapInvoiceToRow(stripe, invoice, localPlan));
+      mapped.push(await mapInvoiceToRow(invoice, localPlan));
     };
 
-    for (const customerIdToLoad of customerIdsToLoad) {
-      const invoices = await listInvoicesForCustomer(stripe, customerIdToLoad);
-      for (const invoice of invoices) {
-        await pushUnique(invoice);
+    const loadInvoicesForSelectedCustomers = async () => {
+      const invoicesByCustomer = await Promise.all(
+        customerIdsToLoad.map((customerIdToLoad) =>
+          listInvoicesForCustomer(stripe, customerIdToLoad),
+        ),
+      );
+      for (const invoices of invoicesByCustomer) {
+        for (const invoice of invoices) {
+          await pushUnique(invoice);
+        }
+      }
+    };
+
+    if (customerIdsToLoad.length > 0) {
+      await loadInvoicesForSelectedCustomers();
+    }
+
+    if (mapped.length === 0 && !didBroadDiscovery) {
+      await runBroadDiscovery();
+      const resolvedAfterDiscovery = await resolveCustomerSelection();
+      customerId = resolvedAfterDiscovery.customerId;
+      customerIdsToLoad = resolvedAfterDiscovery.customerIdsToLoad;
+      if (customerIdsToLoad.length > 0) {
+        await loadInvoicesForSelectedCustomers();
+      }
+    }
+
+    const [upcomingDowngrade, upcomingCancellation] = await Promise.all([
+      findUpcomingDowngrade(stripe, supabase, candidateIds),
+      findUpcomingCancellation(stripe, candidateIds, user.id),
+    ]);
+
+    if (customerIdsToLoad.length === 0 && mapped.length === 0) {
+      if (subscriptionFallback.invoices.length === 0) {
+        return NextResponse.json({
+          plan: localPlanPayload,
+          upcomingDowngrade,
+          upcomingCancellation,
+          isSuperadmin: false,
+          data: [],
+        });
       }
     }
 
@@ -904,19 +1090,23 @@ export async function GET() {
       }
     }
 
-    const emailInvoices = await searchInvoicesByEmail(stripe, user.email);
-    for (const invoice of emailInvoices) {
-      await pushUnique(invoice);
+    if (mapped.length === 0) {
+      const emailInvoices = await searchInvoicesByEmail(stripe, user.email);
+      for (const invoice of emailInvoices) {
+        await pushUnique(invoice);
+      }
     }
 
-    const globalFallbackInvoices = await listInvoicesGlobalFallback(
-      stripe,
-      candidateIds,
-      [user.email ?? ""],
-      user.id,
-    );
-    for (const invoice of globalFallbackInvoices) {
-      await pushUnique(invoice);
+    if (mapped.length === 0) {
+      const globalFallbackInvoices = await listInvoicesGlobalFallback(
+        stripe,
+        candidateIds,
+        [user.email ?? ""],
+        user.id,
+      );
+      for (const invoice of globalFallbackInvoices) {
+        await pushUnique(invoice);
+      }
     }
 
     const data: StripeInvoiceRow[] = mapped.sort((a, b) => {
@@ -942,6 +1132,8 @@ export async function GET() {
     return NextResponse.json({
       plan: localPlanPayload ?? fallbackPlanFromInvoice,
       upcomingDowngrade,
+      upcomingCancellation,
+      isSuperadmin: false,
       data,
     });
   } catch (error) {

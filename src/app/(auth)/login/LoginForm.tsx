@@ -60,7 +60,7 @@ export default function LoginForm() {
 
     const { data: userRecord, error: fetchError } = await supabase
       .from("users")
-      .select("account_id,plan_id")
+      .select("account_id,plan_id,role")
       .eq("id", userId)
       .maybeSingle();
 
@@ -69,8 +69,12 @@ export default function LoginForm() {
       setLoading(false);
       return;
     }
-    console.log("userRecord", userRecord);
-    if (userRecord?.account_id && userRecord?.plan_id) {
+    const role = userRecord?.role ?? "";
+    const customerRoles = new Set(["client", "staff-client"]);
+
+    if (role === "staff-user" || customerRoles.has(role)) {
+      router.push("/dashboard");
+    } else if (userRecord?.account_id && userRecord?.plan_id) {
       router.push("/dashboard");
     } else if (userRecord?.account_id && !userRecord?.plan_id) {
       router.push("/pricing");

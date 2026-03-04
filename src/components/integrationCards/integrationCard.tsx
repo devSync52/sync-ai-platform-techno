@@ -27,14 +27,46 @@ export default function IntegrationCard({
   const supabase = useSupabase()
   const [testing, setTesting] = useState(false)
 
+  const runSellercloudAction = async (action: 'connect' | 'disconnect' | 'retry' | 'test') => {
+    const response = await fetch('/api/integrations/sellercloud', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        accountId,
+      }),
+    })
+
+    const result = await response.json().catch(() => ({}))
+    return { ok: response.ok && Boolean(result?.success), result }
+  }
+
   const handleTestConnection = async () => {
     if (!accountId) return
     setTesting(true)
 
     const toastId = toast.loading(`Testing ${title} connection...`)
 
+    if (type === 'sellercloud') {
+      try {
+        const { ok, result } = await runSellercloudAction('test')
+
+        if (ok) {
+          toast.success(`✅ ${title} is connected!`, { id: toastId })
+        } else {
+          toast.error(result?.error || `❌ ${title} failed to connect`, { id: toastId })
+        }
+      } catch (err) {
+        console.error(`❌ Error testing ${type} connection:`, err)
+        toast.error(`Error testing ${title}`, { id: toastId })
+      }
+
+      setTesting(false)
+      onTested?.()
+      return
+    }
+
     const functionMap: Record<string, string> = {
-      sellercloud: 'test_integration',
       extensiv: 'test_integration_extensiv',
       project44: 'test_integration_project44'
     }
@@ -101,42 +133,61 @@ export default function IntegrationCard({
           </button>
 
           <button
-    onClick={async () => {
-      if (!accountId) return
+            onClick={async () => {
+              if (!accountId) return
 
-      const toastId = toast.loading(`${status === 'active' ? 'Disconnecting' : 'Connecting'} ${title}...`)
+              const toastId = toast.loading(`${status === 'active' ? 'Disconnecting' : 'Connecting'} ${title}...`)
 
-      if (status === 'active') {
-        // 🔌 Desconectar
-        const { error } = await supabase
-          .from('account_integrations')
-          .update({ status: 'inactive' })
-          .eq('account_id', accountId)
-          .eq('type', type)
+              if (type === 'sellercloud') {
+                try {
+                  const action = status === 'active' ? 'disconnect' : 'connect'
+                  const { ok, result } = await runSellercloudAction(action)
 
-        if (error) {
-          console.error('[disconnect] error:', error)
-          toast.error(`❌ Failed to disconnect ${title}`, { id: toastId })
-        } else {
-          toast.success(`🔌 ${title} disconnected`, { id: toastId })
-          onTested?.()
-        }
-      } else {
-        // ⚡ Conectar
-        await handleTestConnection()
-      }
-    }}
-    disabled={!accountId || testing}
-    className="text-white px-4 py-2 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition"
-  >
-    {status === 'active'
-      ? testing
-        ? 'Disconnecting...'
-        : 'Disconnect'
-      : testing
-        ? 'Connecting...'
-        : 'Connect'}
-  </button>
+                  if (ok) {
+                    toast.success(
+                      status === 'active' ? `🔌 ${title} disconnected` : `✅ ${title} connected`,
+                      { id: toastId }
+                    )
+                    onTested?.()
+                  } else {
+                    toast.error(result?.error || `❌ Failed to ${action} ${title}`, { id: toastId })
+                  }
+                } catch (err) {
+                  console.error(`[${type}] action error:`, err)
+                  toast.error(`❌ Failed to update ${title}`, { id: toastId })
+                }
+                return
+              }
+
+              if (status === 'active') {
+                const { error } = await supabase
+                  .from('account_integrations')
+                  .update({ status: 'inactive' })
+                  .eq('account_id', accountId)
+                  .eq('type', type)
+
+                if (error) {
+                  console.error('[disconnect] error:', error)
+                  toast.error(`❌ Failed to disconnect ${title}`, { id: toastId })
+                } else {
+                  toast.success(`🔌 ${title} disconnected`, { id: toastId })
+                  onTested?.()
+                }
+              } else {
+                await handleTestConnection()
+              }
+            }}
+            disabled={!accountId || testing}
+            className="text-white px-4 py-2 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition"
+          >
+            {status === 'active'
+              ? testing
+                ? 'Disconnecting...'
+                : 'Disconnect'
+              : testing
+                ? 'Connecting...'
+                : 'Connect'}
+          </button>
         </div>
 
         

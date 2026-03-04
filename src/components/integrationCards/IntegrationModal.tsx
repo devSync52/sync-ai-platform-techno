@@ -44,6 +44,8 @@ export default function IntegrationModal({
   const fields = useMemo(() => integrationFields[type] || [], [type])
   const [formData, setFormData] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [isTestPassed, setIsTestPassed] = useState(false)
 
   useEffect(() => {
     const initialData: Record<string, string> = {}
@@ -63,6 +65,7 @@ export default function IntegrationModal({
     })
 
     setFormData(initialData)
+    setIsTestPassed(false)
   }, [existingData, fields])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,10 +73,68 @@ export default function IntegrationModal({
       ...prev,
       [e.target.name]: e.target.value
     }))
+    if (type === 'sellercloud') {
+      setIsTestPassed(false)
+    }
+  }
+
+  const getMissingField = () => fields.find((field: Field) => !String(formData[field.name] || '').trim())
+
+  const handleTest = async () => {
+    const missingField = getMissingField()
+    if (missingField) {
+      toast.error(`${missingField.label} is required`)
+      return
+    }
+
+    setTesting(true)
+
+    try {
+      const response = await fetch('/api/integrations/sellercloud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'test_credentials',
+          accountId,
+          credentials: {
+            domain: formData.domain,
+            username: formData.username,
+            password: formData.password,
+          },
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok || !result?.success) {
+        setIsTestPassed(false)
+        toast.error(result?.error || 'Sellercloud connection test failed')
+      } else {
+        setIsTestPassed(true)
+        toast.success('Sellercloud connection test passed')
+      }
+    } catch {
+      setIsTestPassed(false)
+      toast.error('Sellercloud connection test failed')
+    } finally {
+      setTesting(false)
+    }
   }
 
   const handleSave = async () => {
     setLoading(true)
+
+    const missingField = getMissingField()
+    if (missingField) {
+      toast.error(`${missingField.label} is required`)
+      setLoading(false)
+      return
+    }
+
+    if (type === 'sellercloud' && !isTestPassed) {
+      toast.error('Please test Sellercloud connection before saving')
+      setLoading(false)
+      return
+    }
 
     const encrypted = AES.encrypt(
       JSON.stringify(formData),
@@ -92,15 +153,17 @@ export default function IntegrationModal({
       }
     )
 
-    setLoading(false)
-
     if (error) {
       toast.error('Error saving integration')
-    } else {
-      toast.success('Integration saved')
-      handleSaved()
-      handleClose()
+      setLoading(false)
+      return
     }
+
+    toast.success(type === 'sellercloud' ? 'Sellercloud integration saved' : 'Integration saved')
+    handleClose()
+
+    setLoading(false)
+    handleSaved()
   }
 
   return (
@@ -128,13 +191,25 @@ export default function IntegrationModal({
             </div>
           ))}
 
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="w-full mt-4 bg-black text-white py-2 rounded-md text-sm hover:bg-gray-900 transition"
-          >
-            {loading ? 'Saving...' : 'Save Integration'}
-          </button>
+          {type === 'sellercloud' && (
+            <button
+              onClick={handleTest}
+              disabled={testing || loading}
+              className="w-full mt-4 bg-[#3f2d90] text-white py-2 rounded-md text-sm hover:bg-[#3f2d90]/90 transition disabled:opacity-60"
+            >
+              {testing ? 'Testing...' : 'Test Connection'}
+            </button>
+          )}
+
+          {(type !== 'sellercloud' || isTestPassed) && (
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="w-full mt-2 bg-black text-white py-2 rounded-md text-sm hover:bg-gray-900 transition disabled:opacity-60"
+            >
+              {loading ? 'Saving...' : 'Save Integration'}
+            </button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

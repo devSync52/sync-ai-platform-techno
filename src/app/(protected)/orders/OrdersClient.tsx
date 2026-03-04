@@ -8,7 +8,7 @@ import { SyncOrdersButton } from '@/components/buttons/SyncOrdersButton'
 import FilterBar from '@/components/FilterBar'
 import { DateRange } from 'react-day-picker'
 import { DateRangePicker } from '@/components/ui/DateRangePicker'
-import { startOfMonth, endOfMonth } from 'date-fns'
+import { startOfMonth, endOfMonth, subYears } from 'date-fns'
 import '@/styles/daypicker-custom.css'
 
 export default function OrdersClient({ userId }: { userId: string }) {
@@ -23,13 +23,14 @@ export default function OrdersClient({ userId }: { userId: string }) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>({
-    from: startOfMonth(new Date()),
+    from: subYears(startOfMonth(new Date()), 2),
     to: endOfMonth(new Date()),
   })
   const startDate = selectedRange?.from?.toISOString().slice(0, 10) || ''
   const endDate = selectedRange?.to?.toISOString().slice(0, 10) || ''
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [reloadToken, setReloadToken] = useState(0)
 
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -53,6 +54,22 @@ export default function OrdersClient({ userId }: { userId: string }) {
     return logos[normalized] || null
   }
 
+  const deriveCustomerName = (row: any) => {
+    const first = String(row?.metadata?.FirstName || '').trim()
+    const last = String(row?.metadata?.LastName || '').trim()
+    const full = `${first} ${last}`.trim()
+    if (full) return full
+
+    const current = String(row?.client_name || '').trim()
+    if (current) return current
+
+    const company = String(row?.metadata?.CompanyName || '').trim()
+    if (company) return company
+
+    const email = String(row?.metadata?.CustomerEmail || '').trim()
+    return email || null
+  }
+
   useEffect(() => {
     async function fetchData() {
       const start = (currentPage - 1) * itemsPerPage
@@ -70,17 +87,22 @@ export default function OrdersClient({ userId }: { userId: string }) {
       const userRole = userRecord.role
       if (!userAccountId) return
 
-      setAccountId(userAccountId)
-
       const { data: accountRecord, error: accountError } = await supabase
         .from('accounts')
-        .select('source')
+        .select('source, parent_account_id')
         .eq('id', userAccountId)
         .maybeSingle()
 
       if (accountError) {
         console.error('❌ Error fetching account source:', accountError.message)
       }
+
+      const effectiveAccountId =
+        userRole === 'client' || userRole === 'staff-client'
+          ? userAccountId
+          : accountRecord?.parent_account_id || userAccountId
+
+      setAccountId(effectiveAccountId)
 
       const isExtensiv = (accountRecord?.source || '').toLowerCase() === 'extensiv'
       const ordersTable = isExtensiv ? 'extensiv_orders' : 'ai_orders_unified_6'
@@ -95,7 +117,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
       const { data: statusRows, error: statusError } = await supabase
         .from(ordersTable)
         .select(statusField)
-        .eq(statusFilterField, userAccountId)
+        .eq(statusFilterField, effectiveAccountId)
 
       if (statusError) {
         console.error('❌ Error fetching status options:', statusError.message)
@@ -122,9 +144,9 @@ export default function OrdersClient({ userId }: { userId: string }) {
   
 // ✅ Filtrar corretamente dependendo da role
 if (userRole === 'client' || userRole === 'staff-client') {
-  query = query.eq(isExtensiv ? 'account_id_channel' : 'channel_account_id', userAccountId)
+  query = query.eq(isExtensiv ? 'account_id_channel' : 'channel_account_id', effectiveAccountId)
 } else {
-  query = query.eq('account_id', userAccountId)
+  query = query.eq('account_id', effectiveAccountId)
 }
 
 if (sourceFilter !== 'all') {
@@ -166,7 +188,7 @@ const { data, count, error } = await query.range(start, end)
         return
       }
   
-      const normalizedOrders = isExtensiv
+      let normalizedOrders = isExtensiv
         ? (data || []).map((row: any) => ({
             order_uuid: row.external_id ?? String(row.id),
             order_id: row.order_number ?? row.external_id ?? String(row.id),
@@ -180,6 +202,40 @@ const { data, count, error } = await query.range(start, end)
             channel_account_id: row.account_id_channel ?? null,
           }))
         : data || []
+
+      if (!isExtensiv) {
+        const orderIds = Array.from(
+          new Set(
+            (normalizedOrders || [])
+              .map((row: any) => row?.order_id)
+              .filter((id: any) => id !== null && id !== undefined)
+              .map((id: any) => String(id))
+          )
+        )
+
+        if (orderIds.length > 0) {
+          const { data: sellerRows } = await supabase
+            .from('sellercloud_orders')
+            .select('order_id, client_name, metadata')
+            .eq('account_id', effectiveAccountId)
+            .in('order_id', orderIds)
+
+          if (sellerRows?.length) {
+            const byOrderId = new Map(
+              sellerRows.map((row: any) => [String(row.order_id), row])
+            )
+
+            normalizedOrders = normalizedOrders.map((row: any) => {
+              const match = byOrderId.get(String(row.order_id))
+              if (!match) return row
+              return {
+                ...row,
+                client_name: deriveCustomerName(match),
+              }
+            })
+          }
+        }
+      }
 
       setOrders(normalizedOrders)
       setTotalCount(count || 0)
@@ -197,6 +253,7 @@ const { data, count, error } = await query.range(start, end)
     startDate,
     endDate,
     searchTerm,
+    reloadToken,
   ])
 
   const exportToCSV = (data: any[], filename = 'orders.csv') => {
@@ -221,15 +278,23 @@ const { data, count, error } = await query.range(start, end)
 
   return (
     <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-      <h1 className="text-2xl font-bold text-primary">Orders</h1>
-  <div className="flex gap-4 items-center">
-    <DateRangePicker
-      date={selectedRange}
-      setDate={setSelectedRange}
-    />
-    </div>
-  </div>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-primary">Orders</h1>
+        <div className="flex gap-4 items-center">
+          <DateRangePicker
+            date={selectedRange}
+            setDate={setSelectedRange}
+          />
+          {accountId && userRole !== 'client' && userRole !== 'staff-client' && (
+            <SyncOrdersButton
+              accountId={accountId}
+              onImported={() => setReloadToken((prev) => prev + 1)}
+              fromDate={startDate}
+              toDate={endDate}
+            />
+          )}
+        </div>
+      </div>
 
       <FilterBar
         title="Unified Orders"

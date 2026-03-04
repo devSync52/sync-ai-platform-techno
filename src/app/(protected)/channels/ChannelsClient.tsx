@@ -1,499 +1,574 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Channel, ChannelMarketplace } from '@/types/supabase2'
-import { sendInviteAction } from '@/actions/sendInvite'
-import { resendInviteAction } from '@/actions/resendInvite'
-import { toast } from 'sonner'
+import { useEffect, useMemo, useState } from 'react'
 import Table from '@/components/ui/table'
-import { useSupabase } from '@/components/supabase-provider'
-import { Send, RefreshCw, Ban, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
+import { toast } from 'sonner'
+import { Eye, EyeOff, Pencil, Plus, Trash2, X } from 'lucide-react'
 
-interface InvitationSimple {
+type AuthType = 'local' | 'wms_extensiv'
+type CustomerRole = 'client'
+type CustomerStatus = 'active' | 'disabled'
+
+type CustomerUser = {
   id: string
-  channel_id: string
+  name: string | null
   email: string
-  token: string
-  status: string
-  created_at?: string
-  source: string
+  role: string
+  created_at: string | null
+  last_login_at: string | null
+  has_logged_in: boolean | null
+  auth_type: AuthType
+  wms_user_identifier: string | null
+  status: CustomerStatus
+  source?: 'local' | 'sellercloud'
 }
+
+type FormState = {
+  name: string
+  email: string
+  role: CustomerRole
+  authType: AuthType
+  temporaryPassword: string
+  wmsUserIdentifier: string
+  status: CustomerStatus
+}
+
+type FormErrors = Partial<Record<keyof FormState, string>>
 
 interface ChannelsClientProps {
   accountId: string
-  channels: Channel[]
-  marketplaces: ChannelMarketplace[]
-  invitations: InvitationSimple[]
 }
 
-const sourceOptions = [
-  { value: '', label: 'All sources' },
-  { value: 'sellercloud', label: 'Sellercloud' },
-  { value: 'extensiv', label: 'Extensiv' }
-]
+const defaultForm: FormState = {
+  name: '',
+  email: '',
+  role: 'client',
+  authType: 'local',
+  temporaryPassword: '',
+  wmsUserIdentifier: '',
+  status: 'active',
+}
 
-export default function ChannelsClient({
-  accountId,
-  channels,
-  marketplaces,
-  invitations: initialInvitations,
-}: ChannelsClientProps) {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filteredChannels, setFilteredChannels] = useState<Channel[]>(channels)
-  const [loading, setLoading] = useState(false)
-  const [sourceFilter, setSourceFilter] = useState<string>('')
-  const [inviteModalOpen, setInviteModalOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteChannelId, setInviteChannelId] = useState<string | null>(null)
-  const [sendingId, setSendingId] = useState<string | null>(null)
-  const [resendingId, setResendingId] = useState<string | null>(null)
-  const [invitations, setInvitations] = useState<InvitationSimple[]>(initialInvitations || [])
+function formatDate(value: string | null) {
+  if (!value) return '-'
+  return new Date(value).toLocaleString()
+}
 
-  const [markupModalOpen, setMarkupModalOpen] = useState(false)
-  const [selectedChannelForMarkup, setSelectedChannelForMarkup] = useState<Channel | null>(null)
-  const [markupValue, setMarkupValue] = useState('')
-  const [savingMarkup, setSavingMarkup] = useState(false)
-  const [markupAccountId, setMarkupAccountId] = useState<string | null>(null)
+function getAuthTypeLabel(authType: AuthType) {
+  if (authType === 'local') return 'Local'
+  return 'Extensive WMS-based'
+}
 
-  const itemsPerPage = 10
-  const [currentPage, setCurrentPage] = useState(1)
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
 
-  const supabase = useSupabase()
+export default function ChannelsClient({ accountId }: ChannelsClientProps) {
+  const [customers, setCustomers] = useState<CustomerUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState<CustomerUser | null>(null)
+  const [form, setForm] = useState<FormState>(defaultForm)
+  const [formErrors, setFormErrors] = useState<FormErrors>({})
+  const [modalError, setModalError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showTemporaryPassword, setShowTemporaryPassword] = useState(false)
+
+  const loadCustomers = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/customers', { cache: 'no-store' })
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to load customers')
+      }
+      setCustomers((payload.customers ?? []) as CustomerUser[])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unexpected error')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    setLoading(true)
-    const timeout = setTimeout(() => {
-      const term = searchTerm.toLowerCase()
-      const filtered = channels.filter((channel) => {
-        const matchesTerm =
-          channel.name.toLowerCase().includes(term) ||
-          (channel.email?.toLowerCase().includes(term) ?? false)
-        const matchesSource =
-          !sourceFilter || channel.source === sourceFilter
-        return matchesTerm && matchesSource
-      })
-      setFilteredChannels(filtered)
-      setCurrentPage(1)
-      setLoading(false)
-    }, 300)
+    loadCustomers()
+  }, [accountId])
 
-    return () => clearTimeout(timeout)
-  }, [searchTerm, channels, sourceFilter])
-
-  const findInvitation = (channelId: string) => {
-    return invitations?.find((inv) => inv.channel_id === channelId) || null
-  }
-
-  const findInvitationStatus = (channelId: string) => {
-    const invitation = findInvitation(channelId)
-    if (!invitation) return 'No Invite'
-    if (invitation.status === 'accepted') return 'Accepted'
-    // Nova verificação: se o usuário já fez login, considerar aceito
-    if (invitation.status === 'pending' && invitation.token === null) return 'Accepted'
-    return invitation.status
-  }
-
-  const renderInvitationStatus = (status: string) => {
-    let color = 'text-gray-500 border-gray-300'
-    if (status.toLowerCase() === 'pending') color = 'text-yellow-600 border-yellow-400'
-    else if (status.toLowerCase() === 'accepted') color = 'text-green-600 border-green-400'
-    else if (status.toLowerCase() === 'expired') color = 'text-red-600 border-red-400'
-
-    return (
-      <span className={`inline-block px-3 py-1 text-xs font-semibold bg-white border rounded-full ${color}`}>
-        {status}
-      </span>
-    )
-  }
-
-  const renderSourceTag = (source?: string | null) => {
-    if (!source) return null
-    let color = 'bg-gray-200 text-gray-700 border-gray-300'
-    if (source === 'sellercloud') color = 'bg-blue-500 text-white py-1'
-    else if (source === 'extensiv') color = 'bg-primary text-white py-1'
-    return (
-      <span className={`ml-2 px-2 py-0.5 text-xs font-semibold rounded ${color}`}>
-        {source.charAt(0).toUpperCase() + source.slice(1)}
-      </span>
-    )
-  }
-
-  const openInviteModal = (channel: Channel) => {
-    setInviteEmail(channel.email || '')
-    setInviteChannelId(channel.id)
-    setInviteModalOpen(true)
-  }
-
-  const openMarkupModal = async (channel: Channel) => {
-    setSelectedChannelForMarkup(channel)
-    setMarkupValue('')
-    setMarkupAccountId(null)
-    setMarkupModalOpen(true)
-
-    // Resolve the account for this channel:
-    // we look for a child account whose parent_account_id = current accountId
-    // and whose name matches the channel name.
-    try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('id, shipping_markup_percent')
-        .eq('parent_account_id', accountId)
-        .eq('name', channel.name)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (error) {
-        console.error('Error fetching account for channel markup:', error)
-        return
-      }
-
-      if (!data || data.length === 0) {
-        console.warn(
-          'No child account found for channel. Expected accounts.parent_account_id = accountId and accounts.name = channel.name',
-          { accountId, channelName: channel.name },
-        )
-        return
-      }
-
-      const acc = data[0]
-      console.log('Resolved account for channel markup:', {
-        accountId: acc.id,
-        shipping_markup_percent: acc.shipping_markup_percent,
-      })
-      setMarkupAccountId(acc.id)
-
-      if (acc.shipping_markup_percent != null) {
-        setMarkupValue(String(acc.shipping_markup_percent))
-      }
-    } catch (err) {
-      console.error('Unexpected error fetching account for channel markup:', err)
-    }
-  }
-
-  const handleSaveMarkup = async () => {
-    if (!selectedChannelForMarkup) return
-
-    const accountIdForMarkup = markupAccountId
-
-    if (!accountIdForMarkup) {
-      toast.error('This channel is not linked to a child account for markup.')
-      console.warn(
-        'No markupAccountId resolved for selected channel. Not updating any account for markup:',
-        selectedChannelForMarkup,
+  const filteredCustomers = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    if (!term) return customers
+    return customers.filter((customer) => {
+      return (
+        (customer.name ?? '').toLowerCase().includes(term) ||
+        customer.email.toLowerCase().includes(term)
       )
+    })
+  }, [customers, search])
+
+  const openCreateModal = () => {
+    setEditingCustomer(null)
+    setForm(defaultForm)
+    setFormErrors({})
+    setModalError(null)
+    setShowTemporaryPassword(false)
+    setModalOpen(true)
+  }
+
+  const openEditModal = (customer: CustomerUser) => {
+    if (customer.source === 'sellercloud') {
+      toast.info('Sellercloud customers are read-only in this list.')
       return
     }
 
-    const raw = markupValue.replace(',', '.')
-    const percent = Number(raw)
-    if (Number.isNaN(percent) || percent < 0) {
-      toast.error('Please enter a valid percentage (0 or greater).')
-      return
+    setEditingCustomer(customer)
+    setForm({
+      name: customer.name ?? '',
+      email: customer.email,
+      role: 'client',
+      authType: customer.auth_type ?? 'local',
+      temporaryPassword: '',
+      wmsUserIdentifier: customer.wms_user_identifier ?? '',
+      status: customer.status ?? 'active',
+    })
+    setFormErrors({})
+    setModalError(null)
+    setShowTemporaryPassword(false)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setModalOpen(false)
+    setEditingCustomer(null)
+    setForm(defaultForm)
+    setFormErrors({})
+    setModalError(null)
+    setShowTemporaryPassword(false)
+  }
+
+  const validateForm = () => {
+    const nextErrors: FormErrors = {}
+
+    if (!form.name.trim()) {
+      nextErrors.name = 'Name is required.'
+    } else if (form.name.trim().length < 2) {
+      nextErrors.name = 'Name must be at least 2 characters.'
     }
+
+    if (!form.email.trim()) {
+      nextErrors.email = 'Email is required.'
+    } else if (!isValidEmail(form.email.trim())) {
+      nextErrors.email = 'Enter a valid email address.'
+    }
+
+    if (form.authType === 'local') {
+      if (!editingCustomer && !form.temporaryPassword.trim()) {
+        nextErrors.temporaryPassword = 'Temporary Password is required for Local auth.'
+      } else if (form.temporaryPassword.trim() && form.temporaryPassword.trim().length < 8) {
+        nextErrors.temporaryPassword = 'Temporary Password must be at least 8 characters.'
+      }
+    }
+
+    if (form.authType === 'wms_extensiv') {
+      if (!form.wmsUserIdentifier.trim()) {
+        nextErrors.wmsUserIdentifier = 'WMS User Identifier is required for WMS auth.'
+      } else if (form.wmsUserIdentifier.trim().length < 3) {
+        nextErrors.wmsUserIdentifier = 'WMS User Identifier must be at least 3 characters.'
+      }
+    }
+
+    setFormErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
+  }
+
+  const saveCustomer = async () => {
+    if (!validateForm()) return
+
+    setSaving(true)
+    setError(null)
+    setModalError(null)
 
     try {
-      setSavingMarkup(true)
-      const { error } = await supabase
-        .from('accounts')
-        .update({ shipping_markup_percent: percent })
-        .eq('id', accountIdForMarkup)
+      const isEdit = Boolean(editingCustomer)
+      const endpoint = isEdit ? `/api/customers/${editingCustomer?.id}` : '/api/customers'
+      const method = isEdit ? 'PATCH' : 'POST'
 
-      if (error) {
-        console.error('Error updating shipping markup:', error)
-        toast.error('Failed to update shipping markup.')
-      } else {
-        toast.success('Shipping markup updated successfully.')
-        setMarkupModalOpen(false)
-        setSelectedChannelForMarkup(null)
-        setMarkupValue('')
-        setMarkupAccountId(null)
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          role: form.role,
+          authType: form.authType,
+          temporaryPassword: form.authType === 'local' ? form.temporaryPassword : undefined,
+          wmsUserIdentifier: form.authType === 'wms_extensiv' ? form.wmsUserIdentifier : undefined,
+          status: form.status,
+        }),
+      })
+
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to save customer')
       }
+
+      const saved = payload.customer as CustomerUser
+
+      if (isEdit) {
+        setCustomers((prev) => prev.map((row) => (row.id === saved.id ? saved : row)))
+        toast.success('Customer updated successfully')
+      } else {
+        setCustomers((prev) => [saved, ...prev])
+        if (payload.warning) {
+          toast.warning(payload.warning)
+        } else {
+          toast.success('Customer created successfully')
+        }
+      }
+
+      closeModal()
     } catch (err) {
-      console.error('Unexpected error updating shipping markup:', err)
-      toast.error('Unexpected error updating shipping markup.')
+      const message = err instanceof Error ? err.message : 'Failed to save customer'
+      setModalError(message)
     } finally {
-      setSavingMarkup(false)
+      setSaving(false)
     }
   }
 
-  const sendInvite = async () => {
-    if (!inviteChannelId || !inviteEmail) return
-    setSendingId(inviteChannelId)
-    const result = await sendInviteAction({ channelId: inviteChannelId, email: inviteEmail })
-
-    if (result.success) {
-      setInvitations((prev) => [...prev, result.invitation])
-      toast.success('Invitation sent successfully!')
-    } else {
-      toast.error(result.message)
+  const deleteCustomer = async (customer: CustomerUser) => {
+    if (customer.source === 'sellercloud') {
+      toast.info('Sellercloud customers are read-only in this list.')
+      return
     }
 
-    setInviteModalOpen(false)
-    setSendingId(null)
-  }
+    const confirmDelete = window.confirm(`Delete customer user ${customer.email}?`)
+    if (!confirmDelete) return
 
-  const handleResendInvite = async (channelId: string) => {
-    setResendingId(channelId)
-    const result = await resendInviteAction({ channelId })
+    setDeletingId(customer.id)
+    setError(null)
+    try {
+      const res = await fetch(`/api/customers/${customer.id}`, { method: 'DELETE' })
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to delete customer')
+      }
 
-    if (result.success) toast.success('Invite resent successfully!')
-    else toast.error(result.message)
-
-    setResendingId(null)
-  }
-
-  const handleRevokeInvite = async (channelId: string) => {
-    if (!confirm('Are you sure you want to revoke this invite?')) return
-
-    const result = await fetch('/api/invitations/revoke', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channelId }),
-    })
-
-    const data = await result.json()
-    if (data.success) {
-      toast.success('Invite revoked')
-      setInvitations(prev => prev.filter(inv => inv.channel_id !== channelId))
-    } else {
-      toast.error(data.message || 'Failed to revoke invite')
+      setCustomers((prev) => prev.filter((row) => row.id !== customer.id))
+      toast.success('Customer deleted successfully')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete customer')
+    } finally {
+      setDeletingId(null)
     }
   }
-
-  const paginatedChannels = filteredChannels.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
-  const totalPages = Math.ceil(filteredChannels.length / itemsPerPage)
-  const totalCount = filteredChannels.length
-  const startIndex = totalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
-  const endIndex = Math.min(currentPage * itemsPerPage, totalCount)
 
   return (
-    <div className="p-6">
-      <h1 className="text-xl sm:text-3xl font-bold text-primary mb-4 sm:mb-6">Customers</h1>
-
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <input
-          type="text"
-          placeholder="Search by name or email..."
-          className="w-full max-w-md px-4 py-2 border rounded-lg focus:outline-none focus:ring focus:border-primary/30 text-sm"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <select
-          value={sourceFilter}
-          onChange={e => setSourceFilter(e.target.value)}
-          className="px-3 py-2 border rounded-lg text-sm w-full max-w-xs"
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-primary">Customers</h1>
+          <p className="text-sm text-gray-500">Manage customer users and authentication type.</p>
+        </div>
+        <button
+          onClick={openCreateModal}
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
         >
-          {sourceOptions.map(opt => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          <Plus size={16} />
+          Add Customer
+        </button>
       </div>
 
-      {loading ? (
-        <div className="text-center py-10 text-gray-500">Filtering channels...</div>
-      ) : (
-        <>
+      {error && !modalOpen && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="bg-white border rounded-xl p-4">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name or email"
+          className="w-full border rounded-md px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div className="bg-white border rounded-xl overflow-x-auto">
+        {loading ? (
+          <div className="p-6 text-sm text-gray-600">Loading customers...</div>
+        ) : (
           <Table>
             <thead className="bg-gray-100">
               <tr>
                 <th className="p-3 text-left text-sm font-semibold">Name</th>
-                <th className="p-3 text-left text-sm font-semibold">Source</th>
                 <th className="p-3 text-left text-sm font-semibold">Email</th>
-                <th className="p-3 text-left text-sm font-semibold">Country</th>
-                <th className="p-3 text-left text-sm font-semibold">City</th>
-                <th className="p-3 text-left text-sm font-semibold">Invite Status</th>
+                <th className="p-3 text-left text-sm font-semibold">Role/Type</th>
+                <th className="p-3 text-left text-sm font-semibold">Auth Type</th>
+                <th className="p-3 text-left text-sm font-semibold">WMS User Identifier</th>
+                <th className="p-3 text-left text-sm font-semibold">Status</th>
+                <th className="p-3 text-left text-sm font-semibold">Last Login</th>
                 <th className="p-3 text-center text-sm font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {paginatedChannels.length > 0 ? (
-                paginatedChannels.map((channel) => {
-                  const status = findInvitationStatus(channel.id)
-
-                  return (
-                    <tr key={channel.id} className="border-t border-gray-200 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-gray-500 text-sm uppercase">{channel.name}</td>
-                      <td className="py-3 px-4">{renderSourceTag(channel.source)}</td>
-                      <td className="py-3 px-4 text-gray-500">{channel.email ?? '-'}</td>
-                      <td className="py-3 px-4 text-gray-500">{channel.country ?? '-'}</td>
-                      <td className="py-3 px-4 text-gray-500">{channel.city ?? '-'}</td>
-                      <td className="p-3 text-sm">{renderInvitationStatus(status)}</td>
-                      <td className="p-3 text-center align-top">
-                        <div className="flex flex-row items-center justify-center gap-2 flex-wrap">
-                          {['pending', 'accepted'].includes(status.toLowerCase()) ? (
-                            <>
-                              {status.toLowerCase() === 'pending' && (
-                                <button
-                                  onClick={() => handleResendInvite(channel.id)}
-                                  className="flex items-center gap-1 px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
-                                  disabled={resendingId === channel.id}
-                                >
-                                  <RefreshCw size={14} />
-                                  {resendingId === channel.id ? 'Resending' : 'Resend'}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleRevokeInvite(channel.id)}
-                                className="flex items-center gap-1 px-3 py-2 bg-red-500 text-white text-xs rounded hover:bg-red-600"
-                              >
-                                <Ban size={14} />
-                                Revoke
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => openInviteModal(channel)}
-                              className="flex items-center gap-1 px-3 py-2 bg-primary hover:bg-primary/90 text-white text-xs rounded"
-                            >
-                              <Send size={14} />
-                              Invite
-                            </button>
-                          )}
-
+              {filteredCustomers.length > 0 ? (
+                filteredCustomers.map((customer) => (
+                  <tr key={customer.id} className="border-t border-gray-200 hover:bg-gray-50">
+                    <td className="py-3 px-4 text-sm">{customer.name || '-'}</td>
+                    <td className="py-3 px-4 text-sm">{customer.email}</td>
+                    <td className="py-3 px-4 text-sm">
+                      {customer.source === 'sellercloud' ? 'Sellercloud Customer' : 'Customer User'}
+                    </td>
+                    <td className="py-3 px-4 text-sm">{getAuthTypeLabel(customer.auth_type)}</td>
+                    <td className="py-3 px-4 text-sm">{customer.wms_user_identifier || '-'}</td>
+                    <td className="py-3 px-4 text-sm">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                          customer.status === 'active'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {customer.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm">{formatDate(customer.last_login_at)}</td>
+                    <td className="py-3 px-4">
+                      {customer.source === 'sellercloud' ? (
+                        <div className="text-center text-xs text-gray-400">Read-only</div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={() => openMarkupModal(channel)}
-                            className="flex items-center gap-1 px-3 py-2 border border-primary text-primary text-xs rounded hover:bg-primary/5"
+                            onClick={() => openEditModal(customer)}
+                            className="inline-flex items-center gap-1 rounded border border-primary px-2 py-1 text-xs text-primary hover:bg-primary/5"
                           >
                             <Pencil size={14} />
                             Edit
                           </button>
-
-                          {/* Mostrar email do convite se existir */}
-                          {findInvitation(channel.id)?.email && (
-                            <div className="mt-2 text-[11px] text-gray-500 italic max-w-[150px] break-words">
-                              Sent to: {findInvitation(channel.id)?.email}
-                            </div>
-                          )}
+                          <button
+                            onClick={() => deleteCustomer(customer)}
+                            disabled={deletingId === customer.id}
+                            className="inline-flex items-center gap-1 rounded border border-red-500 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <Trash2 size={14} />
+                            {deletingId === customer.id ? 'Deleting...' : 'Delete'}
+                          </button>
                         </div>
-                      </td>
-                    </tr>
-                  )
-                })
+                      )}
+                    </td>
+                  </tr>
+                ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-gray-500">
-                    No channels found.
+                  <td colSpan={8} className="text-center py-10 text-gray-500">
+                    No customer users found.
                   </td>
                 </tr>
               )}
             </tbody>
           </Table>
+        )}
+      </div>
 
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center mt-6 px-4 text-sm">
-              <span className="text-gray-600">
-                Showing {startIndex} - {endIndex} of {totalCount}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="inline-flex items-center gap-1 px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft size={16} />
-                  Prev
-                </button>
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="inline-flex items-center gap-1 px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Next page"
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </button>
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" aria-modal="true" role="dialog">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {editingCustomer ? 'Edit Customer User' : 'Create Customer User'}
+              </h2>
+              <button
+                onClick={closeModal}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {modalError && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {modalError}
               </div>
-            </div>
-          )}
-        </>
-      )}
+            )}
 
-      {markupModalOpen && selectedChannelForMarkup && (
-        <div
-          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
-          aria-modal="true"
-          role="dialog"
-        >
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">
-              Shipping markup for {selectedChannelForMarkup.name}
-            </h2>
-            <label className="block text-sm font-medium mb-1">
-              Markup percentage (%)
-            </label>
-            <input
-              key={selectedChannelForMarkup?.id || 'markup-input'}
-              type="number"
-              min={0}
-              step="0.01"
-              className="w-full border px-4 py-3 rounded mb-2 text-sm"
-              value={markupValue}
-              onChange={(e) => setMarkupValue(e.target.value)}
-              placeholder="e.g. 15 for 15%"
-            />
-            <p className="text-[11px] text-gray-500 mb-4">
-              This percentage will be applied on top of the carrier rate when showing quotes for this customer.
-            </p>
-            <div className="flex justify-end gap-2">
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Customer User Name</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setForm((prev) => ({ ...prev, name: value }))
+                    if (modalError) setModalError(null)
+                    if (formErrors.name) {
+                      setFormErrors((prev) => ({ ...prev, name: undefined }))
+                    }
+                  }}
+                  className={`w-full rounded-md border px-3 py-2 text-sm ${
+                    formErrors.name ? 'border-red-500' : ''
+                  }`}
+                  placeholder="Enter customer name"
+                />
+                {formErrors.name && (
+                  <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setForm((prev) => ({ ...prev, email: value }))
+                    if (modalError) setModalError(null)
+                    if (formErrors.email) {
+                      setFormErrors((prev) => ({ ...prev, email: undefined }))
+                    }
+                  }}
+                  className={`w-full rounded-md border px-3 py-2 text-sm ${
+                    formErrors.email ? 'border-red-500' : ''
+                  }`}
+                  placeholder="customer@example.com"
+                />
+                {formErrors.email && (
+                  <p className="mt-1 text-xs text-red-600">{formErrors.email}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Role/Type</label>
+                <select
+                  value={form.role}
+                  onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value as CustomerRole }))}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                >
+                  <option value="client">Customer User</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Authentication Type</label>
+                <select
+                  value={form.authType}
+                  onChange={(e) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      authType: e.target.value as AuthType,
+                      temporaryPassword: '',
+                      wmsUserIdentifier: '',
+                    }))
+                    if (modalError) setModalError(null)
+                    setShowTemporaryPassword(false)
+                  }}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                >
+                  <option value="local">Local (Platform-managed credentials)</option>
+                  <option value="wms_extensiv">Extensive WMS-based (Authenticate via WMS)</option>
+                </select>
+              </div>
+
+              {form.authType === 'local' && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Temporary Password</label>
+                  <div className="relative">
+                    <input
+                      type={showTemporaryPassword ? 'text' : 'password'}
+                      value={form.temporaryPassword}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setForm((prev) => ({ ...prev, temporaryPassword: value }))
+                        if (modalError) setModalError(null)
+                        if (formErrors.temporaryPassword) {
+                          setFormErrors((prev) => ({ ...prev, temporaryPassword: undefined }))
+                        }
+                      }}
+                      className={`w-full rounded-md border px-3 py-2 pr-10 text-sm ${
+                        formErrors.temporaryPassword ? 'border-red-500' : ''
+                      }`}
+                      placeholder={editingCustomer ? 'Optional: enter to reset password' : 'Minimum 8 characters'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTemporaryPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+                      aria-label={showTemporaryPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showTemporaryPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {formErrors.temporaryPassword && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.temporaryPassword}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {editingCustomer
+                      ? 'Leave empty to keep existing password.'
+                      : 'This password will be sent to the customer by email.'}
+                  </p>
+                </div>
+              )}
+
+              {form.authType === 'wms_extensiv' && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">WMS User Identifier</label>
+                  <input
+                    type="text"
+                    value={form.wmsUserIdentifier}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setForm((prev) => ({ ...prev, wmsUserIdentifier: value }))
+                      if (modalError) setModalError(null)
+                      if (formErrors.wmsUserIdentifier) {
+                        setFormErrors((prev) => ({ ...prev, wmsUserIdentifier: undefined }))
+                      }
+                    }}
+                    className={`w-full rounded-md border px-3 py-2 text-sm ${
+                      formErrors.wmsUserIdentifier ? 'border-red-500' : ''
+                    }`}
+                    placeholder="Enter WMS user identifier"
+                  />
+                  {formErrors.wmsUserIdentifier && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.wmsUserIdentifier}</p>
+                  )}
+                </div>
+              )}
+
+              {editingCustomer && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value as CustomerStatus }))}
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                  >
+                    <option value="active">Active</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
               <button
-                onClick={() => {
-                  setMarkupModalOpen(false)
-                  setSelectedChannelForMarkup(null)
-                  setMarkupValue('')
-                  setMarkupAccountId(null)
-                }}
-                className="px-4 py-3 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 text-sm"
+                onClick={closeModal}
+                className="rounded-md bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSaveMarkup}
-                className={`px-4 py-3 rounded text-sm ${
-                  savingMarkup
-                    ? 'bg-[#3f2d90]/60 text-white cursor-not-allowed'
-                    : 'bg-[#3f2d90] text-white hover:bg-[#3f2d90]/90'
-                }`}
-                disabled={savingMarkup}
+                onClick={saveCustomer}
+                disabled={saving}
+                className="rounded-md bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90 disabled:opacity-60"
               >
-                {savingMarkup ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {inviteModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50" aria-modal="true" role="dialog">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Invite Channel</h2>
-            <input
-              type="email"
-              className="w-full border px-4 py-3 rounded mb-4 text-sm"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="Email address"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setInviteModalOpen(false)}
-                className="px-4 py-3 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={sendInvite}
-                className={`px-4 py-3 rounded text-sm ${
-                  sendingId ? 'bg-green-400 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'
-                }`}
-                disabled={!!sendingId}
-              >
-                {sendingId ? 'Sending...' : 'Send'}
+                {saving ? 'Saving...' : editingCustomer ? 'Update' : 'Create'}
               </button>
             </div>
           </div>

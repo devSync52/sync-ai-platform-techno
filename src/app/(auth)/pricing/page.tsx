@@ -17,13 +17,10 @@ export default function PricingPage() {
 
   useEffect(() => {
     const fetchPlans = async () => {
-      const { data, error } = await supabase
-        .from("plans")
-        .select("*")
-        .order("price", { ascending: true });
-
-      if (!error && data) {
-        setPlans(data);
+      const plansRes = await fetch("/api/pricing/plans", { cache: "no-store" });
+      const plansPayload = await plansRes.json();
+      if (plansRes.ok) {
+        setPlans(plansPayload.plans ?? []);
       }
     };
 

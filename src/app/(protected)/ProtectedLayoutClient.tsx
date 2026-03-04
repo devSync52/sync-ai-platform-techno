@@ -20,11 +20,7 @@ interface ProtectedLayoutClientProps extends PropsWithChildren {
   hideLayout?: boolean
 }
 
-export default function ProtectedLayoutClient({
-  children,
-  user,
-  hideLayout = false
-}: ProtectedLayoutClientProps) {
+export default function ProtectedLayoutClient({ children, user, hideLayout = false }: ProtectedLayoutClientProps) {
   const [showSidebar, setShowSidebar] = useState(false)
   const pathname = usePathname()
 

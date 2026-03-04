@@ -52,6 +52,14 @@ function RegisterPageContent() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    const normalizedEmail = email.trim().toLowerCase();
+    setEmail(normalizedEmail);
+
+    if (!normalizedEmail) {
+      setError("❌ Email is required");
+      setLoading(false);
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("❌ Passwords do not match");
@@ -65,8 +73,32 @@ function RegisterPageContent() {
       return;
     }
 
+    try {
+      const emailCheckRes = await fetch(
+        `/api/auth/check-email?email=${encodeURIComponent(normalizedEmail)}`,
+        { method: "GET", cache: "no-store" },
+      );
+      const emailCheckPayload = await emailCheckRes.json();
+
+      if (!emailCheckRes.ok) {
+        throw new Error(emailCheckPayload?.error || "Unable to validate email");
+      }
+
+      if (emailCheckPayload?.exists) {
+        setError("❌ This email is already registered. Please log in.");
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      setError(
+        `❌ ${err instanceof Error ? err.message : "Unable to validate email"}`,
+      );
+      setLoading(false);
+      return;
+    }
+
     const { error: signUpError } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
     });
 

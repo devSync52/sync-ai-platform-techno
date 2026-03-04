@@ -10,9 +10,19 @@ interface Props {
   accountId: string
   companyName: string
   onClose: () => void
+  onImported?: () => void
+  fromDate?: string
+  toDate?: string
 }
 
-export default function ImportOrdersModal({ accountId, companyName, onClose }: Props) {
+export default function ImportOrdersModal({
+  accountId,
+  companyName,
+  onClose,
+  onImported,
+  fromDate,
+  toDate,
+}: Props) {
   const [source, setSource] = useState<'sellercloud' | 'extensiv' | 'project44'>('sellercloud')
   const [step, setStep] = useState<'select' | 'loading'>('select')
   const [isPending, startTransition] = useTransition()
@@ -25,12 +35,13 @@ export default function ImportOrdersModal({ accountId, companyName, onClose }: P
       const res = await fetch('/api/sync-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: accountId, source })
+        body: JSON.stringify({ account_id: accountId, source, fromDate, toDate })
       })
 
       const result = await res.json()
       if (result.success) {
         toast.success(`✅ Imported ${result.imported || 0} orders from ${source}`)
+        onImported?.()
       } else {
         toast.error(result.error || 'Failed to import orders')
       }

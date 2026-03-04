@@ -9,6 +9,7 @@ import { useSession } from "@/components/supabase-provider";
 import {
   LayoutDashboard,
   Users,
+  FileText,
   Settings,
   LogOut,
   Building2,
@@ -24,7 +25,6 @@ import {
   TicketIcon,
   TicketPlus,
   Wallet,
-  FileText,
   BarChart3,
 } from "lucide-react";
 
@@ -63,14 +63,16 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         if (data?.account_id) {
           const { data: accountData, error: accountError } = await supabase
             .from("accounts")
-            .select('"logo-main"')
+            .select("logo, logo_main")
             .eq("id", data.account_id)
             .single();
 
           if (accountError) {
             console.error("Error fetching account logo:", accountError.message);
           } else {
-            setAccountLogo((accountData as any)?.["logo-main"] ?? null);
+            const resolvedLogo =
+              (accountData as any)?.logo_main ?? (accountData as any)?.logo ?? null;
+            setAccountLogo(resolvedLogo);
           }
         } else {
           setAccountLogo(null);
@@ -92,6 +94,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
     if (pathname.startsWith("/billing")) setBillingOpen(true);
     else setBillingOpen(false);
+
   }, [pathname]);
 
   async function handleLogout() {
@@ -101,6 +104,10 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/users", label: "Users", icon: Users },
+    { href: "/plans", label: "Plans", icon: FileText },
+    { href: "/features", label: "Features", icon: BarChart3 },
+    { href: "/billing/invoices", label: "Invoices", icon: Wallet },
     {
       label: "Orders",
       icon: ShoppingBag,
@@ -131,6 +138,26 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: "/support", label: "Support", icon: TicketPlus },
   ];
   const filteredNavItems = navItems.filter((item) => {
+    // Customer users should only see Dashboard + Orders module
+    if (userRole === "client") {
+      return item.href === "/dashboard" || item.label === "Orders";
+    }
+
+    if (userRole === "superadmin") {
+      return (
+        item.href === "/dashboard" ||
+        item.href === "/users" ||
+        item.href === "/plans" ||
+        item.href === "/features" ||
+        item.href === "/billing/invoices"
+      );
+    }
+
+    // Keep the root "Invoices" entry exclusive to superadmin.
+    if (item.href === "/billing/invoices") {
+      return false;
+    }
+
     const clientExclusions = ["/bot-training", "/ai-settings", "/channels"];
     const staffExclusions = [
       "/bot-training",
@@ -138,6 +165,10 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       "/staff",
       "/channels",
     ];
+
+    if (item.href === "/users" || item.href === "/plans" || item.href === "/features") {
+      return false;
+    }
 
     if (userRole === "staff-client") {
       // staff-client can see only: Orders (Quotations), Inventory, Support
@@ -147,25 +178,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       return false;
     }
 
-    if (item.label === "Billing" && userRole === "client") {
-      return false;
-    }
-
-    if (userRole === "client") {
-      if (
-        (item.href && clientExclusions.includes(item.href)) ||
-        (item.label === "Orders" &&
-          item.items &&
-          item.items.some((subItem) =>
-            clientExclusions.includes(subItem.href || ""),
-          ))
-      ) {
-        if (item.label === "Orders") {
-          return true;
-        }
-        return false;
-      }
-    } else if (userRole === "staff-user") {
+    if (userRole === "staff-user") {
       if (
         (item.href && staffExclusions.includes(item.href)) ||
         (item.label === "Orders" &&
@@ -190,6 +203,15 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   ];
 
   const filteredSettingsItems = baseSettingsItems.filter((item) => {
+    if (userRole === "superadmin") {
+      return false;
+    }
+
+    // Customer users should not see settings in sidebar
+    if (userRole === "client") {
+      return false;
+    }
+
     // staff-client: only "My profile"
     if (userRole === "staff-client") {
       return item.href === "/settings/profile";
@@ -311,48 +333,50 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         })}
 
         {/* SETTINGS DROPDOWN */}
-        <div>
-          <button
-            onClick={() => setSettingsOpen((prev) => !prev)}
-            className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#0000001c] transition text-white"
-          >
-            <span className="flex items-center gap-3">
-              <Settings size={18} />
-              <span>Settings</span>
-            </span>
-            <ChevronDown
-              size={16}
-              className={`transition-transform duration-200 ${
-                settingsOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
+        {filteredSettingsItems.length > 0 && (
+          <div>
+            <button
+              onClick={() => setSettingsOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 tracking-wider hover:bg-[#0000001c] transition text-white"
+            >
+              <span className="flex items-center gap-3">
+                <Settings size={18} />
+                <span>Settings</span>
+              </span>
+              <ChevronDown
+                size={16}
+                className={`transition-transform duration-200 ${
+                  settingsOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
 
-          <div
-            className={`pl-8 mt-1 space-y-1 overflow-hidden transition-all duration-200 ease-in-out ${
-              settingsOpen ? "max-h-40" : "max-h-0"
-            }`}
-          >
-            {filteredSettingsItems.map(({ href, label, icon: Icon }) => {
-              const isActive = pathname === href;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={onLinkClick}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
-                    isActive
-                      ? "bg-white text-primary font-semibold"
-                      : "text-white hover:bg-[#0000001c]"
-                  }`}
-                >
-                  <Icon size={16} />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
+            <div
+              className={`pl-8 mt-1 space-y-1 overflow-hidden transition-all duration-200 ease-in-out ${
+                settingsOpen ? "max-h-40" : "max-h-0"
+              }`}
+            >
+              {filteredSettingsItems.map(({ href, label, icon: Icon }) => {
+                const isActive = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onLinkClick}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${
+                      isActive
+                        ? "bg-white text-primary font-semibold"
+                        : "text-white hover:bg-[#0000001c]"
+                    }`}
+                  >
+                    <Icon size={16} />
+                    <span>{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </nav>
 
       {/* FOOTER */}

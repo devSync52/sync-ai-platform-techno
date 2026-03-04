@@ -17,6 +17,42 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
   const [loading, setLoading] = useState(false)
   const [fullOrder, setFullOrder] = useState<any>(null)
 
+  const getPreferredCustomerName = () => {
+    const first = String(
+      fullOrder?.metadata?.FirstName ||
+        fullOrder?.metadata?.ShippingAddress?.FirstName ||
+        fullOrder?.metadata?.BillingAddress?.FirstName ||
+        ''
+    ).trim()
+    const last = String(
+      fullOrder?.metadata?.LastName ||
+        fullOrder?.metadata?.ShippingAddress?.LastName ||
+        fullOrder?.metadata?.BillingAddress?.LastName ||
+        ''
+    ).trim()
+    const fullName = `${first} ${last}`.trim()
+    if (fullName) return fullName
+
+    return (
+      order?.client_name ||
+      fullOrder?.metadata?.CompanyName ||
+      fullOrder?.metadata?.CustomerEmail ||
+      '—'
+    )
+  }
+
+  const getBillingName = () => {
+    const recipient = String(fullOrder?.metadata?.BillingAddress?.RecipientName || '').trim()
+    if (recipient) return recipient
+
+    const first = String(fullOrder?.metadata?.BillingAddress?.FirstName || '').trim()
+    const last = String(fullOrder?.metadata?.BillingAddress?.LastName || '').trim()
+    const fullName = `${first} ${last}`.trim()
+    if (fullName) return fullName
+
+    return '—'
+  }
+
   useEffect(() => {
     if (!open || !order?.order_id) return;
 
@@ -36,16 +72,45 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
         setFullOrder(full);
       }
 
+      const orderUuid =
+        full?.id ||
+        order?.id ||
+        order?.order_uuid ||
+        null
+
       const { data: itemsData, error: itemsErr } = await supabase
         .from('sellercloud_order_items')
         .select('*')
-        .eq('order_uuid', order.id)
+        .eq('order_uuid', orderUuid)
 
       if (itemsErr) {
         console.error('❌ Erro ao buscar itens do pedido:', itemsErr.message);
       } else {
         console.log('[✅] Itens encontrados:', itemsData);
         setItems(itemsData || []);
+      }
+
+      // Fallback: render line items directly from sellercloud_orders.metadata.Items
+      // when sellercloud_order_items is empty for this order.
+      const hasDbItems = Array.isArray(itemsData) && itemsData.length > 0
+      const rawItems = Array.isArray(full?.metadata?.Items) ? full.metadata.Items : []
+      if (!hasDbItems && rawItems.length > 0) {
+        const mapped = rawItems.map((item: any, index: number) => {
+          const quantity = Number(item?.Qty ?? item?.Quantity ?? 0)
+          const unitPrice = Number(item?.UnitPrice ?? item?.SitePrice ?? item?.PricePerCase ?? item?.Price ?? 0)
+          const totalPrice =
+            Number(item?.LineTotal ?? item?.TotalPrice ?? item?.LineTotalPrice ?? unitPrice * quantity)
+
+          return {
+            id: `meta-${index}`,
+            sku: item?.SKU || item?.ProductID || null,
+            quantity,
+            unit_price: unitPrice,
+            total_price: totalPrice,
+            metadata: item,
+          }
+        })
+        setItems(mapped)
       }
 
       setLoading(false);
@@ -91,7 +156,7 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
           {/* Order To */}
           <section className="space-y-1">
             <p className="font-semibold text-lg">Order To:</p>
-            <p>{order?.client_name || '—'}</p>
+            <p>{getPreferredCustomerName()}</p>
            
           </section>
 
@@ -106,7 +171,7 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
             </div>
             <div className="space-y-1">
               <p className="font-semibold text-lg">Billing Info</p>
-              <p className="text-xs"><strong>Name:</strong> {fullOrder?.metadata?.BillingAddress?.RecipientName || '—'}</p>
+              <p className="text-xs"><strong>Name:</strong> {getBillingName()}</p>
               <p className="text-xs"><strong>Address:</strong> {fullOrder?.metadata?.BillingAddress?.StreetLine1 || '—'}</p>
               <p className="text-xs">
                 <strong>City:</strong> {fullOrder?.metadata?.BillingAddress?.City || '—'},{' '}
@@ -164,17 +229,22 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item, index) => (
+                  {items.map((item, index) => {
+                    const qty = Number(item.quantity ?? item?.metadata?.Qty ?? item?.metadata?.Quantity ?? 0)
+                    const unit = Number(item.unit_price ?? item?.metadata?.UnitPrice ?? item?.metadata?.Price ?? 0)
+                    const total = Number(item.total_price ?? unit * qty)
+                    return (
                     <tr key={index} className="border-t">
                       <td className="px-3 py-2 border">
-                        <div>{item.sku}</div>
+                        <div>{item.sku || item?.metadata?.SKU || '—'}</div>
                         <div className="text-xs text-muted-foreground">{item?.metadata?.ProductName || '—'}</div>
                       </td>
-                      <td className="px-3 py-2 border">{item.quantity}</td>
-                      <td className="px-3 py-2 border">$ {item.unit_price?.toFixed(2)}</td>
-                      <td className="px-3 py-2 border">$ {item.total_price?.toFixed(2)}</td>
+                      <td className="px-3 py-2 border">{qty}</td>
+                      <td className="px-3 py-2 border">$ {unit.toFixed(2)}</td>
+                      <td className="px-3 py-2 border">$ {total.toFixed(2)}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

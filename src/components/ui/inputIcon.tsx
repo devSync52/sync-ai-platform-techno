@@ -1,11 +1,11 @@
-'use client'
+"use client";
 
-import { Eye, EyeOff } from 'lucide-react'
-import { InputHTMLAttributes, ReactNode, useState } from 'react'
+import { Eye, EyeOff } from "lucide-react";
+import { InputHTMLAttributes, ReactNode, useState } from "react";
 
 interface InputIconProps extends InputHTMLAttributes<HTMLInputElement> {
-  icon: ReactNode
-  toggleVisibility?: boolean
+  icon: ReactNode;
+  toggleVisibility?: boolean;
 }
 
 export default function InputIcon({
@@ -14,19 +14,17 @@ export default function InputIcon({
   type,
   ...rest
 }: InputIconProps) {
-  const [visible, setVisible] = useState(false)
+  const [visible, setVisible] = useState(false);
 
   const inputType = toggleVisibility
     ? visible
-      ? 'text'
-      : 'password'
-    : type || 'text'
+      ? "text"
+      : "password"
+    : type || "text";
 
   return (
     <div className="relative">
-      <span className="absolute left-3 top-2.5 text-gray-400">
-        {icon}
-      </span>
+      <span className="absolute left-3 top-3 text-gray-400">{icon}</span>
       <input
         {...rest}
         type={inputType}
@@ -36,11 +34,11 @@ export default function InputIcon({
         <button
           type="button"
           onClick={() => setVisible((prev) => !prev)}
-          className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+          className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
         >
           {visible ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       )}
     </div>
-  )
+  );
 }

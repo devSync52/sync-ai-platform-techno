@@ -18,9 +18,9 @@ const isInvoicePaid = (invoice: Stripe.Invoice | null | undefined) => {
 const supabase =
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
     ? createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY,
-      )
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    )
     : null;
 
 async function autoPayInvoiceForSubscription(
@@ -48,9 +48,9 @@ async function autoPayInvoiceForSubscription(
       if (!("deleted" in customer)) {
         paymentMethodId = stripeId(
           customer.invoice_settings.default_payment_method as
-            | string
-            | { id: string }
-            | null,
+          | string
+          | { id: string }
+          | null,
         );
       }
     }
@@ -59,8 +59,8 @@ async function autoPayInvoiceForSubscription(
   try {
     return paymentMethodId
       ? await stripe.invoices.pay(latestInvoice.id, {
-          payment_method: paymentMethodId,
-        })
+        payment_method: paymentMethodId,
+      })
       : await stripe.invoices.pay(latestInvoice.id);
   } catch (error) {
     console.warn(
@@ -115,9 +115,9 @@ export async function GET(req: NextRequest) {
     const sessionUserId = session.metadata?.userId;
     const sessionPlanId =
       (subscription &&
-      typeof subscription === "object" &&
-      "metadata" in subscription &&
-      subscription.metadata?.planId
+        typeof subscription === "object" &&
+        "metadata" in subscription &&
+        subscription.metadata?.planId
         ? subscription.metadata.planId
         : null) ?? session.metadata?.planId;
     const sessionCustomerId = stripeId(

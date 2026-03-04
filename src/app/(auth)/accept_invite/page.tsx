@@ -99,6 +99,13 @@ export default function AcceptInvitePage() {
       return
     }
 
+    // Best-effort lineage repair: set created_by_user_id from invitation logs.
+    try {
+      await fetch('/api/staff/link-created-by', { method: 'POST' })
+    } catch (error) {
+      console.warn('[accept_invite] link-created-by warning:', error)
+    }
+
     setSuccess(true)
     setMessage('✅ Account activated! Redirecting to login...')
     setTimeout(() => router.push('/login'), 2500)
