@@ -119,10 +119,66 @@ export async function GET() {
         (appMetadata.wms_user_identifier as string | undefined) ??
         null,
       status: bannedUntil > now ? 'disabled' : 'active',
+      source: 'local',
     }
   })
 
-  return NextResponse.json({ customers: payload })
+  // Merge Sellercloud customers discovered from imported orders so they are visible
+  // in the Customers screen even when they are not platform auth users.
+  const { data: scOrders, error: scError } = await supabaseAdmin
+    .from('sellercloud_orders')
+    .select('sellercloud_customer_id, client_name, metadata, created_at')
+    .eq('account_id', context.accountId)
+    .order('created_at', { ascending: false })
+    .limit(5000)
+
+  if (scError) {
+    console.error('[customers][sellercloud] failed to load sellercloud orders:', scError)
+    return NextResponse.json({ customers: payload })
+  }
+
+  const existingEmails = new Set(
+    payload
+      .map((row: any) => String(row?.email || '').trim().toLowerCase())
+      .filter((email: string) => email.length > 0)
+  )
+
+  const seenKeys = new Set<string>()
+  const sellercloudRows: any[] = []
+
+  for (const row of scOrders || []) {
+    const metadata = (row as any)?.metadata || {}
+    const first = String(metadata?.FirstName || '').trim()
+    const last = String(metadata?.LastName || '').trim()
+    const fullName = `${first} ${last}`.trim()
+    const companyName = String(metadata?.CompanyName || '').trim()
+    const fallbackName = String((row as any)?.client_name || '').trim()
+    const customerName = fullName || fallbackName || companyName || 'Sellercloud Customer'
+
+    const email = String(metadata?.CustomerEmail || '').trim().toLowerCase()
+    const sellerId = String((row as any)?.sellercloud_customer_id || metadata?.CustomerID || '').trim()
+    const dedupeKey = sellerId || email || customerName.toLowerCase()
+    if (!dedupeKey || seenKeys.has(dedupeKey)) continue
+    seenKeys.add(dedupeKey)
+
+    if (email && existingEmails.has(email)) continue
+
+    sellercloudRows.push({
+      id: `sc-${sellerId || email || dedupeKey}`,
+      name: customerName,
+      email: email || '-',
+      role: 'client',
+      created_at: (row as any)?.created_at ?? null,
+      last_login_at: null,
+      has_logged_in: null,
+      auth_type: 'wms_extensiv',
+      wms_user_identifier: sellerId || null,
+      status: 'active',
+      source: 'sellercloud',
+    })
+  }
+
+  return NextResponse.json({ customers: [...payload, ...sellercloudRows] })
 }
 
 export async function POST(req: NextRequest) {
