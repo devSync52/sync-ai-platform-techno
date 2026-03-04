@@ -20,6 +20,7 @@ type CustomerUser = {
   auth_type: AuthType
   wms_user_identifier: string | null
   status: CustomerStatus
+  source?: 'local' | 'sellercloud'
 }
 
 type FormState = {
@@ -119,6 +120,11 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
   }
 
   const openEditModal = (customer: CustomerUser) => {
+    if (customer.source === 'sellercloud') {
+      toast.info('Sellercloud customers are read-only in this list.')
+      return
+    }
+
     setEditingCustomer(customer)
     setForm({
       name: customer.name ?? '',
@@ -234,6 +240,11 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
   }
 
   const deleteCustomer = async (customer: CustomerUser) => {
+    if (customer.source === 'sellercloud') {
+      toast.info('Sellercloud customers are read-only in this list.')
+      return
+    }
+
     const confirmDelete = window.confirm(`Delete customer user ${customer.email}?`)
     if (!confirmDelete) return
 
@@ -310,7 +321,9 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                   <tr key={customer.id} className="border-t border-gray-200 hover:bg-gray-50">
                     <td className="py-3 px-4 text-sm">{customer.name || '-'}</td>
                     <td className="py-3 px-4 text-sm">{customer.email}</td>
-                    <td className="py-3 px-4 text-sm">Customer User</td>
+                    <td className="py-3 px-4 text-sm">
+                      {customer.source === 'sellercloud' ? 'Sellercloud Customer' : 'Customer User'}
+                    </td>
                     <td className="py-3 px-4 text-sm">{getAuthTypeLabel(customer.auth_type)}</td>
                     <td className="py-3 px-4 text-sm">{customer.wms_user_identifier || '-'}</td>
                     <td className="py-3 px-4 text-sm">
@@ -326,23 +339,27 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                     </td>
                     <td className="py-3 px-4 text-sm">{formatDate(customer.last_login_at)}</td>
                     <td className="py-3 px-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEditModal(customer)}
-                          className="inline-flex items-center gap-1 rounded border border-primary px-2 py-1 text-xs text-primary hover:bg-primary/5"
-                        >
-                          <Pencil size={14} />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => deleteCustomer(customer)}
-                          disabled={deletingId === customer.id}
-                          className="inline-flex items-center gap-1 rounded border border-red-500 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          <Trash2 size={14} />
-                          {deletingId === customer.id ? 'Deleting...' : 'Delete'}
-                        </button>
-                      </div>
+                      {customer.source === 'sellercloud' ? (
+                        <div className="text-center text-xs text-gray-400">Read-only</div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => openEditModal(customer)}
+                            className="inline-flex items-center gap-1 rounded border border-primary px-2 py-1 text-xs text-primary hover:bg-primary/5"
+                          >
+                            <Pencil size={14} />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteCustomer(customer)}
+                            disabled={deletingId === customer.id}
+                            className="inline-flex items-center gap-1 rounded border border-red-500 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <Trash2 size={14} />
+                            {deletingId === customer.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
