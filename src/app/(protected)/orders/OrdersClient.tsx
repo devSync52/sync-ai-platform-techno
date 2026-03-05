@@ -39,9 +39,9 @@ export default function OrdersClient({ userId }: { userId: string }) {
 
   const getMarketplaceLogo = (name: string | null | undefined) => {
     if (!name) return null
-  
+
     const normalized = name.toLowerCase()
-  
+
     const logos: Record<string, string> = {
       fba: '/logos/fba.png',
       amazon: '/logos/amazon.png',
@@ -50,7 +50,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
       wayfair: '/logos/wayfair.png',
       website: '/logos/marketplace.png',
     }
-  
+
     return logos[normalized] || null
   }
 
@@ -74,15 +74,11 @@ export default function OrdersClient({ userId }: { userId: string }) {
     async function fetchData() {
       const start = (currentPage - 1) * itemsPerPage
       const end = start + itemsPerPage - 1
-  
-      const { data: userRecord } = await supabase
-        .from('users')
-        .select('account_id, role')
-        .eq('id', userId)
-        .maybeSingle()
-  
+
+      const { data: userRecord } = await supabase.from('users').select('account_id, role').eq('id', userId).maybeSingle()
+
       if (!userRecord) return
-  
+
       const userAccountId = userRecord.account_id
       const userRole = userRecord.role
       if (!userAccountId) return
@@ -108,7 +104,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
       const isExtensiv = (accountRecord?.source || '').toLowerCase() === 'extensiv'
       const ordersTable = isExtensiv ? 'extensiv_orders' : 'ai_orders_unified_6'
       const orderDateField = isExtensiv ? 'creation_date' : 'order_date'
-  
+
       const statusField = isExtensiv ? 'status' : 'order_status'
       const statusFilterField =
         isCustomerUser
@@ -210,7 +206,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
         )
         setAllStatusOptions(allStatuses)
       }
-  
+
       let query = supabase
         .from(ordersTable)
         .select(
@@ -219,70 +215,70 @@ export default function OrdersClient({ userId }: { userId: string }) {
             : 'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id',
           { count: 'exact' }
         )
-  
-// ✅ Filtrar corretamente dependendo da role
-if (isCustomerUser) {
-  if (!isExtensiv && customerScopedOrderIds?.length) {
-    query = query.in('order_id', customerScopedOrderIds)
-  } else {
-    query = query.eq(isExtensiv ? 'account_id_channel' : 'channel_account_id', effectiveAccountId)
-  }
-} else {
-  query = query.eq('account_id', effectiveAccountId)
-}
 
-if (sourceFilter !== 'all') {
-  query = query.eq('source', sourceFilter)
-}
+      // ✅ Filtrar corretamente dependendo da role
+      if (isCustomerUser) {
+        if (!isExtensiv && customerScopedOrderIds?.length) {
+          query = query.in('order_id', customerScopedOrderIds)
+        } else {
+          query = query.eq(isExtensiv ? 'account_id_channel' : 'channel_account_id', effectiveAccountId)
+        }
+      } else {
+        query = query.eq('account_id', effectiveAccountId)
+      }
 
-if (statusFilter) {
-  if (isExtensiv) {
-    const numericStatus = Number(statusFilter)
-    query = query.eq('status', Number.isNaN(numericStatus) ? statusFilter : numericStatus)
-  } else {
-    query = query.eq('order_status', statusFilter)
-  }
-}
+      if (sourceFilter !== 'all') {
+        query = query.eq('source', sourceFilter)
+      }
 
-if (startDate) {
-  query = query.gte(orderDateField, startDate)
-}
+      if (statusFilter) {
+        if (isExtensiv) {
+          const numericStatus = Number(statusFilter)
+          query = query.eq('status', Number.isNaN(numericStatus) ? statusFilter : numericStatus)
+        } else {
+          query = query.eq('order_status', statusFilter)
+        }
+      }
 
-if (endDate) {
-  query = query.lte(orderDateField, endDate)
-}
+      if (startDate) {
+        query = query.gte(orderDateField, startDate)
+      }
 
-if (searchTerm) {
-  query = query.or(
-    isExtensiv
-      ? `order_number.ilike.%${searchTerm}%,external_id.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%,tracking_number.ilike.%${searchTerm}%`
-      : `order_id.ilike.%${searchTerm}%,marketplace_name.ilike.%${searchTerm}%,client_name.ilike.%${searchTerm}%,order_source_order_id.ilike.%${searchTerm}%`
-  )
-}
+      if (endDate) {
+        query = query.lte(orderDateField, endDate)
+      }
 
-// ✅ Ordenação por data decrescente
-query = query.order(orderDateField, { ascending: false })
+      if (searchTerm) {
+        query = query.or(
+          isExtensiv
+            ? `order_number.ilike.%${searchTerm}%,external_id.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%,tracking_number.ilike.%${searchTerm}%`
+            : `order_id.ilike.%${searchTerm}%,marketplace_name.ilike.%${searchTerm}%,client_name.ilike.%${searchTerm}%,order_source_order_id.ilike.%${searchTerm}%`
+        )
+      }
 
-const { data, count, error } = await query.range(start, end)
-  
+      // ✅ Ordenação por data decrescente
+      query = query.order(orderDateField, { ascending: false })
+
+      const { data, count, error } = await query.range(start, end)
+
       if (error) {
         console.error('❌ Error fetching orders:', error.message)
         return
       }
-  
+
       let normalizedOrders = isExtensiv
         ? (data || []).map((row: any) => ({
-            order_uuid: row.external_id ?? String(row.id),
-            order_id: row.order_number ?? row.external_id ?? String(row.id),
-            order_source_order_id: row.external_id ?? row.order_number ?? '—',
-            client_name: row.customer_name ?? '—',
-            grand_total: null,
-            order_date: row.creation_date ?? row.process_date ?? null,
-            order_status: row.status_closed ? 'Closed' : row.status !== null && row.status !== undefined ? String(row.status) : '—',
-            source: (row.source || 'extensiv') as string,
-            marketplace_name: row.facility_name ?? 'extensiv',
-            channel_account_id: row.account_id_channel ?? null,
-          }))
+          order_uuid: row.external_id ?? String(row.id),
+          order_id: row.order_number ?? row.external_id ?? String(row.id),
+          order_source_order_id: row.external_id ?? row.order_number ?? '—',
+          client_name: row.customer_name ?? '—',
+          grand_total: null,
+          order_date: row.creation_date ?? row.process_date ?? null,
+          order_status: row.status_closed ? 'Closed' : row.status !== null && row.status !== undefined ? String(row.status) : '—',
+          source: (row.source || 'extensiv') as string,
+          marketplace_name: row.facility_name ?? 'extensiv',
+          channel_account_id: row.account_id_channel ?? null,
+        }))
         : data || []
 
       if (!isExtensiv) {
@@ -323,7 +319,7 @@ const { data, count, error } = await query.range(start, end)
       setTotalCount(count || 0)
       setUserRole(userRecord.role)
     }
-  
+
     fetchData()
   }, [
     userId,
@@ -395,13 +391,13 @@ const { data, count, error } = await query.range(start, end)
         filters={[
           ...(userRole !== 'client'
             ? [
-                {
-                  label: 'Source',
-                  value: sourceFilter,
-                  options: ['All sources', 'sellercloud', 'extensiv'],
-                  onChange: (v: string) => setSourceFilter(v === 'All sources' ? 'all' : v),
-                },
-              ]
+              {
+                label: 'Source',
+                value: sourceFilter,
+                options: ['All sources', 'sellercloud', 'extensiv'],
+                onChange: (v: string) => setSourceFilter(v === 'All sources' ? 'all' : v),
+              },
+            ]
             : []),
           {
             label: 'Status',
@@ -417,11 +413,10 @@ const { data, count, error } = await query.range(start, end)
         {[10, 25, 50].map((count) => (
           <button
             key={count}
-            className={`px-1 py-1 rounded ${
-              itemsPerPage === count
-                ? 'bg-primary/10 text-primary font-bold'
-                : 'text-gray-600'
-            }`}
+            className={`px-1 py-1 rounded ${itemsPerPage === count
+              ? 'bg-primary/10 text-primary font-bold'
+              : 'text-gray-600'
+              }`}
             onClick={() => {
               setItemsPerPage(count)
               setCurrentPage(1)
@@ -443,8 +438,8 @@ const { data, count, error } = await query.range(start, end)
               <th className="py-3 px-4 text-left font-medium">Marketplace</th>
               <th className="py-3 px-4 text-left font-medium">Order Marketplace ID</th>
               {userRole !== 'client' && (
-  <th className="py-3 px-4 text-left font-medium">Source</th>
-)}
+                <th className="py-3 px-4 text-left font-medium">Source</th>
+              )}
               <th className="py-3 px-4 text-left font-medium">Order Date</th>
               <th className="py-3 px-4 text-left font-medium">Status</th>
               <th className="py-3 px-4 text-left font-medium">Total</th>
@@ -461,43 +456,41 @@ const { data, count, error } = await query.range(start, end)
                   </div>
                 </td>
                 <td className="py-3 px-4">
-  <div className="flex items-center gap-2">
-    {getMarketplaceLogo(order.marketplace_name) && (
-      <img
-        src={getMarketplaceLogo(order.marketplace_name)!}
-        alt={order.marketplace_name}
-        className="w-8 h-8 object-contain rounded"
-      />
-    )}
-    
-  </div>
-</td>
-<td className="py-3 px-4 text-gray-700">
-  {order.order_source_order_id || '—'}
-</td>{userRole !== 'client' && (
-                <td className="py-3 px-4">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      order.source === 'sellercloud'
+                  <div className="flex items-center gap-2">
+                    {getMarketplaceLogo(order.marketplace_name) && (
+                      <img
+                        src={getMarketplaceLogo(order.marketplace_name)!}
+                        alt={order.marketplace_name}
+                        className="w-8 h-8 object-contain rounded"
+                      />
+                    )}
+
+                  </div>
+                </td>
+                <td className="py-3 px-4 text-gray-700">
+                  {order.order_source_order_id || '—'}
+                </td>{userRole !== 'client' && (
+                  <td className="py-3 px-4">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${order.source === 'sellercloud'
                         ? 'bg-blue-600 text-white'
                         : 'bg-purple-500 text-white'
-                    }`}
-                  >
-                    {order.source}
-                  </span>
-                </td>)}
+                        }`}
+                    >
+                      {order.source}
+                    </span>
+                  </td>)}
                 <td className="py-3 px-4 text-gray-500">
                   {order.order_date?.split('T')[0]}
                 </td>
                 <td className="py-3 px-4">
                   <span
-                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      order.order_status === 'Shipped'
-                        ? 'bg-green-100 text-green-700'
-                        : order.order_status === 'Processing'
+                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${order.order_status === 'Shipped'
+                      ? 'bg-green-100 text-green-700'
+                      : order.order_status === 'Processing'
                         ? 'bg-[#3f2d90]/20 text-[#3f2d90]'
                         : 'bg-gray-100 text-gray-500'
-                    }`}
+                      }`}
                   >
                     {order.order_status}
                   </span>
