@@ -11,8 +11,6 @@ interface Props {
   companyName: string
   onClose: () => void
   onImported?: () => void
-  fromDate?: string
-  toDate?: string
 }
 
 export default function ImportOrdersModal({
@@ -20,8 +18,6 @@ export default function ImportOrdersModal({
   companyName,
   onClose,
   onImported,
-  fromDate,
-  toDate,
 }: Props) {
   const [source, setSource] = useState<'sellercloud' | 'extensiv' | 'project44'>('sellercloud')
   const [step, setStep] = useState<'select' | 'loading'>('select')
@@ -36,7 +32,7 @@ export default function ImportOrdersModal({
         const res = await fetch('/api/sync-orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ account_id: accountId, source, fromDate, toDate })
+          body: JSON.stringify({ account_id: accountId, source })
         })
 
         let result: any = null
