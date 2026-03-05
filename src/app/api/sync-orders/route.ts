@@ -51,8 +51,15 @@ function parseCredentials(raw: unknown): SellercloudCredentials | null {
 
 function safeJsonParse(text: string): any | null {
   try {
-    if (!text) return null;
-    const parsed = JSON.parse(text);
+    if (!text || typeof text !== "string") return null;
+
+    // Trim and check if it looks like JSON
+    const trimmed = text.trim();
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+      return null;
+    }
+
+    const parsed = JSON.parse(trimmed);
     if (typeof parsed === "string") {
       try {
         return JSON.parse(parsed);
@@ -61,7 +68,13 @@ function safeJsonParse(text: string): any | null {
       }
     }
     return parsed;
-  } catch {
+  } catch (error) {
+    console.warn(
+      "JSON parse warning:",
+      error instanceof Error ? error.message : String(error),
+      "for text:",
+      text?.substring?.(0, 100),
+    );
     return null;
   }
 }
@@ -303,19 +316,21 @@ function mapOrderRow(
   ).trim();
   const fullName = `${firstName} ${lastName}`.trim();
   const clientName =
-    (pick(
-      row,
-      [
-        "ClientName",
-        "CustomerName",
-        "BuyerName",
-        "ShipToName",
-        "CompanyName",
-        "customer_name",
-        "client_name",
-      ],
-      "",
-    ) as string)?.trim() ||
+    (
+      pick(
+        row,
+        [
+          "ClientName",
+          "CustomerName",
+          "BuyerName",
+          "ShipToName",
+          "CompanyName",
+          "customer_name",
+          "client_name",
+        ],
+        "",
+      ) as string
+    )?.trim() ||
     fullName ||
     String(pick(row, ["CustomerEmail", "Email", "email"], "")).trim() ||
     null;
@@ -370,12 +385,11 @@ function mapOrderRow(
 function mapOrderItemRows(row: any, orderUuid: string) {
   const sourceItems = Array.isArray(row?.Items) ? row.Items : [];
   return sourceItems.map((item: any, idx: number) => {
-    const quantity = toNumber(
-      pick(item, ["Qty", "Quantity", "quantity", "qty"], 0),
-    ) ?? 0;
-    const unitPrice = toNumber(
-      pick(item, ["UnitPrice", "Price", "price", "unit_price"], 0),
-    ) ?? 0;
+    const quantity =
+      toNumber(pick(item, ["Qty", "Quantity", "quantity", "qty"], 0)) ?? 0;
+    const unitPrice =
+      toNumber(pick(item, ["UnitPrice", "Price", "price", "unit_price"], 0)) ??
+      0;
     const totalPrice =
       toNumber(pick(item, ["TotalPrice", "LineTotal", "total_price"], null)) ??
       unitPrice * quantity;
@@ -441,6 +455,7 @@ async function tryDirectSellercloudFallback(params: {
       message: "No orders found in Sellercloud",
     };
   }
+  console.log("fetched", fetched);
 
   const rows = fetched.map((row, idx) =>
     mapOrderRow(row, idx, effectiveAccountId, requestedAccountId),
@@ -516,6 +531,7 @@ export async function POST(req: Request) {
         },
       );
     }
+    console.log("519");
 
     const syncUrls: Record<SyncSource, string> = {
       sellercloud:
@@ -587,7 +603,8 @@ export async function POST(req: Request) {
 
     const edgeRaw = await edgeResponse.text();
     const edgeResult = safeJsonParse(edgeRaw);
-    const edgeSucceeded = edgeResponse.ok && edgeResult?.success !== false;
+    const edgeSucceeded = false; //edgeResponse.ok && edgeResult?.success !== false;
+    console.log("593", edgeSucceeded);
 
     if (edgeSucceeded) {
       let customerProvision: Awaited<
@@ -612,10 +629,10 @@ export async function POST(req: Request) {
                 }),
                 customer_provision: customerProvision,
               }
-            : edgeResult ?? {
+            : (edgeResult ?? {
                 success: true,
                 message: "Sync completed with empty response body",
-              },
+              }),
         ),
         {
           status: edgeResponse.status,
@@ -645,7 +662,7 @@ export async function POST(req: Request) {
             customer_provision: customerProvision,
             fallback_warning:
               edgeResult?.error ||
-              edgeRaw ||
+              (edgeRaw ? edgeRaw.substring(0, 500) : null) ||
               `Sync function failed (${edgeResponse.status})`,
           }),
           {
@@ -654,13 +671,17 @@ export async function POST(req: Request) {
           },
         );
       } catch (fallbackError: any) {
+        const errorMessage =
+          edgeResult?.error ||
+          edgeResult?.message ||
+          fallbackError?.message ||
+          `Sync function failed (${edgeResponse.status})`;
+
         return new Response(
           JSON.stringify({
             success: false,
-            error:
-              edgeResult?.error ||
-              `Sync function failed (${edgeResponse.status})`,
-            details: edgeRaw || null,
+            error: errorMessage,
+            details: edgeRaw ? edgeRaw.substring(0, 500) : null,
             fallback_error:
               fallbackError?.message || "Sellercloud direct fallback failed",
           }),
@@ -676,8 +697,10 @@ export async function POST(req: Request) {
       JSON.stringify({
         success: false,
         error:
-          edgeResult?.error || `Sync function failed (${edgeResponse.status})`,
-        details: edgeRaw || null,
+          edgeResult?.error ||
+          edgeResult?.message ||
+          `Sync function failed (${edgeResponse.status})`,
+        details: edgeRaw ? edgeRaw.substring(0, 500) : null,
       }),
       {
         status: edgeResponse.status >= 400 ? edgeResponse.status : 500,
@@ -685,10 +708,12 @@ export async function POST(req: Request) {
       },
     );
   } catch (error: any) {
+    console.error("Sync error:", error);
     return new Response(
       JSON.stringify({
         success: false,
         error: error?.message || "Internal server error",
+        errorType: error?.constructor?.name || "Unknown",
       }),
       {
         status: 500,
