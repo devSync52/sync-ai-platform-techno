@@ -1,3 +1,6 @@
+import { createClient } from "@supabase/supabase-js";
+import { createSellercloudCustomerLogins } from "@/lib/sellercloudCustomerProvision";
+
 export async function POST(request: Request) {
   try {
     const { account_id, source } = await request.json()
@@ -30,6 +33,50 @@ export async function POST(request: Request) {
     })
 
     const data = await response.json()
+    const isSuccess = response.ok && data?.success !== false
+
+    if (source === 'sellercloud' && isSuccess) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+      if (!supabaseUrl || !serviceRole) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Missing Supabase server configuration',
+          }),
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      const admin = createClient(supabaseUrl, serviceRole, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+
+      let effectiveAccountId = account_id
+      const { data: accountRow } = await admin
+        .from('accounts')
+        .select('parent_account_id')
+        .eq('id', account_id)
+        .maybeSingle()
+
+      if (accountRow?.parent_account_id) {
+        effectiveAccountId = accountRow.parent_account_id
+      }
+
+      const customerProvision = await createSellercloudCustomerLogins({
+        admin,
+        accountId: effectiveAccountId,
+      })
+
+      return new Response(JSON.stringify({ ...data, customer_provision: customerProvision }), {
+        status: response.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
     return new Response(JSON.stringify(data), {
       status: response.status,

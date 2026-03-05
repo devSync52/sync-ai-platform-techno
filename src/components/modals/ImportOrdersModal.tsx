@@ -32,24 +32,39 @@ export default function ImportOrdersModal({
 
     setStep('loading')
     startTransition(async () => {
-      const res = await fetch('/api/sync-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: accountId, source, fromDate, toDate })
-      })
+      try {
+        const res = await fetch('/api/sync-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_id: accountId, source, fromDate, toDate })
+        })
 
-      const result = await res.json()
-      if (result.success) {
-        toast.success(`✅ Imported ${result.imported || 0} orders from ${source}`)
-        onImported?.()
-      } else {
-        toast.error(result.error || 'Failed to import orders')
+        let result: any = null
+        try {
+          result = await res.json()
+        } catch {
+          result = null
+        }
+
+        if (res.ok && result?.success) {
+          toast.success(`✅ Imported ${result.imported || 0} orders from ${source}`)
+
+          if (result?.fallback_warning || result?.upstream_error) {
+            toast.warning('Orders imported using fallback mode. Please review integration logs.')
+          }
+
+          onImported?.()
+        } else {
+          toast.error(result?.error || 'Failed to import orders')
+        }
+      } catch {
+        toast.error('Failed to import orders')
+      } finally {
+        setTimeout(() => {
+          setStep('select')
+          onClose()
+        }, 1000)
       }
-
-      setTimeout(() => {
-        setStep('select')
-        onClose()
-      }, 1000)
     })
   }
 

@@ -194,10 +194,10 @@ export default function IntegrationModal({
           {type === 'sellercloud' && (
             <button
               onClick={handleTest}
-              disabled={testing || loading}
+              disabled={testing || loading || isTestPassed}
               className="w-full mt-4 bg-[#3f2d90] text-white py-2 rounded-md text-sm hover:bg-[#3f2d90]/90 transition disabled:opacity-60"
             >
-              {testing ? 'Testing...' : 'Test Connection'}
+              {testing ? 'Testing...' : isTestPassed ? 'Test Connection Passed' : 'Test Connection'}
             </button>
           )}
 

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import AES from "crypto-js/aes";
 import Utf8 from "crypto-js/enc-utf8";
 import { v5 as uuidv5 } from "uuid";
+import { createSellercloudCustomerLogins } from "@/lib/sellercloudCustomerProvision";
 
 const ENCRYPTION_KEY =
   process.env.NEXT_PUBLIC_CREDENTIAL_SECRET || "SYNC_SECRET";
@@ -589,12 +590,31 @@ export async function POST(req: Request) {
     const edgeSucceeded = edgeResponse.ok && edgeResult?.success !== false;
 
     if (edgeSucceeded) {
+      let customerProvision: Awaited<
+        ReturnType<typeof createSellercloudCustomerLogins>
+      > | null = null;
+
+      if (source === "sellercloud") {
+        customerProvision = await createSellercloudCustomerLogins({
+          admin,
+          accountId: effectiveAccountId,
+        });
+      }
+
       return new Response(
         JSON.stringify(
-          edgeResult ?? {
-            success: true,
-            message: "Sync completed with empty response body",
-          },
+          customerProvision
+            ? {
+                ...(edgeResult ?? {
+                  success: true,
+                  message: "Sync completed with empty response body",
+                }),
+                customer_provision: customerProvision,
+              }
+            : edgeResult ?? {
+                success: true,
+                message: "Sync completed with empty response body",
+              },
         ),
         {
           status: edgeResponse.status,
@@ -612,11 +632,16 @@ export async function POST(req: Request) {
           fromDate,
           toDate,
         });
+        const customerProvision = await createSellercloudCustomerLogins({
+          admin,
+          accountId: effectiveAccountId,
+        });
 
         return new Response(
           JSON.stringify({
             ...fallback,
-            upstream_error:
+            customer_provision: customerProvision,
+            fallback_warning:
               edgeResult?.error ||
               edgeRaw ||
               `Sync function failed (${edgeResponse.status})`,
