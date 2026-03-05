@@ -20,11 +20,7 @@ export default function ChatPage() {
     const fetchUserRole = async () => {
       if (!user) return
 
-      const { data, error } = await supabase
-        .from('users')
-        .select('role, account_id')
-        .eq('id', user.id)
-        .single()
+      const { data, error } = await supabase.from('users').select('role, account_id').eq('id', user.id).single()
 
       if (error) {
         console.error('[ChatPage] ❌ Failed to fetch user role:', error.message)
