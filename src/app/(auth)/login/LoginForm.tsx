@@ -45,13 +45,7 @@ export default function LoginForm() {
       return;
     }
 
-    await supabase
-      .from("users")
-      .update({
-        has_logged_in: true,
-        last_login_at: new Date().toISOString(),
-      })
-      .eq("id", userId);
+    await supabase.from("users").update({ has_logged_in: true, last_login_at: new Date().toISOString(), }).eq("id", userId);
 
     const { data: userRecord, error: fetchError } = await supabase
       .from("users")
