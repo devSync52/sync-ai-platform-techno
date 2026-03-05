@@ -47,11 +47,7 @@ export default function LoginForm() {
 
     await supabase.from("users").update({ has_logged_in: true, last_login_at: new Date().toISOString(), }).eq("id", userId);
 
-    const { data: userRecord, error: fetchError } = await supabase
-      .from("users")
-      .select("account_id,plan_id,role")
-      .eq("id", userId)
-      .maybeSingle();
+    const { data: userRecord, error: fetchError } = await supabase.from("users").select("account_id,plan_id,role").eq("id", userId).maybeSingle();
 
     if (fetchError) {
       setError("Error fetching user info.");
