@@ -70,6 +70,7 @@ export async function POST(request: Request) {
       const customerProvision = await createSellercloudCustomerLogins({
         admin,
         accountId: effectiveAccountId,
+        inviteAccountId: account_id,
       })
 
       return new Response(JSON.stringify({ ...data, customer_provision: customerProvision }), {

@@ -598,6 +598,7 @@ export async function POST(req: Request) {
         customerProvision = await createSellercloudCustomerLogins({
           admin,
           accountId: effectiveAccountId,
+          inviteAccountId: account_id,
         });
       }
 
@@ -635,6 +636,7 @@ export async function POST(req: Request) {
         const customerProvision = await createSellercloudCustomerLogins({
           admin,
           accountId: effectiveAccountId,
+          inviteAccountId: account_id,
         });
 
         return new Response(

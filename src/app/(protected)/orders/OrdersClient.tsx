@@ -86,6 +86,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
       const userAccountId = userRecord.account_id
       const userRole = userRecord.role
       if (!userAccountId) return
+      const isCustomerUser = userRole === 'client' || userRole === 'staff-client'
 
       const { data: accountRecord, error: accountError } = await supabase
         .from('accounts')
@@ -98,7 +99,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
       }
 
       const effectiveAccountId =
-        userRole === 'client' || userRole === 'staff-client'
+        isCustomerUser
           ? userAccountId
           : accountRecord?.parent_account_id || userAccountId
 
@@ -110,14 +111,91 @@ export default function OrdersClient({ userId }: { userId: string }) {
   
       const statusField = isExtensiv ? 'status' : 'order_status'
       const statusFilterField =
-        userRole === 'client' || userRole === 'staff-client'
+        isCustomerUser
           ? (isExtensiv ? 'account_id_channel' : 'channel_account_id')
           : 'account_id'
 
-      const { data: statusRows, error: statusError } = await supabase
-        .from(ordersTable)
-        .select(statusField)
-        .eq(statusFilterField, effectiveAccountId)
+      let customerScopedOrderIds: string[] | null = null
+      if (isCustomerUser && !isExtensiv) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        const wmsUserIdentifier = String(
+          (session?.user?.user_metadata as any)?.wms_user_identifier || ''
+        ).trim()
+        const customerEmail = String(session?.user?.email || '')
+          .trim()
+          .toLowerCase()
+        const customerName = String(userRecord?.name || '')
+          .trim()
+          .toLowerCase()
+
+        let customerScopeQuery = supabase
+          .from('sellercloud_orders')
+          .select('order_id, sellercloud_customer_id, client_name, metadata, order_date')
+          .eq('account_id', effectiveAccountId)
+
+        if (startDate) {
+          customerScopeQuery = customerScopeQuery.gte('order_date', startDate)
+        }
+        if (endDate) {
+          customerScopeQuery = customerScopeQuery.lte('order_date', endDate)
+        }
+
+        const { data: customerScopeRows, error: customerScopeError } =
+          await customerScopeQuery.limit(5000)
+
+        if (customerScopeError) {
+          console.error('❌ Error fetching customer-scoped sellercloud orders:', customerScopeError.message)
+          setOrders([])
+          setTotalCount(0)
+          setAllStatusOptions([])
+          setUserRole(userRecord.role)
+          return
+        }
+
+        const scopedIds = new Set<string>()
+        for (const row of customerScopeRows || []) {
+          const sellerId = String(
+            (row as any)?.sellercloud_customer_id || (row as any)?.metadata?.CustomerID || ''
+          ).trim()
+          const rowEmail = String((row as any)?.metadata?.CustomerEmail || '')
+            .trim()
+            .toLowerCase()
+          const rowName = deriveCustomerName(row).toLowerCase()
+
+          const isMatch =
+            (wmsUserIdentifier && sellerId === wmsUserIdentifier) ||
+            (customerEmail && rowEmail === customerEmail) ||
+            (customerName && rowName === customerName)
+
+          if (isMatch && row?.order_id) {
+            scopedIds.add(String(row.order_id))
+          }
+        }
+
+        customerScopedOrderIds = Array.from(scopedIds)
+        if (!customerScopedOrderIds.length) {
+          setOrders([])
+          setTotalCount(0)
+          setAllStatusOptions([])
+          setUserRole(userRecord.role)
+          return
+        }
+      }
+
+      let statusQuery = supabase.from(ordersTable).select(statusField)
+      if (isCustomerUser) {
+        if (!isExtensiv && customerScopedOrderIds?.length) {
+          statusQuery = statusQuery.in('order_id', customerScopedOrderIds)
+        } else {
+          statusQuery = statusQuery.eq(statusFilterField, effectiveAccountId)
+        }
+      } else {
+        statusQuery = statusQuery.eq(statusFilterField, effectiveAccountId)
+      }
+      const { data: statusRows, error: statusError } = await statusQuery
 
       if (statusError) {
         console.error('❌ Error fetching status options:', statusError.message)
@@ -143,8 +221,12 @@ export default function OrdersClient({ userId }: { userId: string }) {
         )
   
 // ✅ Filtrar corretamente dependendo da role
-if (userRole === 'client' || userRole === 'staff-client') {
-  query = query.eq(isExtensiv ? 'account_id_channel' : 'channel_account_id', effectiveAccountId)
+if (isCustomerUser) {
+  if (!isExtensiv && customerScopedOrderIds?.length) {
+    query = query.in('order_id', customerScopedOrderIds)
+  } else {
+    query = query.eq(isExtensiv ? 'account_id_channel' : 'channel_account_id', effectiveAccountId)
+  }
 } else {
   query = query.eq('account_id', effectiveAccountId)
 }
