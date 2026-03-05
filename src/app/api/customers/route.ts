@@ -120,6 +120,10 @@ export async function GET() {
         null,
       status: bannedUntil > now ? 'disabled' : 'active',
       source: 'local',
+      origin:
+        (userMetadata.customer_source as string | undefined) ??
+        (appMetadata.customer_source as string | undefined) ??
+        'manual',
     }
   })
 
@@ -175,6 +179,7 @@ export async function GET() {
       wms_user_identifier: sellerId || null,
       status: 'active',
       source: 'sellercloud',
+      origin: 'sellercloud',
     })
   }
 
@@ -246,6 +251,7 @@ export async function POST(req: NextRequest) {
       account_id: context.accountId,
       customer_auth_type: authType,
       wms_user_identifier: authType === 'wms_extensiv' ? wmsUserIdentifier : null,
+      customer_source: 'manual',
     },
     app_metadata: {
       role,
@@ -299,6 +305,8 @@ export async function POST(req: NextRequest) {
       auth_type: authType,
       wms_user_identifier: authType === 'wms_extensiv' ? wmsUserIdentifier : null,
       status: 'active',
+      source: 'local',
+      origin: 'manual',
     },
   })
 }

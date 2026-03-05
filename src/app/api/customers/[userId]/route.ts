@@ -155,6 +155,12 @@ export async function PATCH(
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
+  const authUserResult = await supabaseAdmin.auth.admin.getUserById(userId)
+  const existingSource =
+    (authUserResult.data.user?.user_metadata as any)?.customer_source ??
+    (authUserResult.data.user?.app_metadata as any)?.customer_source ??
+    'manual'
+
   const authUpdatePayload: {
     email?: string
     password?: string
@@ -169,6 +175,7 @@ export async function PATCH(
       account_id: context.accountId,
       customer_auth_type: authType,
       wms_user_identifier: authType === 'wms_extensiv' ? wmsUserIdentifier : null,
+      customer_source: existingSource,
     },
   }
 
@@ -198,6 +205,8 @@ export async function PATCH(
       auth_type: authType,
       wms_user_identifier: authType === 'wms_extensiv' ? wmsUserIdentifier : null,
       status: body.status ?? 'active',
+      source: 'local',
+      origin: existingSource,
     },
   })
 }

@@ -21,6 +21,7 @@ type CustomerUser = {
   wms_user_identifier: string | null
   status: CustomerStatus
   source?: 'local' | 'sellercloud'
+  origin?: string
 }
 
 type FormState = {
@@ -57,6 +58,12 @@ function formatDate(value: string | null) {
 function getAuthTypeLabel(authType: AuthType) {
   if (authType === 'local') return 'Local'
   return 'Extensive WMS-based'
+}
+
+function getOriginLabel(origin?: string) {
+  if (origin === 'sellercloud') return 'Sellercloud'
+  if (origin === 'manual') return 'Manual'
+  return origin || '-'
 }
 
 function isValidEmail(value: string) {
@@ -308,6 +315,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                 <th className="p-3 text-left text-sm font-semibold">Name</th>
                 <th className="p-3 text-left text-sm font-semibold">Email</th>
                 <th className="p-3 text-left text-sm font-semibold">Role/Type</th>
+                <th className="p-3 text-left text-sm font-semibold">Source</th>
                 <th className="p-3 text-left text-sm font-semibold">Auth Type</th>
                 <th className="p-3 text-left text-sm font-semibold">WMS User Identifier</th>
                 <th className="p-3 text-left text-sm font-semibold">Status</th>
@@ -324,6 +332,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                     <td className="py-3 px-4 text-sm">
                       {customer.source === 'sellercloud' ? 'Sellercloud Customer' : 'Customer User'}
                     </td>
+                    <td className="py-3 px-4 text-sm">{getOriginLabel(customer.origin)}</td>
                     <td className="py-3 px-4 text-sm">{getAuthTypeLabel(customer.auth_type)}</td>
                     <td className="py-3 px-4 text-sm">{customer.wms_user_identifier || '-'}</td>
                     <td className="py-3 px-4 text-sm">
@@ -365,7 +374,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="text-center py-10 text-gray-500">
+                  <td colSpan={9} className="text-center py-10 text-gray-500">
                     No customer users found.
                   </td>
                 </tr>

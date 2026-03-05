@@ -31,6 +31,19 @@ export default function ImportCustomersModal({ accountId, companyName, onClose }
       const result = await res.json()
       if (result.success) {
         toast.success(`✅ Imported ${result.upserted || 0} customers from ${source}`)
+        const provision = result?.customer_provision
+        if (provision) {
+          if (provision.created > 0) {
+            toast.success(
+              `Customer logins: ${provision.created} created, ${provision.emailed || 0} credential emails sent`
+            )
+          } else {
+            toast.warning('No customer login users were created from this sync.')
+          }
+          if (Array.isArray(provision.errors) && provision.errors.length > 0) {
+            toast.error(`Credential provisioning issues: ${provision.errors[0]}`)
+          }
+        }
       } else {
         toast.error(result.error || 'Failed to import customers')
       }

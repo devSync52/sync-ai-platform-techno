@@ -107,6 +107,20 @@ export async function createSellercloudCustomerLogins(params: {
       .filter(Boolean),
   );
 
+  const authUsersResult = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const authByEmail = new Map<string, string>();
+  if (authUsersResult.error) {
+    summary.errors.push(
+      `Failed loading auth users for duplicate resolution: ${authUsersResult.error.message}`,
+    );
+  } else {
+    for (const authUser of authUsersResult.data.users || []) {
+      const email = String(authUser?.email || "").trim().toLowerCase();
+      if (!email) continue;
+      authByEmail.set(email, authUser.id);
+    }
+  }
+
   for (const candidate of candidates) {
     if (!candidate.email) {
       summary.skipped_invalid += 1;
@@ -119,43 +133,80 @@ export async function createSellercloudCustomerLogins(params: {
     }
 
     const temporaryPassword = generateSecurePassword(12);
-    const { data: authData, error: authError } =
-      await admin.auth.admin.createUser({
-        email: candidate.email,
-        password: temporaryPassword,
-        email_confirm: true,
-        user_metadata: {
-          name: candidate.name,
-          account_id: accountId,
-          customer_auth_type: "wms_extensiv",
-          wms_user_identifier: candidate.wmsUserIdentifier,
-        },
-        app_metadata: {
-          role: "client",
-        },
-      });
+    let userId: string | null = authByEmail.get(candidate.email) || null;
 
-    if (authError || !authData?.user?.id) {
-      summary.errors.push(
-        `Failed creating auth user for ${candidate.email}: ${authError?.message || "Unknown error"}`,
+    if (userId) {
+      const { error: existingAuthUpdateError } = await admin.auth.admin.updateUserById(
+        userId,
+        {
+          password: temporaryPassword,
+          email_confirm: true,
+          user_metadata: {
+            name: candidate.name,
+            account_id: accountId,
+            customer_auth_type: "wms_extensiv",
+            wms_user_identifier: candidate.wmsUserIdentifier,
+            customer_source: "sellercloud",
+          },
+          app_metadata: {
+            role: "client",
+          },
+        },
       );
+      if (existingAuthUpdateError) {
+        summary.errors.push(
+          `Failed updating existing auth user for ${candidate.email}: ${existingAuthUpdateError.message}`,
+        );
+        continue;
+      }
+    } else {
+      const { data: authData, error: authError } =
+        await admin.auth.admin.createUser({
+          email: candidate.email,
+          password: temporaryPassword,
+          email_confirm: true,
+          user_metadata: {
+            name: candidate.name,
+            account_id: accountId,
+            customer_auth_type: "wms_extensiv",
+            wms_user_identifier: candidate.wmsUserIdentifier,
+            customer_source: "sellercloud",
+          },
+          app_metadata: {
+            role: "client",
+          },
+        });
+
+      if (authError || !authData?.user?.id) {
+        summary.errors.push(
+          `Failed creating auth user for ${candidate.email}: ${authError?.message || "Unknown error"}`,
+        );
+        continue;
+      }
+      userId = authData.user.id;
+      authByEmail.set(candidate.email, userId);
+    }
+
+    if (!userId) {
+      summary.errors.push(`Failed resolving auth user id for ${candidate.email}`);
       continue;
     }
 
-    const userId = authData.user.id;
-    const { error: userInsertError } = await admin.from("users").insert({
-      id: userId,
-      name: candidate.name,
-      email: candidate.email,
-      role: "client",
-      account_id: accountId,
-      created_by_user_id: null,
-    });
+    const { error: userUpsertError } = await admin.from("users").upsert(
+      {
+        id: userId,
+        name: candidate.name,
+        email: candidate.email,
+        role: "client",
+        account_id: accountId,
+        created_by_user_id: null,
+      },
+      { onConflict: "id" },
+    );
 
-    if (userInsertError) {
-      await admin.auth.admin.deleteUser(userId);
+    if (userUpsertError) {
       summary.errors.push(
-        `Failed creating public user for ${candidate.email}: ${userInsertError.message}`,
+        `Failed upserting public user for ${candidate.email}: ${userUpsertError.message}`,
       );
       continue;
     }
