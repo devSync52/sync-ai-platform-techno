@@ -25,12 +25,7 @@ export default function LoginForm() {
     setError("");
     setLoading(true);
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword(
-      {
-        email,
-        password,
-      },
-    );
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password, },);
 
     if (signInError) {
       // console.error("error", signInError);
