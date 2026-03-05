@@ -371,8 +371,6 @@ const { data, count, error } = await query.range(start, end)
             <SyncOrdersButton
               accountId={accountId}
               onImported={() => setReloadToken((prev) => prev + 1)}
-              fromDate={startDate}
-              toDate={endDate}
             />
           )}
         </div>

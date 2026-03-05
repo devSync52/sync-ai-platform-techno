@@ -9,22 +9,16 @@ interface Props {
   accountId: string
   companyName: string
   onImported?: () => void
-  fromDate?: string
-  toDate?: string
 }
 
 export function SyncOrdersButton({
   accountId,
   companyName = '',
   onImported,
-  fromDate,
-  toDate,
 }: {
   accountId: string
   companyName?: string
   onImported?: () => void
-  fromDate?: string
-  toDate?: string
 }) {
   const [showModal, setShowModal] = useState(false)
 
@@ -43,8 +37,6 @@ export function SyncOrdersButton({
           accountId={accountId}
           companyName={companyName}
           onImported={onImported}
-          fromDate={fromDate}
-          toDate={toDate}
           onClose={() => setShowModal(false)}
         />
       )}
