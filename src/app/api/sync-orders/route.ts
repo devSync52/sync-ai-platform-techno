@@ -200,55 +200,59 @@ async function loadCustomerIdentityMatcher(
     if (name && !billingByName.has(name)) billingByName.set(name, clientAccountId);
   }
 
-  const accountNameById = new Map<string, string>();
-  for (const account of accounts || []) {
-    const accountId = String((account as any)?.id || "").trim();
-    const accountName = normalizeText((account as any)?.name);
-    if (accountId && accountName) accountNameById.set(accountId, accountName);
-  }
+  const { data: clients } = await admin
+    .from("clients")
+    .select("id, account_id, name, email")
+    .in("account_id", accountIds);
 
-  const { data: users } = await admin
-    .from("users")
-    .select("id, account_id, name, email, role")
-    .in("account_id", accountIds)
-    .in("role", ["client", "staff-client", "staff-user", "client-user"]);
-
-  const authUsersResult = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  const wmsByUserId = new Map<string, string>();
-  if (!authUsersResult.error) {
-    for (const authUser of authUsersResult.data.users || []) {
-      const wmsId = normalizeText(
-        (authUser.user_metadata as any)?.wms_user_identifier ||
-          (authUser.app_metadata as any)?.wms_user_identifier,
-      );
-      if (wmsId) wmsByUserId.set(authUser.id, wmsId);
-    }
-  }
-
-  const byWmsId = new Map<string, string>();
   const byEmail = new Map<string, string>();
   const byName = new Map<string, string>();
-  const byCompany = new Map<string, string>();
-  for (const [accountId, accountName] of accountNameById.entries()) {
-    if (accountName && !byCompany.has(accountName)) byCompany.set(accountName, accountId);
+  const byAccount = new Map<string, string[]>();
+  const clientById = new Map<string, any>();
+
+  for (const client of clients || []) {
+    const clientId = String((client as any)?.id || "").trim();
+    const accountId = String((client as any)?.account_id || "").trim();
+    if (!clientId) continue;
+
+    clientById.set(clientId, client);
+    if (accountId) {
+      const current = byAccount.get(accountId) || [];
+      current.push(clientId);
+      byAccount.set(accountId, current);
+    }
+
+    const email = normalizeText((client as any)?.email);
+    if (email && !byEmail.has(email)) byEmail.set(email, clientId);
+
+    const name = normalizeText((client as any)?.name);
+    if (name && !byName.has(name)) byName.set(name, clientId);
   }
 
-  for (const user of users || []) {
-    const userId = String((user as any)?.id || "").trim();
-    const accountId = String((user as any)?.account_id || "").trim();
-    if (!userId || !accountId) continue;
+  function pickClientFromAccount(
+    accountId: string,
+    names: string[],
+    email: string,
+  ): string | null {
+    const candidates = byAccount.get(accountId) || [];
+    if (!candidates.length) return null;
 
-    const email = normalizeText((user as any)?.email);
-    if (email && !byEmail.has(email)) byEmail.set(email, accountId);
+    if (email) {
+      for (const clientId of candidates) {
+        const candidateEmail = normalizeText((clientById.get(clientId) as any)?.email);
+        if (candidateEmail === email) return clientId;
+      }
+    }
 
-    const name = normalizeText((user as any)?.name);
-    if (name && !byName.has(name)) byName.set(name, accountId);
+    for (const name of names) {
+      if (!name) continue;
+      for (const clientId of candidates) {
+        const candidateName = normalizeText((clientById.get(clientId) as any)?.name);
+        if (candidateName === name) return clientId;
+      }
+    }
 
-    const company = normalizeText(accountNameById.get(accountId));
-    if (company && !byCompany.has(company)) byCompany.set(company, accountId);
-
-    const wms = normalizeText(wmsByUserId.get(userId));
-    if (wms && !byWmsId.has(wms)) byWmsId.set(wms, accountId);
+    return candidates[0] || null;
   }
 
   return {
@@ -259,8 +263,6 @@ async function loadCustomerIdentityMatcher(
       const wmsId = normalizeText(
         pick(metadata, ["CustomerID", "customer_id", "WmsUserIdentifier"], ""),
       );
-      if (wmsId && byWmsId.has(wmsId)) return byWmsId.get(wmsId) || null;
-      if (wmsId && billingByWmsId.has(wmsId)) return billingByWmsId.get(wmsId) || null;
 
       const email = normalizeText(
         pick(metadata, ["CustomerEmail", "Email", "customer_email"], ""),
@@ -274,16 +276,24 @@ async function loadCustomerIdentityMatcher(
         pick(metadata, ["LastName", "ShippingAddressLastName", "BillingAddressLastName"], ""),
       );
       const fullName = `${first} ${last}`.trim();
-      if (fullName && byName.has(fullName)) return byName.get(fullName) || null;
-
       const clientName = normalizeText(row?.client_name);
+      if (fullName && byName.has(fullName)) return byName.get(fullName) || null;
       if (clientName && byName.has(clientName)) return byName.get(clientName) || null;
 
       const company = normalizeText(
         pick(metadata, ["CompanyName", "company_name"], row?.client_name),
       );
-      if (company && byCompany.has(company)) return byCompany.get(company) || null;
-      if (company && billingByName.has(company)) return billingByName.get(company) || null;
+
+      const names = [fullName, clientName, company].filter(Boolean);
+      const mappedAccountId =
+        (wmsId && billingByWmsId.get(wmsId)) ||
+        (company && billingByName.get(company)) ||
+        "";
+
+      if (mappedAccountId) {
+        const fromMappedAccount = pickClientFromAccount(mappedAccountId, names, email);
+        if (fromMappedAccount) return fromMappedAccount;
+      }
 
       return null;
     },
@@ -1021,6 +1031,46 @@ export async function POST(req: Request) {
       effectiveAccountId = accountRow.parent_account_id;
     }
 
+    // Prefer direct Sellercloud sync path to avoid edge-function
+    // decrypt/env mismatches (e.g. "Malformed UTF-8 data").
+    if (source === "sellercloud") {
+      try {
+        const direct = await tryDirectSellercloudFallback({
+          admin,
+          effectiveAccountId,
+          requestedAccountId: account_id,
+          fromDate,
+          toDate,
+        });
+        const customerProvision = await createSellercloudCustomerLogins({
+          admin,
+          accountId: effectiveAccountId,
+          inviteAccountId: account_id,
+          sourceRows: Array.isArray((direct as any)?.source_rows)
+            ? (direct as any).source_rows
+            : undefined,
+        });
+        const { source_rows, ...directPublic } = direct as any;
+
+        return new Response(
+          JSON.stringify({
+            ...directPublic,
+            mode: "direct",
+            customer_provision: customerProvision,
+            imported_universal: directPublic.imported,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      } catch (directError: any) {
+        console.warn("[sync-orders] direct Sellercloud sync failed, falling back to edge", {
+          message: directError?.message,
+        });
+      }
+    }
+
     const edgeResponse = await fetch(syncUrls[source], {
       method: "POST",
       headers: {
@@ -1124,9 +1174,9 @@ export async function POST(req: Request) {
         );
       } catch (fallbackError: any) {
         const errorMessage =
+          fallbackError?.message ||
           edgeResult?.error ||
           edgeResult?.message ||
-          fallbackError?.message ||
           `Sync function failed (${edgeResponse.status})`;
 
         return new Response(

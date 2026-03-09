@@ -73,7 +73,7 @@ export default function IntegrationModal({
       ...prev,
       [e.target.name]: e.target.value
     }))
-    if (type === 'sellercloud') {
+    if (type === 'sellercloud' || type === 'extensiv') {
       setIsTestPassed(false)
     }
   }
@@ -90,31 +90,65 @@ export default function IntegrationModal({
     setTesting(true)
 
     try {
-      const response = await fetch('/api/integrations/sellercloud', {
+      const testUrl =
+        type === 'sellercloud'
+          ? '/api/integrations/sellercloud'
+          : type === 'extensiv'
+            ? '/api/integrations/extensiv'
+            : ''
+
+      if (!testUrl) {
+        toast.error('Test connection is not supported for this integration yet')
+        return
+      }
+
+      const credentialsPayload =
+        type === 'sellercloud'
+          ? {
+              domain: formData.domain,
+              username: formData.username,
+              password: formData.password,
+            }
+          : {
+              client_id: formData.client_id,
+              client_secret: formData.client_secret,
+              extensiv_id: formData.extensiv_id,
+            }
+
+      const response = await fetch(testUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'test_credentials',
           accountId,
-          credentials: {
-            domain: formData.domain,
-            username: formData.username,
-            password: formData.password,
-          },
+          credentials: credentialsPayload,
         }),
       })
 
       const result = await response.json()
       if (!response.ok || !result?.success) {
         setIsTestPassed(false)
-        toast.error(result?.error || 'Sellercloud connection test failed')
+        toast.error(
+          result?.error ||
+            (type === 'sellercloud'
+              ? 'Sellercloud connection test failed'
+              : 'Extensiv connection test failed'),
+        )
       } else {
         setIsTestPassed(true)
-        toast.success('Sellercloud connection test passed')
+        toast.success(
+          type === 'sellercloud'
+            ? 'Sellercloud connection test passed'
+            : 'Extensiv connection test passed',
+        )
       }
     } catch {
       setIsTestPassed(false)
-      toast.error('Sellercloud connection test failed')
+      toast.error(
+        type === 'sellercloud'
+          ? 'Sellercloud connection test failed'
+          : 'Extensiv connection test failed',
+      )
     } finally {
       setTesting(false)
     }
@@ -130,8 +164,12 @@ export default function IntegrationModal({
       return
     }
 
-    if (type === 'sellercloud' && !isTestPassed) {
-      toast.error('Please test Sellercloud connection before saving')
+    if ((type === 'sellercloud' || type === 'extensiv') && !isTestPassed) {
+      toast.error(
+        type === 'sellercloud'
+          ? 'Please test Sellercloud connection before saving'
+          : 'Please test Extensiv connection before saving',
+      )
       setLoading(false)
       return
     }
@@ -191,7 +229,7 @@ export default function IntegrationModal({
             </div>
           ))}
 
-          {type === 'sellercloud' && (
+          {(type === 'sellercloud' || type === 'extensiv') && (
             <button
               onClick={handleTest}
               disabled={testing || loading || isTestPassed}
@@ -201,7 +239,7 @@ export default function IntegrationModal({
             </button>
           )}
 
-          {(type !== 'sellercloud' || isTestPassed) && (
+          {((type !== 'sellercloud' && type !== 'extensiv') || isTestPassed) && (
             <button
               onClick={handleSave}
               disabled={loading}

@@ -9,6 +9,21 @@ const styles = StyleSheet.create({
   cell: { flex: 1 },
 })
 
+function toPlainText(value: unknown): string {
+  const raw = String(value ?? '')
+  if (!raw) return ''
+  return raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function QuotePdfDocument({
   quote,
   items,
@@ -58,7 +73,7 @@ export function QuotePdfDocument({
           }, i: number) => (
             <View key={i} style={styles.row}>
               <Text style={styles.cell}>{item.sku}</Text>
-              <Text style={styles.cell}>{item.product_name}</Text>
+              <Text style={styles.cell}>{toPlainText(item.product_name) || '-'}</Text>
               <Text style={styles.cell}>{item.quantity}</Text>
               <Text style={styles.cell}>{item.weight_lbs} lbs</Text>
               <Text style={styles.cell}>${item.subtotal?.toFixed(2)}</Text>

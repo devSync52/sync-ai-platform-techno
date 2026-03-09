@@ -10,6 +10,14 @@ type SellercloudCredentials = {
   domain: string
   username: string
   password: string
+  company_id?: number | null
+  companyId?: number | null
+  default_company_id?: number | null
+  channel?: number | null
+  channel_id?: number | null
+  default_channel_id?: number | null
+  warehouse_id?: number | null
+  ship_from_warehouse_id?: number | null
 }
 
 const ENCRYPTION_KEY = process.env.NEXT_PUBLIC_CREDENTIAL_SECRET || 'SYNC_SECRET'
@@ -58,6 +66,9 @@ function parseCredentials(raw: unknown): SellercloudCredentials | null {
     domain: String((parsed as any).domain ?? '').trim(),
     username: String((parsed as any).username ?? '').trim(),
     password: String((parsed as any).password ?? '').trim(),
+    company_id: Number((parsed as any).company_id ?? (parsed as any).companyId ?? (parsed as any).default_company_id ?? 0) || null,
+    channel: Number((parsed as any).channel ?? (parsed as any).channel_id ?? (parsed as any).default_channel_id ?? 0) || null,
+    warehouse_id: Number((parsed as any).warehouse_id ?? (parsed as any).ship_from_warehouse_id ?? 0) || null,
   }
 
   if (!creds.domain || !creds.username || !creds.password) return null
@@ -82,6 +93,22 @@ function toNumber(value: any, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
+function toPositiveInt(value: any): number | null {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  const i = Math.trunc(n)
+  return i > 0 ? i : null
+}
+
+function normalizeSellercloudProductId(value: any): string {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (/^SC-/i.test(raw)) {
+    return raw.replace(/^SC-/i, '').trim()
+  }
+  return raw
+}
+
 function splitName(fullName: string) {
   const clean = String(fullName || '').trim()
   if (!clean) return { firstName: '', lastName: '' }
@@ -90,17 +117,44 @@ function splitName(fullName: string) {
   return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
 }
 
+function normalizeCountry(value: any): string {
+  const raw = String(value ?? '').trim()
+  const lower = raw.toLowerCase()
+  if (!raw) return ''
+  if (lower === 'us' || lower === 'usa') return 'US'
+  if (lower.startsWith('unit')) return 'US'
+  return raw
+}
+
+function ensureRequiredName(firstRaw: any, lastRaw: any, emailRaw?: any) {
+  const first = String(firstRaw ?? '').trim()
+  const last = String(lastRaw ?? '').trim()
+  const email = String(emailRaw ?? '').trim()
+  const emailLocalPart = email.includes('@') ? email.split('@')[0].trim() : ''
+
+  if (first && last) return { firstName: first, lastName: last }
+  if (first && !last) return { firstName: first, lastName: first || 'Customer' }
+  if (!first && last) return { firstName: last, lastName: last }
+  if (emailLocalPart) return { firstName: emailLocalPart, lastName: emailLocalPart }
+  return { firstName: 'Customer', lastName: 'Customer' }
+}
+
 function buildAddress(addressRaw: any) {
   const address = addressRaw && typeof addressRaw === 'object' ? addressRaw : {}
   const fullName = String(address.full_name ?? address.name ?? '').trim()
   const parsedName = splitName(fullName)
+  const safeName = ensureRequiredName(
+    address.first_name ?? parsedName.firstName,
+    address.last_name ?? parsedName.lastName,
+    address.email
+  )
 
   return {
     Business: String(address.business ?? '').trim(),
-    FirstName: String(address.first_name ?? parsedName.firstName ?? '').trim(),
+    FirstName: safeName.firstName,
     MiddleName: String(address.middle_name ?? '').trim(),
-    LastName: String(address.last_name ?? parsedName.lastName ?? '').trim(),
-    Country: String(address.country ?? '').trim(),
+    LastName: safeName.lastName,
+    Country: normalizeCountry(address.country),
     City: String(address.city ?? '').trim(),
     State: String(address.state ?? '').trim(),
     Region: String(address.region ?? '').trim(),
@@ -121,15 +175,23 @@ function mapDraftToSellercloudOrder(draft: any, body: any) {
   const preferences = parseMaybeJson<any>(draft?.preferences) || {}
   const selectedShipping = draft?.selected_service ?? {}
   const customerName = splitName(String(shipTo?.full_name || ''))
+  const safeCustomerName = ensureRequiredName(
+    shipTo?.first_name ?? customerName.firstName,
+    shipTo?.last_name ?? customerName.lastName,
+    shipTo?.email
+  )
 
   const products = items
     .filter((item) => item && (item.sku || item.product_name))
     .map((item) => {
       const qty = Math.max(1, toNumber(item.quantity, 1))
       const sitePrice = toNumber(item.price, 0)
+      const sourceProductId = String(item.sku ?? item.product_id ?? '').trim()
+      const normalizedProductId = normalizeSellercloudProductId(sourceProductId)
+      const referenceId = String(item.reference_id ?? '').trim()
       return {
-        ProductID: String(item.sku ?? item.product_id ?? '').trim(),
-        ReferenceID: String(item.reference_id ?? '').trim(),
+        ProductID: normalizedProductId || sourceProductId,
+        ReferenceID: referenceId || (normalizedProductId !== sourceProductId ? sourceProductId : ''),
         ProductName: String(item.product_name ?? item.name ?? '').trim(),
         SitePrice: sitePrice,
         DiscountValue: toNumber(item.discount_value, 0),
@@ -163,8 +225,8 @@ function mapDraftToSellercloudOrder(draft: any, body: any) {
     CustomerDetails: {
       ID: toNumber(body?.customerId, 0),
       Email: String(shipTo?.email ?? '').trim(),
-      FirstName: String(shipTo?.first_name ?? customerName.firstName ?? '').trim(),
-      LastName: String(shipTo?.last_name ?? customerName.lastName ?? '').trim(),
+      FirstName: safeCustomerName.firstName,
+      LastName: safeCustomerName.lastName,
       Business: String(shipTo?.business ?? '').trim(),
       IsWholesale: Boolean(body?.isWholesale ?? false),
       IgnoreCreditLimit: Boolean(body?.ignoreCreditLimit ?? false),
@@ -252,6 +314,33 @@ async function getSellercloudToken(credentials: SellercloudCredentials): Promise
   return String(data.access_token)
 }
 
+async function fetchSellercloudJson(baseUrl: string, token: string, path: string): Promise<any> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  const text = await response.text()
+  if (!response.ok) return null
+  try {
+    return text ? JSON.parse(text) : null
+  } catch {
+    return null
+  }
+}
+
+function extractArray(payload: any): any[] {
+  if (Array.isArray(payload)) return payload
+  if (!payload || typeof payload !== 'object') return []
+  const keys = ['results', 'Results', 'data', 'Data', 'items', 'Items', 'companies', 'Companies', 'warehouses', 'Warehouses']
+  for (const key of keys) {
+    if (Array.isArray((payload as any)[key])) return (payload as any)[key]
+  }
+  return []
+}
+
 async function loadSellercloudContext() {
   const cookieStore = (await cookies()) as any
   const authClient = createServerClient<Database>(
@@ -288,7 +377,7 @@ async function loadSellercloudContext() {
 
   const { data: integration, error: integrationError } = await admin
     .from('account_integrations')
-    .select('credentials, status')
+    .select('credentials, metadata, status')
     .eq('account_id', accountId)
     .eq('type', 'sellercloud')
     .maybeSingle()
@@ -310,7 +399,7 @@ async function loadSellercloudContext() {
     return { error: 'Invalid Sellercloud credentials', status: 400 as const }
   }
 
-  return { accountId, admin, credentials }
+  return { accountId, admin, credentials, integration }
 }
 
 export async function GET() {
@@ -404,6 +493,76 @@ export async function POST(req: NextRequest) {
     const token = await getSellercloudToken(ctx.credentials)
     const baseUrl = normalizeDomain(ctx.credentials.domain)
 
+    // Resolve ShipFrom warehouse id when draft stores public warehouse UUID only.
+    let resolvedShipFromWarehouseId =
+      toPositiveInt(body?.shipFromWarehouseId) ??
+      toPositiveInt((draft as any)?.ship_from?.sellercloud_warehouse_id) ??
+      toPositiveInt((ctx.credentials as any)?.warehouse_id)
+
+    if (!resolvedShipFromWarehouseId) {
+      const publicWarehouseId = String((draft as any)?.ship_from?.warehouse_id ?? '').trim()
+      if (publicWarehouseId) {
+        const { data: warehouseRow } = await ctx.admin
+          .from('v_billing_warehouses')
+          .select('wms_facility_id')
+          .eq('id', publicWarehouseId)
+          .maybeSingle()
+        resolvedShipFromWarehouseId = toPositiveInt((warehouseRow as any)?.wms_facility_id)
+      }
+    }
+
+    if (resolvedShipFromWarehouseId) {
+      for (const product of payload.Products || []) {
+        const current = toPositiveInt((product as any)?.ShipFromWareHouseID)
+        if (!current) (product as any).ShipFromWareHouseID = resolvedShipFromWarehouseId
+      }
+    }
+
+    // Resolve CompanyID: body -> integration metadata/credentials -> warehouse company -> companies default.
+    let resolvedCompanyId =
+      toPositiveInt(body?.companyId) ??
+      toPositiveInt((ctx.integration as any)?.metadata?.default_company_id) ??
+      toPositiveInt((ctx.integration as any)?.metadata?.company_id) ??
+      toPositiveInt((ctx.credentials as any)?.company_id) ??
+      toPositiveInt((ctx.credentials as any)?.companyId)
+
+    if (!resolvedCompanyId) {
+      const whJson = await fetchSellercloudJson(baseUrl, token, '/rest/api/Warehouses')
+      const warehouses = extractArray(whJson)
+      const matchedWarehouse = warehouses.find((w: any) => {
+        const id = toPositiveInt(w?.ID ?? w?.Id ?? w?.id)
+        return !!resolvedShipFromWarehouseId && id === resolvedShipFromWarehouseId
+      })
+      resolvedCompanyId = toPositiveInt(
+        (matchedWarehouse as any)?.CompanyID ??
+          (matchedWarehouse as any)?.CompanyId ??
+          (matchedWarehouse as any)?.company_id,
+      )
+    }
+
+    if (!resolvedCompanyId) {
+      const companiesJson =
+        (await fetchSellercloudJson(baseUrl, token, '/rest/api/Companies')) ??
+        (await fetchSellercloudJson(baseUrl, token, '/rest/api/Company'))
+      const companies = extractArray(companiesJson)
+      const preferred = companies.find((c: any) => Boolean(c?.IsDefault ?? c?.isDefault))
+      const picked = preferred || companies[0]
+      resolvedCompanyId = toPositiveInt((picked as any)?.ID ?? (picked as any)?.Id ?? (picked as any)?.id)
+    }
+
+    if (!resolvedCompanyId) {
+      return NextResponse.json(
+        {
+          error:
+            'Sellercloud CompanyID is required but could not be resolved. Configure default company in integration metadata or pass companyId in request.',
+          payload,
+        },
+        { status: 400 }
+      )
+    }
+
+    payload.OrderDetails.CompanyID = resolvedCompanyId
+
     const response = await fetch(`${baseUrl}/rest/api/Orders`, {
       method: 'POST',
       headers: {
@@ -423,11 +582,51 @@ export async function POST(req: NextRequest) {
     }
 
     if (!response.ok) {
+      const rawErrorText =
+        (typeof responseJson === 'string' ? responseJson : '') ||
+        String((responseJson as any)?.raw ?? '') ||
+        String(responseText ?? '')
+
       const message =
         responseJson?.error ||
         responseJson?.message ||
         responseJson?.Message ||
+        rawErrorText ||
         `Sellercloud create order failed (${response.status})`
+
+      const duplicateSourceIdError =
+        String(message).toLowerCase().includes('same order source order id already exists') ||
+        String(message).toLowerCase().includes('order source order id already exists') ||
+        rawErrorText.toLowerCase().includes('same order source order id already exists') ||
+        rawErrorText.toLowerCase().includes('order source order id already exists')
+
+      if (duplicateSourceIdError) {
+        const existingOrderId = (draft as any)?.sellercloud_order_id ?? null
+
+        const { error: persistError } = await ctx.admin
+          .from('saip_quote_drafts')
+          .update({
+            sellercloud_status: 'success',
+            sellercloud_order_id: existingOrderId,
+          } as any)
+          .eq('id', draftId)
+
+        if (persistError) {
+          console.warn('[orders/sellercloud] duplicate order detected but failed to persist success status', {
+            draftId,
+            message: persistError.message,
+          })
+        }
+
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          sellercloudOrderId: existingOrderId,
+          message: 'Order already exists in Sellercloud for this source ID',
+          sellercloud: responseJson,
+          payload,
+        })
+      }
 
       return NextResponse.json(
         { error: String(message), sellercloud: responseJson, payload },

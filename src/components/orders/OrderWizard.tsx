@@ -108,14 +108,14 @@ export default function OrderWizard() {
 
   const openFilePicker = () => {
     if (!canUseDocs) {
-      alert('Select a client first to upload a document/photo.')
+      alert('Select a customer first to upload a document/photo.')
       return
     }
     fileInputRef.current?.click()
   }
   const openCamera = () => {
     if (!canUseDocs) {
-      alert('Select a client first to take a photo.')
+      alert('Select a customer first to take a photo.')
       return
     }
     cameraInputRef.current?.click()
@@ -137,7 +137,7 @@ export default function OrderWizard() {
     setDragActive(false)
 
     if (!canUseDocs) {
-      alert('Select a client first to upload a document/photo.')
+      alert('Select a customer first to upload a document/photo.')
       return
     }
 
@@ -659,6 +659,27 @@ export default function OrderWizard() {
         if (persistError) {
           console.error('❌ Failed to persist Sellercloud status after create:', persistError)
         }
+
+        if (quoteData?.account_id) {
+          fetch('/api/sync-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              account_id: quoteData.account_id,
+              source: 'sellercloud',
+            }),
+          })
+            .then(async (res) => {
+              const json = await res.json().catch(() => ({}))
+              if (!res.ok || json?.success === false) {
+                console.warn('[order-wizard] auto-sync after OMS push failed', json)
+              }
+            })
+            .catch((err) => {
+              console.warn('[order-wizard] auto-sync after OMS push error', err)
+            })
+        }
       }
   
       router.push('/orders/create-order')
@@ -754,7 +775,7 @@ export default function OrderWizard() {
       return
     }
     if (!canUseDocs) {
-      alert('Select a client first to upload a document/photo.')
+      alert('Select a customer first to upload a document/photo.')
       return
     }
 

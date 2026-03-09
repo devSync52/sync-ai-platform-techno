@@ -126,6 +126,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
         { href: "/billing/clients", label: "Clients" },
         { href: "/billing/invoices", label: "Invoices" },
         { href: "/billing/warehouses", label: "Warehouses" },
+        { href: "/billing/products", label: "Products" },
         { href: "/billing/pricing", label: "Pricing" },
       ],
     },
