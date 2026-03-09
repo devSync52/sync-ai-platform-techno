@@ -582,11 +582,51 @@ export async function POST(req: NextRequest) {
     }
 
     if (!response.ok) {
+      const rawErrorText =
+        (typeof responseJson === 'string' ? responseJson : '') ||
+        String((responseJson as any)?.raw ?? '') ||
+        String(responseText ?? '')
+
       const message =
         responseJson?.error ||
         responseJson?.message ||
         responseJson?.Message ||
+        rawErrorText ||
         `Sellercloud create order failed (${response.status})`
+
+      const duplicateSourceIdError =
+        String(message).toLowerCase().includes('same order source order id already exists') ||
+        String(message).toLowerCase().includes('order source order id already exists') ||
+        rawErrorText.toLowerCase().includes('same order source order id already exists') ||
+        rawErrorText.toLowerCase().includes('order source order id already exists')
+
+      if (duplicateSourceIdError) {
+        const existingOrderId = (draft as any)?.sellercloud_order_id ?? null
+
+        const { error: persistError } = await ctx.admin
+          .from('saip_quote_drafts')
+          .update({
+            sellercloud_status: 'success',
+            sellercloud_order_id: existingOrderId,
+          } as any)
+          .eq('id', draftId)
+
+        if (persistError) {
+          console.warn('[orders/sellercloud] duplicate order detected but failed to persist success status', {
+            draftId,
+            message: persistError.message,
+          })
+        }
+
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          sellercloudOrderId: existingOrderId,
+          message: 'Order already exists in Sellercloud for this source ID',
+          sellercloud: responseJson,
+          payload,
+        })
+      }
 
       return NextResponse.json(
         { error: String(message), sellercloud: responseJson, payload },

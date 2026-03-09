@@ -659,6 +659,27 @@ export default function OrderWizard() {
         if (persistError) {
           console.error('❌ Failed to persist Sellercloud status after create:', persistError)
         }
+
+        if (quoteData?.account_id) {
+          fetch('/api/sync-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              account_id: quoteData.account_id,
+              source: 'sellercloud',
+            }),
+          })
+            .then(async (res) => {
+              const json = await res.json().catch(() => ({}))
+              if (!res.ok || json?.success === false) {
+                console.warn('[order-wizard] auto-sync after OMS push failed', json)
+              }
+            })
+            .catch((err) => {
+              console.warn('[order-wizard] auto-sync after OMS push error', err)
+            })
+        }
       }
   
       router.push('/orders/create-order')

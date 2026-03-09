@@ -206,6 +206,29 @@ export function QuotesList() {
             ? `Sellercloud ID: ${sellercloudOrderId}`
             : 'The quote was successfully sent.',
         })
+
+        // Auto-sync universal orders after OMS push so /orders list is refreshed
+        // without requiring a manual "SynC Orders" click.
+        if (user?.account_id) {
+          fetch('/api/sync-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              account_id: user.account_id,
+              source: 'sellercloud',
+            }),
+          })
+            .then(async (res) => {
+              const json = await res.json().catch(() => ({}))
+              if (!res.ok || json?.success === false) {
+                console.warn('[orders] auto-sync after OMS push failed', json)
+              }
+            })
+            .catch((err) => {
+              console.warn('[orders] auto-sync after OMS push error', err)
+            })
+        }
       }
     } catch (error) {
       console.error('❌ Unexpected error sending quote to Sellercloud:', error)
