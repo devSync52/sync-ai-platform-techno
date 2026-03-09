@@ -28,6 +28,21 @@ type PackageItem = {
 
 type Json = any
 
+const containsHtml = (value?: string | null) => {
+  if (!value) return false
+  return /<\/?[a-z][\s\S]*>/i.test(value)
+}
+
+const sanitizeHtmlForPreview = (value?: string | null) => {
+  if (!value) return ''
+  return value
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+    .replace(/\s(href|src)=["']javascript:[^"']*["']/gi, '')
+}
+
 interface Step4PackageDetailsProps {
   draftId: string
   initialItems: Json
@@ -56,8 +71,12 @@ function ProductSearchModal({
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(10)
+  const [totalItems, setTotalItems] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
 
-  const handleSearch = async () => {
+  const fetchProducts = async (page = 1) => {
     if (!clientId) return
 
     setLoading(true)
@@ -68,6 +87,8 @@ function ProductSearchModal({
         warehouseId: warehouseId || '',
         shipFromName: shipFromName || '',
         term: searchTerm || '',
+        page: String(page),
+        pageSize: String(pageSize),
       })
 
       const res = await fetch(`/api/products/search?${params.toString()}`, {
@@ -79,20 +100,50 @@ function ProductSearchModal({
       if (!res.ok) {
         console.error('[Step4][ProductSearch] SSR search failed', json)
         setResults([])
+        setTotalItems(0)
+        setTotalPages(1)
         return
       }
 
       setResults(json?.products || [])
+      const nextPage = Number(json?.pagination?.page || page)
+      const nextPageSize = Number(json?.pagination?.pageSize || pageSize)
+      const nextTotal = Number(json?.pagination?.total || (json?.products || []).length || 0)
+      const nextTotalPages = Number(
+        json?.pagination?.totalPages || Math.max(1, Math.ceil(nextTotal / nextPageSize))
+      )
+      setCurrentPage(nextPage)
+      setTotalItems(nextTotal)
+      setTotalPages(Math.max(1, nextTotalPages))
     } finally {
       setLoading(false)
     }
   }
+
+  const handleSearch = async () => {
+    await fetchProducts(1)
+  }
+
+  useEffect(() => {
+    if (!show) return
+    if (!warehouseId) return
+    if (!clientId) return
+    fetchProducts(1)
+  }, [show, clientId, warehouseId, shipFromName])
 
   const handleAdd = (product: any) => {
     const length = Number(product.pkg_length_in ?? 0)
     const width = Number(product.pkg_width_in ?? 0)
     const height = Number(product.pkg_height_in ?? 0)
     const weight = Number(product.pkg_weight_lb ?? 0)
+    const productPrice = Number(
+      product.price ??
+        product.site_price ??
+        product.store_price ??
+        product.sale_price ??
+        product.list_price ??
+        0,
+    )
 
     const packageItem: PackageItem = {
       sku: product.sku,
@@ -105,8 +156,8 @@ function ProductSearchModal({
       stackable: false,
       hazardous: false,
       freight_class: '',
-      price: 0,
-      subtotal: 0,
+      price: Number.isFinite(productPrice) ? productPrice : 0,
+      subtotal: Number.isFinite(productPrice) ? productPrice : 0,
     }
     onAddProduct(packageItem)
     onClose()
@@ -153,7 +204,18 @@ function ProductSearchModal({
             {results.map((product, idx) => (
               <li key={idx} className="py-2 flex justify-between items-center">
                 <div>
-                  <p className="font-semibold">{product.description || product.sku}</p>
+                  <div className="font-semibold max-w-[36rem] text-sm">
+                    {containsHtml(product.description) ? (
+                      <div
+                        className="max-h-16 overflow-hidden leading-5 [&_table]:w-full [&_td]:align-top"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeHtmlForPreview(product.description),
+                        }}
+                      />
+                    ) : (
+                      <p>{product.description || product.sku}</p>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">SKU: {product.sku}</p>
                   <p className="text-sm text-gray-500">
                     Available: {Number(product.available ?? 0).toLocaleString('en-US')}
@@ -172,6 +234,36 @@ function ProductSearchModal({
               </li>
             ))}
           </ul>
+
+          {!warehouseMissing && (
+            <div className="mt-3 flex items-center justify-between gap-2 text-sm">
+              <p className="text-gray-500">
+                Showing {results.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+                {' '}to {Math.min(currentPage * pageSize, totalItems)} of {totalItems}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchProducts(currentPage - 1)}
+                  disabled={loading || currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-gray-600">
+                  Page {currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchProducts(currentPage + 1)}
+                  disabled={loading || currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -413,10 +505,18 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
             </div>
             <div>
               <Label>Product Name</Label>
-              <Input
-                value={item.product_name || ''} disabled
-                onChange={(e) => handleItemChange(index, 'product_name', e.target.value)}
-              />
+              <div className="min-h-10 rounded-md border bg-muted/20 px-3 py-2 text-sm leading-5">
+                {containsHtml(item.product_name) ? (
+                  <div
+                    className="max-h-16 overflow-hidden [&_table]:w-full [&_td]:align-top"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeHtmlForPreview(item.product_name),
+                    }}
+                  />
+                ) : (
+                  <span>{item.product_name || '-'}</span>
+                )}
+              </div>
             </div>
             <div>
               <Label>Quantity</Label>

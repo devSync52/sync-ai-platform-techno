@@ -139,10 +139,10 @@ export function Step1ClientSelection({
   return (
     <Card className="bg-white">
       <CardHeader>
-        <CardTitle>Select Client</CardTitle>
+        <CardTitle>Select Customer</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        <Label>Client</Label>
+        <Label>Customer</Label>
         {!isLoadingDraft && (
           <Select
             value={selectedClientId}
@@ -155,7 +155,7 @@ export function Step1ClientSelection({
             }}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select a client..." />
+              <SelectValue placeholder="Select a customer..." />
             </SelectTrigger>
             <SelectContent>
               {clients.map((client) => (
@@ -171,8 +171,8 @@ export function Step1ClientSelection({
           <button
             onClick={async () => {
               if (!selectedClientId) {
-                toast.error('Client required', {
-                  description: 'Please select a client before proceeding.',
+                toast.error('Customer required', {
+                  description: 'Please select a customer before proceeding.',
                 })
                 return
               }
@@ -191,11 +191,11 @@ export function Step1ClientSelection({
 
               if (!res.ok) {
                 console.error('❌ Error updating draft via API:', json)
-                toast.error('Error saving client selection')
+                toast.error('Error saving customer selection')
                 return
               }
 
-              toast.success('Client selected successfully')
+              toast.success('Customer selected successfully')
               if (onClientChange) onClientChange(clientAccountId)
               onNext()
             }}
@@ -208,4 +208,3 @@ export function Step1ClientSelection({
     </Card>
   )
 }
-

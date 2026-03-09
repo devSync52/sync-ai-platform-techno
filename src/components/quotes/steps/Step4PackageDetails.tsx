@@ -28,6 +28,21 @@ type PackageItem = {
 
 type Json = any
 
+const containsHtml = (value?: string | null) => {
+  if (!value) return false
+  return /<\/?[a-z][\s\S]*>/i.test(value)
+}
+
+const sanitizeHtmlForPreview = (value?: string | null) => {
+  if (!value) return ''
+  return value
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+    .replace(/\s(href|src)=["']javascript:[^"']*["']/gi, '')
+}
+
 interface Step4PackageDetailsProps {
   draftId: string
   initialItems: Json
@@ -98,6 +113,14 @@ function ProductSearchModal({
     const width = Number(product.pkg_width_in ?? 0)
     const height = Number(product.pkg_height_in ?? 0)
     const weight = Number(product.pkg_weight_lb ?? 0)
+    const productPrice = Number(
+      product.price ??
+        product.site_price ??
+        product.store_price ??
+        product.sale_price ??
+        product.list_price ??
+        0,
+    )
 
     const packageItem: PackageItem = {
       sku: product.sku,
@@ -111,8 +134,8 @@ function ProductSearchModal({
       hazardous: false,
       freight_class: '',
       // vw_products_master_enriched não tem preço, então deixamos 0 por padrão
-      price: 0,
-      subtotal: 0,
+      price: Number.isFinite(productPrice) ? productPrice : 0,
+      subtotal: Number.isFinite(productPrice) ? productPrice : 0,
     }
     onAddProduct(packageItem)
     onClose()
@@ -159,7 +182,18 @@ function ProductSearchModal({
             {results.map((product, idx) => (
               <li key={idx} className="py-2 flex justify-between items-center">
                 <div>
-                  <p className="font-semibold">{product.description || product.sku}</p>
+                  <div className="font-semibold max-w-[36rem] text-sm">
+                    {containsHtml(product.description) ? (
+                      <div
+                        className="max-h-16 overflow-hidden leading-5 [&_table]:w-full [&_td]:align-top"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeHtmlForPreview(product.description),
+                        }}
+                      />
+                    ) : (
+                      <p>{product.description || product.sku}</p>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">SKU: {product.sku}</p>
                   <p className="text-sm text-gray-500">
                     Available: {Number(product.available ?? 0).toLocaleString('en-US')}
@@ -393,10 +427,18 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
             </div>
             <div>
               <Label>Product Name</Label>
-              <Input
-                value={item.product_name || ''} disabled
-                onChange={(e) => handleItemChange(index, 'product_name', e.target.value)}
-              />
+              <div className="min-h-10 rounded-md border bg-muted/20 px-3 py-2 text-sm leading-5">
+                {containsHtml(item.product_name) ? (
+                  <div
+                    className="max-h-16 overflow-hidden [&_table]:w-full [&_td]:align-top"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeHtmlForPreview(item.product_name),
+                    }}
+                  />
+                ) : (
+                  <span>{item.product_name || '-'}</span>
+                )}
+              </div>
             </div>
             <div>
               <Label>Quantity</Label>

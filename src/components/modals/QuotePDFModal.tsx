@@ -13,6 +13,21 @@ interface Props {
   shipTo: any
 }
 
+function toPlainText(value: unknown): string {
+  const raw = String(value ?? '')
+  if (!raw) return ''
+  return raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export default function QuotePdfModal({ open, onCloseAction, quote, items = [], shipFrom = {}, shipTo = {} }: Props) {
   // Temporarily log to validate if account.name is coming correctly
   console.log('🧾 Quote Account Name:', quote?.account?.name)
@@ -151,7 +166,7 @@ export default function QuotePdfModal({ open, onCloseAction, quote, items = [], 
                 items.map((item, i) => (
                   <tr key={i} className="border-t">
                     <td className="px-3 py-2 border">{item.sku}</td>
-                    <td className="px-3 py-2 border">{item.product_name}</td>
+                    <td className="px-3 py-2 border">{toPlainText(item.product_name) || '-'}</td>
                     <td className="px-3 py-2 border">{item.length}×{item.width}×{item.height}</td>
                     <td className="px-3 py-2 border">{item.weight_lbs}</td>
                     <td className="px-3 py-2 border">{item.quantity}</td>

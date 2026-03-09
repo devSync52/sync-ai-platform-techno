@@ -66,10 +66,10 @@ export function QuoteClientSelectionSection({ onClientChange }: { onClientChange
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Select Client</CardTitle>
+        <CardTitle>Select Customer</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        <Label>Client</Label>
+        <Label>Customer</Label>
         {!isLoadingDraft && (
           <Select value={selectedClientId} onValueChange={(clientId) => {
             setSelectedClientId(clientId)
@@ -79,7 +79,7 @@ export function QuoteClientSelectionSection({ onClientChange }: { onClientChange
             }
           }}>
             <SelectTrigger>
-              <SelectValue placeholder="Select a client..." />
+              <SelectValue placeholder="Select a customer..." />
             </SelectTrigger>
             <SelectContent>
               {clients.map((client) => (

@@ -129,11 +129,12 @@ export function QuotesList() {
   const handleSendToSellercloud = async (quoteId: string) => {
     try {
       setSendingQuoteId(quoteId)
-      const res = await fetch('/api/quotes/sellercloud', {
+      const res = await fetch('/api/orders/sellercloud', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ draftId: quoteId }),
       })
 
@@ -141,6 +142,27 @@ export function QuotesList() {
 
       if (!res.ok || !data?.success) {
         console.error('❌ Error sending quote to Sellercloud:', data)
+        const { error: persistError } = await supabase
+          .from('saip_quote_drafts')
+          .update({
+            sellercloud_status: 'error',
+          })
+          .eq('id', quoteId)
+        if (persistError) {
+          console.error('❌ Error persisting Sellercloud error status:', persistError)
+        }
+
+        setQuotes((prev) =>
+          prev.map((q) =>
+            q.id === quoteId
+              ? {
+                  ...q,
+                  sellercloud_status: 'error',
+                }
+              : q
+          )
+        )
+
         toast('Failed to send quote to Sellercloud', {
           description: data?.error || 'Please try again in a moment.',
         })
