@@ -8,6 +8,33 @@ type RoleType = 'client'
 
 const ALLOWED_ROLES = new Set(['superadmin', 'admin', 'staff-admin'])
 
+function pick<T = any>(obj: any, keys: string[], fallback: T = null as T): T {
+  for (const key of keys) {
+    if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key] as T
+  }
+  return fallback
+}
+
+function deriveCustomerName(primary: any, metadata: any) {
+  const first = String(
+    pick(metadata, ['FirstName', 'ShippingAddressFirstName', 'BillingAddressFirstName'], '')
+  ).trim()
+  const last = String(
+    pick(metadata, ['LastName', 'ShippingAddressLastName', 'BillingAddressLastName'], '')
+  ).trim()
+  const full = `${first} ${last}`.trim()
+  if (full) return full
+
+  const fromPrimary = String(primary || '').trim()
+  if (fromPrimary) return fromPrimary
+
+  const company = String(pick(metadata, ['CompanyName'], '')).trim()
+  if (company) return company
+
+  const email = String(pick(metadata, ['CustomerEmail', 'Email'], '')).trim()
+  return email || 'Customer'
+}
+
 function normalizeAuthType(value: unknown): AuthType | null {
   if (value === 'local') return 'local'
   if (value === 'wms_extensiv') return 'wms_extensiv'
@@ -81,7 +108,7 @@ export async function GET() {
     .from('users')
     .select('id, name, email, role, created_at, last_login_at, has_logged_in')
     .eq('account_id', context.accountId)
-    .in('role', ['client', 'staff-client'])
+    .in('role', ['client', 'staff-client', 'staff-user', 'client-user'])
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -127,17 +154,17 @@ export async function GET() {
     }
   })
 
-  // Merge Sellercloud customers discovered from imported orders so they are visible
+  // Merge customers discovered from synced orders so they are visible
   // in the Customers screen even when they are not platform auth users.
-  const { data: scOrders, error: scError } = await supabaseAdmin
-    .from('sellercloud_orders')
-    .select('sellercloud_customer_id, client_name, metadata, created_at')
+  const { data: orderRows, error: ordersError } = await supabaseAdmin
+    .from('orders')
+    .select('client_name, origin, metadata, created_at, order_number')
     .eq('account_id', context.accountId)
     .order('created_at', { ascending: false })
     .limit(5000)
 
-  if (scError) {
-    console.error('[customers][sellercloud] failed to load sellercloud orders:', scError)
+  if (ordersError) {
+    console.error('[customers][orders] failed to load orders:', ordersError)
     return NextResponse.json({ customers: payload })
   }
 
@@ -148,27 +175,25 @@ export async function GET() {
   )
 
   const seenKeys = new Set<string>()
-  const sellercloudRows: any[] = []
+  const discoveredRows: any[] = []
 
-  for (const row of scOrders || []) {
+  for (const row of orderRows || []) {
     const metadata = (row as any)?.metadata || {}
-    const first = String(metadata?.FirstName || '').trim()
-    const last = String(metadata?.LastName || '').trim()
-    const fullName = `${first} ${last}`.trim()
-    const companyName = String(metadata?.CompanyName || '').trim()
-    const fallbackName = String((row as any)?.client_name || '').trim()
-    const customerName = fullName || fallbackName || companyName || 'Sellercloud Customer'
+    const customerName = deriveCustomerName((row as any)?.client_name, metadata)
 
     const email = String(metadata?.CustomerEmail || '').trim().toLowerCase()
-    const sellerId = String((row as any)?.sellercloud_customer_id || metadata?.CustomerID || '').trim()
-    const dedupeKey = sellerId || email || customerName.toLowerCase()
+    const wmsId = String(metadata?.CustomerID || metadata?.customer_id || '').trim()
+    const source = String((row as any)?.origin || 'orders').trim().toLowerCase() || 'orders'
+    const dedupeKey = wmsId || email || `${source}:${customerName.toLowerCase()}`
     if (!dedupeKey || seenKeys.has(dedupeKey)) continue
     seenKeys.add(dedupeKey)
 
-    if (email && existingEmails.has(email)) continue
+    if (email && existingEmails.has(email)) {
+      continue
+    }
 
-    sellercloudRows.push({
-      id: `sc-${sellerId || email || dedupeKey}`,
+    discoveredRows.push({
+      id: `ord-${wmsId || email || String((row as any)?.order_number || dedupeKey)}`,
       name: customerName,
       email: email || '-',
       role: 'client',
@@ -176,14 +201,14 @@ export async function GET() {
       last_login_at: null,
       has_logged_in: null,
       auth_type: 'wms_extensiv',
-      wms_user_identifier: sellerId || null,
+      wms_user_identifier: wmsId || null,
       status: 'active',
-      source: 'sellercloud',
-      origin: 'sellercloud',
+      source,
+      origin: source,
     })
   }
 
-  return NextResponse.json({ customers: [...payload, ...sellercloudRows] })
+  return NextResponse.json({ customers: [...payload, ...discoveredRows] })
 }
 
 export async function POST(req: NextRequest) {

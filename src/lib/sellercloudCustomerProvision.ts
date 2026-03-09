@@ -135,22 +135,43 @@ function extractSellercloudCandidates(rows: any[]): SellercloudCandidate[] {
   const candidates: SellercloudCandidate[] = [];
 
   for (const row of rows || []) {
-    const metadata = row?.metadata || {};
-    const first = String(metadata?.FirstName || "").trim();
-    const last = String(metadata?.LastName || "").trim();
+    const metadata =
+      row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+    const first = String(
+      metadata?.FirstName || row?.FirstName || row?.ShippingAddressFirstName || "",
+    ).trim();
+    const last = String(
+      metadata?.LastName || row?.LastName || row?.ShippingAddressLastName || "",
+    ).trim();
     const fullName = `${first} ${last}`.trim();
-    const fallbackName = String(row?.client_name || "").trim();
-    const companyName = String(metadata?.CompanyName || "").trim();
+    const fallbackName = String(
+      row?.client_name || row?.CustomerName || row?.BuyerName || row?.ShipToName || "",
+    ).trim();
+    const companyName = String(metadata?.CompanyName || row?.CompanyName || "").trim();
     const name =
       fullName || fallbackName || companyName || "Sellercloud Customer";
 
-    const email = String(metadata?.CustomerEmail || "")
+    const email = String(
+      metadata?.CustomerEmail ||
+        metadata?.Email ||
+        row?.CustomerEmail ||
+        row?.Email ||
+        row?.customer_email ||
+        row?.email ||
+        "",
+    )
       .trim()
       .toLowerCase();
     if (!isValidEmail(email)) continue;
 
     const wmsUserIdentifier = String(
-      row?.sellercloud_customer_id || metadata?.CustomerID || "",
+      row?.sellercloud_customer_id ||
+        metadata?.CustomerID ||
+        metadata?.customer_id ||
+        row?.CustomerID ||
+        row?.customer_id ||
+        row?.WmsUserIdentifier ||
+        "",
     ).trim();
 
     const dedupeKey = wmsUserIdentifier || email || name.toLowerCase();
@@ -171,8 +192,9 @@ export async function createSellercloudCustomerLogins(params: {
   admin: ReturnType<typeof createClient>;
   accountId: string;
   inviteAccountId?: string;
+  sourceRows?: any[];
 }) {
-  const { admin, accountId, inviteAccountId } = params;
+  const { admin, accountId, inviteAccountId, sourceRows } = params;
   const accountIdForInvite = inviteAccountId || accountId;
   const summary = {
     discovered: 0,
@@ -183,21 +205,29 @@ export async function createSellercloudCustomerLogins(params: {
     errors: [] as string[],
   };
 
-  const { data: scOrders, error: scError } = await admin
-    .from("sellercloud_orders")
-    .select("client_name, sellercloud_customer_id, metadata")
-    .eq("account_id", accountId)
-    .order("order_date", { ascending: false })
-    .limit(5000);
+  let candidateRows: any[] = [];
+  if (Array.isArray(sourceRows) && sourceRows.length > 0) {
+    candidateRows = sourceRows;
+  } else {
+    const { data: orderRows, error: orderRowsError } = await admin
+      .from("orders")
+      .select("client_name, metadata, origin, created_at")
+      .eq("account_id", accountId)
+      .eq("origin", "sellercloud")
+      .order("created_at", { ascending: false })
+      .limit(5000);
 
-  if (scError) {
-    summary.errors.push(
-      `Failed loading Sellercloud customers: ${scError.message}`,
-    );
-    return summary;
+    if (!orderRowsError && orderRows) {
+      candidateRows = orderRows;
+    } else {
+      summary.errors.push(
+        `Failed loading Sellercloud customers from orders: ${orderRowsError?.message || "unknown error"}`,
+      );
+      return summary;
+    }
   }
 
-  const candidates = extractSellercloudCandidates(scOrders || []);
+  const candidates = extractSellercloudCandidates(candidateRows);
   summary.discovered = candidates.length;
 
   if (!candidates.length) return summary;
@@ -206,7 +236,7 @@ export async function createSellercloudCustomerLogins(params: {
     .from("users")
     .select("email")
     .eq("account_id", accountId)
-    .in("role", ["client", "staff-client"]);
+    .in("role", ["client", "staff-client", "staff-user", "client-user"]);
 
   if (existingError) {
     summary.errors.push(

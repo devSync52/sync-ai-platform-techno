@@ -151,6 +151,145 @@ function toDateOnly(value: any): string | null {
   return d.toISOString();
 }
 
+function normalizeText(value: any): string {
+  return String(value || "").trim().toLowerCase();
+}
+
+async function loadCustomerIdentityMatcher(
+  admin: ReturnType<typeof createClient>,
+  parentAccountId: string,
+) {
+  if (!parentAccountId) {
+    return {
+      resolve(): string | null {
+        return null;
+      },
+    };
+  }
+
+  const { data: accounts } = await admin
+    .from("accounts")
+    .select("id, name, parent_account_id")
+    .or(`id.eq.${parentAccountId},parent_account_id.eq.${parentAccountId}`);
+
+  const accountIds = Array.from(
+    new Set(
+      (accounts || [])
+        .map((a: any) => String(a?.id || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  if (!accountIds.length) accountIds.push(parentAccountId);
+
+  const { data: billingClients } = await admin
+    .from("billing_clients")
+    .select("client_account_id, name, wms_customer_id")
+    .eq("parent_account_id", parentAccountId);
+
+  const billingByWmsId = new Map<string, string>();
+  const billingByName = new Map<string, string>();
+  for (const billing of billingClients || []) {
+    const clientAccountId = String((billing as any)?.client_account_id || "").trim();
+    if (!clientAccountId) continue;
+    if (!accountIds.includes(clientAccountId)) accountIds.push(clientAccountId);
+
+    const wms = normalizeText((billing as any)?.wms_customer_id);
+    if (wms && !billingByWmsId.has(wms)) billingByWmsId.set(wms, clientAccountId);
+
+    const name = normalizeText((billing as any)?.name);
+    if (name && !billingByName.has(name)) billingByName.set(name, clientAccountId);
+  }
+
+  const accountNameById = new Map<string, string>();
+  for (const account of accounts || []) {
+    const accountId = String((account as any)?.id || "").trim();
+    const accountName = normalizeText((account as any)?.name);
+    if (accountId && accountName) accountNameById.set(accountId, accountName);
+  }
+
+  const { data: users } = await admin
+    .from("users")
+    .select("id, account_id, name, email, role")
+    .in("account_id", accountIds)
+    .in("role", ["client", "staff-client", "staff-user", "client-user"]);
+
+  const authUsersResult = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const wmsByUserId = new Map<string, string>();
+  if (!authUsersResult.error) {
+    for (const authUser of authUsersResult.data.users || []) {
+      const wmsId = normalizeText(
+        (authUser.user_metadata as any)?.wms_user_identifier ||
+          (authUser.app_metadata as any)?.wms_user_identifier,
+      );
+      if (wmsId) wmsByUserId.set(authUser.id, wmsId);
+    }
+  }
+
+  const byWmsId = new Map<string, string>();
+  const byEmail = new Map<string, string>();
+  const byName = new Map<string, string>();
+  const byCompany = new Map<string, string>();
+  for (const [accountId, accountName] of accountNameById.entries()) {
+    if (accountName && !byCompany.has(accountName)) byCompany.set(accountName, accountId);
+  }
+
+  for (const user of users || []) {
+    const userId = String((user as any)?.id || "").trim();
+    const accountId = String((user as any)?.account_id || "").trim();
+    if (!userId || !accountId) continue;
+
+    const email = normalizeText((user as any)?.email);
+    if (email && !byEmail.has(email)) byEmail.set(email, accountId);
+
+    const name = normalizeText((user as any)?.name);
+    if (name && !byName.has(name)) byName.set(name, accountId);
+
+    const company = normalizeText(accountNameById.get(accountId));
+    if (company && !byCompany.has(company)) byCompany.set(company, accountId);
+
+    const wms = normalizeText(wmsByUserId.get(userId));
+    if (wms && !byWmsId.has(wms)) byWmsId.set(wms, accountId);
+  }
+
+  return {
+    resolve(row: any): string | null {
+      const metadata =
+        row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+
+      const wmsId = normalizeText(
+        pick(metadata, ["CustomerID", "customer_id", "WmsUserIdentifier"], ""),
+      );
+      if (wmsId && byWmsId.has(wmsId)) return byWmsId.get(wmsId) || null;
+      if (wmsId && billingByWmsId.has(wmsId)) return billingByWmsId.get(wmsId) || null;
+
+      const email = normalizeText(
+        pick(metadata, ["CustomerEmail", "Email", "customer_email"], ""),
+      );
+      if (email && byEmail.has(email)) return byEmail.get(email) || null;
+
+      const first = normalizeText(
+        pick(metadata, ["FirstName", "ShippingAddressFirstName", "BillingAddressFirstName"], ""),
+      );
+      const last = normalizeText(
+        pick(metadata, ["LastName", "ShippingAddressLastName", "BillingAddressLastName"], ""),
+      );
+      const fullName = `${first} ${last}`.trim();
+      if (fullName && byName.has(fullName)) return byName.get(fullName) || null;
+
+      const clientName = normalizeText(row?.client_name);
+      if (clientName && byName.has(clientName)) return byName.get(clientName) || null;
+
+      const company = normalizeText(
+        pick(metadata, ["CompanyName", "company_name"], row?.client_name),
+      );
+      if (company && byCompany.has(company)) return byCompany.get(company) || null;
+      if (company && billingByName.has(company)) return billingByName.get(company) || null;
+
+      return null;
+    },
+  };
+}
+
 function inDateRange(
   isoDate: string | null,
   fromDate?: string,
@@ -271,7 +410,27 @@ async function fetchSellercloudOrders(
   });
 }
 
-function mapOrderRow(
+function normalizeSellercloudStatus(row: any): string | null {
+  const raw =
+    String(
+      pick(row, ["OrderStatus", "OrderStatusName", "Status", "status"], ""),
+    ).trim() || "";
+  if (raw) return raw;
+
+  const shippingStatus = toNumber(
+    pick(row, ["ShippingStatus", "shipping_status", "ShippingStatusCode"]),
+  );
+  if (shippingStatus === 2) return "Shipped";
+
+  const statusCode = toNumber(
+    pick(row, ["StatusCode", "status_code", "OrderStatusCode"]),
+  );
+  if (statusCode === null) return null;
+  if (statusCode === 1) return "Processing";
+  return `Status ${statusCode}`;
+}
+
+function mapSellercloudOrderToUnifiedRow(
   row: any,
   idx: number,
   effectiveAccountId: string,
@@ -345,13 +504,14 @@ function mapOrderRow(
   );
 
   const stableNaturalKey = `${effectiveAccountId}:${orderIdRaw || orderSourceRaw || externalId || pick(row, ["UniqueID", "UniqueId", "Guid"], idx)}`;
-  const id = uuidv5(stableNaturalKey, ORDER_UUID_NAMESPACE);
+  const orderUuid = uuidv5(stableNaturalKey, ORDER_UUID_NAMESPACE);
+  const metadataPayload =
+    row?.metadata && typeof row.metadata === "object" ? row.metadata : row;
 
   return {
-    id,
+    order_uuid: orderUuid,
     account_id: effectiveAccountId,
     channel_account_id: requestedAccountId,
-    external_id: externalId,
     order_id: orderIdRaw ? String(orderIdRaw) : null,
     order_source_order_id: orderSourceRaw ? String(orderSourceRaw) : null,
     client_name: clientName ? String(clientName) : null,
@@ -368,41 +528,66 @@ function mapOrderRow(
     status_code: toNumber(
       pick(row, ["StatusCode", "status_code", "OrderStatusCode"]),
     ),
-    shipping_status: toNumber(pick(row, ["ShippingStatus", "shipping_status"])),
-    payment_status: toNumber(pick(row, ["PaymentStatus", "payment_status"])),
-    sellercloud_customer_id: pick(
-      row,
-      ["CustomerID", "SellercloudCustomerID", "sellercloud_customer_id"],
-      null,
-    ),
-    sellercloud_user_id: toNumber(
-      pick(row, ["SellercloudUserID", "sellercloud_user_id", "UserID"]),
-    ),
-    metadata: row,
+    shipping_status: String(
+      pick(row, ["ShippingStatus", "shipping_status"], ""),
+    ).trim() || null,
+    payment_status: String(
+      pick(row, ["PaymentStatus", "payment_status"], ""),
+    ).trim() || null,
+    order_status: normalizeSellercloudStatus(row),
+    source:
+      String(pick(row, ["Source", "source"], "")).trim().toLowerCase() ||
+      "sellercloud",
+    marketplace_name:
+      String(
+        pick(
+          row,
+          [
+            "MarketplaceName",
+            "ChannelName",
+            "marketplace_name",
+            "Marketplace",
+          ],
+          "",
+        ),
+      ).trim() || null,
+    marketplace_code: String(
+      pick(row, ["MarketplaceCode", "marketplace_code"], ""),
+    ).trim() || null,
+    metadata: metadataPayload,
+    _external_id: externalId,
   };
 }
 
-function mapOrderItemRows(row: any, orderUuid: string) {
-  const sourceItems = Array.isArray(row?.Items) ? row.Items : [];
+function mapSellercloudOrderItems(row: any, orderUuid: string) {
+  const sourceItems = Array.isArray(row?.Items)
+    ? row.Items
+    : Array.isArray(row?.metadata?.Items)
+      ? row.metadata.Items
+      : [];
+
   return sourceItems.map((item: any, idx: number) => {
-    const quantity =
-      toNumber(pick(item, ["Qty", "Quantity", "quantity", "qty"], 0)) ?? 0;
-    const unitPrice =
-      toNumber(pick(item, ["UnitPrice", "Price", "price", "unit_price"], 0)) ??
-      0;
-    const totalPrice =
-      toNumber(pick(item, ["TotalPrice", "LineTotal", "total_price"], null)) ??
-      unitPrice * quantity;
     const sku = String(
       pick(item, ["SKU", "Sku", "ProductID", "ProductId", "sku"], ""),
     ).trim();
+    const quantity =
+      toNumber(pick(item, ["Qty", "Quantity", "quantity", "qty"], 0)) ?? 0;
+    const unitPrice =
+      toNumber(
+        pick(item, ["UnitPrice", "SitePrice", "Price", "price", "unit_price"], 0),
+      ) ?? 0;
+    const totalPrice =
+      toNumber(
+        pick(item, ["TotalPrice", "LineTotal", "LineTotalPrice", "total_price"], null),
+      ) ??
+      unitPrice * quantity;
 
-    const naturalKey = `${orderUuid}:${sku || "item"}:${idx}`;
-    const id = uuidv5(naturalKey, ORDER_ITEM_UUID_NAMESPACE);
+    const lineNaturalKey = `${orderUuid}:${sku || "item"}:${idx}`;
+    const lineId = uuidv5(lineNaturalKey, ORDER_ITEM_UUID_NAMESPACE);
 
     return {
-      id,
-      order_uuid: orderUuid,
+      id: lineId,
+      order_id: orderUuid,
       sku: sku || null,
       quantity,
       unit_price: unitPrice,
@@ -410,6 +595,275 @@ function mapOrderItemRows(row: any, orderUuid: string) {
       metadata: item,
     };
   });
+}
+
+function mapExtensivOrderToUnifiedRow(
+  row: any,
+  effectiveAccountId: string,
+  requestedAccountId: string,
+) {
+  const orderId =
+    String(row?.order_number || row?.external_id || row?.id || "").trim() ||
+    null;
+  const orderSourceId =
+    String(row?.external_id || row?.order_number || "").trim() || null;
+
+  const stableNaturalKey = `${effectiveAccountId}:${orderSourceId || orderId || row?.id}`;
+  const orderUuid = uuidv5(stableNaturalKey, ORDER_UUID_NAMESPACE);
+
+  const statusText =
+    row?.status_closed === true
+      ? "Closed"
+      : row?.status !== null && row?.status !== undefined
+        ? `Status ${row.status}`
+        : null;
+
+  return {
+    order_uuid: orderUuid,
+    account_id: effectiveAccountId,
+    channel_account_id: requestedAccountId,
+    order_id: orderId,
+    order_source_order_id: orderSourceId,
+    client_name: String(row?.customer_name || "").trim() || null,
+    grand_total: null,
+    order_date: toDateOnly(row?.creation_date || row?.process_date),
+    status_code: toNumber(row?.status),
+    shipping_status: null,
+    payment_status: null,
+    order_status: statusText,
+    source: "extensiv",
+    marketplace_name: String(row?.facility_name || "extensiv").trim(),
+    marketplace_code: String(row?.facility_external_id || "").trim() || null,
+    metadata: row?.raw_data && typeof row.raw_data === "object" ? row.raw_data : row,
+  };
+}
+
+function mapExtensivOrderItems(row: any, orderUuid: string) {
+  const rawData = row?.raw_data && typeof row.raw_data === "object" ? row.raw_data : {};
+  const sourceItems = Array.isArray(rawData?.items)
+    ? rawData.items
+    : Array.isArray(rawData?.Items)
+      ? rawData.Items
+      : [];
+
+  return sourceItems.map((item: any, idx: number) => {
+    const sku = String(pick(item, ["sku", "SKU", "product_sku", "productSku"], "")).trim();
+    const quantity = toNumber(pick(item, ["quantity", "qty", "Qty"], 0)) ?? 0;
+    const unitPrice = toNumber(pick(item, ["unit_price", "unitPrice", "price"], 0)) ?? 0;
+    const totalPrice =
+      toNumber(pick(item, ["total_price", "line_total", "lineTotal"], null)) ??
+      unitPrice * quantity;
+
+    const lineNaturalKey = `${orderUuid}:${sku || "item"}:${idx}`;
+    const lineId = uuidv5(lineNaturalKey, ORDER_ITEM_UUID_NAMESPACE);
+    return {
+      id: lineId,
+      order_id: orderUuid,
+      sku: sku || null,
+      quantity,
+      unit_price: unitPrice,
+      total_price: totalPrice,
+      metadata: item,
+    };
+  });
+}
+
+async function upsertUniversalOrders(
+  admin: ReturnType<typeof createClient>,
+  rows: any[],
+) {
+  if (!rows.length) return;
+  const matcher = await loadCustomerIdentityMatcher(
+    admin,
+    String(rows[0]?.account_id || ""),
+  );
+  const sanitizedRows = rows.map((row) => {
+    const orderNumberRaw = row?.order_id || row?.order_source_order_id || row?.order_uuid;
+    const orderNumber = orderNumberRaw ? String(orderNumberRaw) : null;
+    const orderDate = row?.order_date ? String(row.order_date) : null;
+    const createdAt =
+      orderDate && !Number.isNaN(new Date(orderDate).getTime())
+        ? orderDate
+        : new Date().toISOString();
+    return {
+      id: String(row?.order_uuid || uuidv5(`${row?.account_id}:${orderNumber || Math.random()}`, ORDER_UUID_NAMESPACE)),
+      account_id: row?.account_id || null,
+      client_id: matcher.resolve(row),
+      order_number: orderNumber,
+      order_source_order_id: row?.order_source_order_id || null,
+      client_name: row?.client_name || null,
+      marketplace_name: row?.marketplace_name || null,
+      origin: row?.source ? String(row.source) : null,
+      status: row?.order_status ? String(row.order_status) : null,
+      payment_status: row?.payment_status ? String(row.payment_status) : null,
+      shipping_status: row?.shipping_status ? String(row.shipping_status) : null,
+      total: row?.grand_total !== null && row?.grand_total !== undefined ? Number(row.grand_total) : null,
+      created_at: createdAt,
+      metadata: row?.metadata && typeof row.metadata === "object" ? row.metadata : null,
+    };
+  });
+
+  const chunkSize = 500;
+  for (let i = 0; i < sanitizedRows.length; i += chunkSize) {
+    const chunk = sanitizedRows.slice(i, i + chunkSize);
+    const { error: upsertError } = await admin.from("orders").upsert(chunk, {
+      onConflict: "id",
+    });
+    if (!upsertError) continue;
+
+    const errorText = String(upsertError.message || "").toLowerCase();
+    const missingColumn =
+      (errorText.includes("column") && errorText.includes("does not exist")) ||
+      (errorText.includes("could not find") && errorText.includes("column")) ||
+      errorText.includes("schema cache");
+
+    if (!missingColumn) {
+      throw new Error(`Failed to save universal orders: ${upsertError.message}`);
+    }
+
+    // Backward-compatible fallback while migration is pending.
+    const minimalChunk = chunk.map((row: any) => ({
+      id: row.id,
+      account_id: row.account_id,
+      client_id: row.client_id,
+      order_number: row.order_number,
+      origin: row.origin,
+      status: row.status,
+      total: row.total,
+      created_at: row.created_at,
+    }));
+    const { error: minimalError } = await admin
+      .from("orders")
+      .upsert(minimalChunk, { onConflict: "id" });
+    if (minimalError) {
+      throw new Error(`Failed to save universal orders: ${minimalError.message}`);
+    }
+  }
+}
+
+async function upsertOrderItems(
+  admin: ReturnType<typeof createClient>,
+  itemRows: any[],
+) {
+  if (!itemRows.length) return;
+  const chunkSize = 500;
+  for (let i = 0; i < itemRows.length; i += chunkSize) {
+    const chunk = itemRows.slice(i, i + chunkSize);
+    const { error } = await admin
+      .from("order_items")
+      .upsert(chunk, { onConflict: "id" });
+    if (error) {
+      const errorText = String(error.message || error.details || error.hint || "").toLowerCase();
+      // Keep order sync resilient while migration is being applied.
+      if (
+        errorText.includes("relation \"order_items\" does not exist") ||
+        errorText.includes("schema cache") ||
+        errorText.includes("could not find") ||
+        errorText.includes("column")
+      ) {
+        console.warn("[sync-orders] order_items schema not ready, skipping line items");
+        return;
+      }
+
+      // Non-fatal: orders/customer sync should not fail because items failed.
+      console.warn("[sync-orders] failed to upsert order_items chunk:", {
+        message: error.message,
+        details: (error as any).details,
+        hint: (error as any).hint,
+        code: (error as any).code,
+      });
+      return;
+    }
+  }
+}
+
+async function syncUniversalFromSourceTables(params: {
+  admin: ReturnType<typeof createClient>;
+  source: SyncSource;
+  effectiveAccountId: string;
+  requestedAccountId: string;
+  fromDate?: string;
+  toDate?: string;
+}) {
+  const { admin, source, effectiveAccountId, requestedAccountId, fromDate, toDate } =
+    params;
+
+  if (source === "sellercloud") {
+    const { data: integrationRows, error: integrationError } = await admin
+      .from("account_integrations")
+      .select("account_id, credentials")
+      .eq("type", "sellercloud")
+      .in("account_id", [effectiveAccountId, requestedAccountId]);
+
+    if (integrationError) {
+      throw new Error(
+        `Failed to load Sellercloud integration: ${integrationError.message}`,
+      );
+    }
+
+    const integration =
+      integrationRows?.find((r) => r.account_id === effectiveAccountId) ||
+      integrationRows?.find((r) => r.account_id === requestedAccountId) ||
+      null;
+
+    const credentials = parseCredentials(integration?.credentials);
+    if (!credentials) {
+      throw new Error(
+        "Sellercloud integration credentials are missing or invalid",
+      );
+    }
+
+    const fetched = await fetchSellercloudOrders(credentials, fromDate, toDate);
+    const rows = fetched.map((row, idx) =>
+      mapSellercloudOrderToUnifiedRow(
+        row,
+        idx,
+        effectiveAccountId,
+        requestedAccountId,
+      ),
+    );
+    const itemRows = fetched.flatMap((row: any, idx: number) => {
+      const orderUuid = rows[idx]?.order_uuid;
+      if (!orderUuid) return [];
+      return mapSellercloudOrderItems(row, String(orderUuid));
+    });
+    await upsertUniversalOrders(admin, rows);
+    await upsertOrderItems(admin, itemRows);
+    return {
+      importedCount: rows.length,
+      sourceRows: fetched,
+    };
+  }
+
+  let query = admin
+    .from("extensiv_orders")
+    .select(
+      "id, external_id, order_number, customer_name, creation_date, process_date, status, status_closed, facility_name, facility_external_id, raw_data",
+    )
+    .eq("account_id", effectiveAccountId);
+
+  if (fromDate) query = query.gte("creation_date", fromDate);
+  if (toDate) query = query.lte("creation_date", toDate);
+
+  const { data, error } = await query.limit(5000);
+  if (error) {
+    throw new Error(`Failed loading Extensiv orders for normalize: ${error.message}`);
+  }
+
+  const rows = (data || []).map((row: any) =>
+    mapExtensivOrderToUnifiedRow(row, effectiveAccountId, requestedAccountId),
+  );
+  const itemRows = (data || []).flatMap((row: any, idx: number) => {
+    const orderUuid = rows[idx]?.order_uuid;
+    if (!orderUuid) return [];
+    return mapExtensivOrderItems(row, String(orderUuid));
+  });
+  await upsertUniversalOrders(admin, rows);
+  await upsertOrderItems(admin, itemRows);
+  return {
+    importedCount: rows.length,
+    sourceRows: [] as any[],
+  };
 }
 
 async function tryDirectSellercloudFallback(params: {
@@ -451,6 +905,7 @@ async function tryDirectSellercloudFallback(params: {
     return {
       success: true,
       imported: 0,
+      source_rows: [] as any[],
       mode: "fallback_direct",
       message: "No orders found in Sellercloud",
     };
@@ -458,38 +913,21 @@ async function tryDirectSellercloudFallback(params: {
   console.log("fetched", fetched);
 
   const rows = fetched.map((row, idx) =>
-    mapOrderRow(row, idx, effectiveAccountId, requestedAccountId),
+    mapSellercloudOrderToUnifiedRow(
+      row,
+      idx,
+      effectiveAccountId,
+      requestedAccountId,
+    ),
   );
-  const itemRows = fetched.flatMap((row: any, idx: number) =>
-    mapOrderItemRows(row, rows[idx].id),
-  );
+  const itemRows = fetched.flatMap((row: any, idx: number) => {
+    const orderUuid = rows[idx]?.order_uuid;
+    if (!orderUuid) return [];
+    return mapSellercloudOrderItems(row, String(orderUuid));
+  });
 
-  const chunkSize = 500;
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    const chunk = rows.slice(i, i + chunkSize);
-    const { error: upsertError } = await admin
-      .from("sellercloud_orders")
-      .upsert(chunk, { onConflict: "id" });
-
-    if (upsertError) {
-      throw new Error(
-        `Failed to save Sellercloud orders: ${upsertError.message}`,
-      );
-    }
-  }
-
-  for (let i = 0; i < itemRows.length; i += chunkSize) {
-    const chunk = itemRows.slice(i, i + chunkSize);
-    const { error: upsertItemsError } = await admin
-      .from("sellercloud_order_items")
-      .upsert(chunk, { onConflict: "id" });
-
-    if (upsertItemsError) {
-      throw new Error(
-        `Failed to save Sellercloud order items: ${upsertItemsError.message}`,
-      );
-    }
-  }
+  await upsertUniversalOrders(admin, rows);
+  await upsertOrderItems(admin, itemRows);
 
   const now = new Date().toISOString();
   await admin
@@ -501,9 +939,9 @@ async function tryDirectSellercloudFallback(params: {
   return {
     success: true,
     imported: rows.length,
-    imported_items: itemRows.length,
+    source_rows: fetched,
     mode: "fallback_direct",
-    message: "Imported using direct Sellercloud fallback",
+    message: "Imported into universal orders table using direct Sellercloud fallback",
   };
 }
 
@@ -603,10 +1041,19 @@ export async function POST(req: Request) {
 
     const edgeRaw = await edgeResponse.text();
     const edgeResult = safeJsonParse(edgeRaw);
-    const edgeSucceeded = false; //edgeResponse.ok && edgeResult?.success !== false;
+    const edgeSucceeded = edgeResponse.ok && edgeResult?.success !== false;
     console.log("593", edgeSucceeded);
 
     if (edgeSucceeded) {
+      const normalized = await syncUniversalFromSourceTables({
+        admin,
+        source,
+        effectiveAccountId,
+        requestedAccountId: account_id,
+        fromDate,
+        toDate,
+      });
+
       let customerProvision: Awaited<
         ReturnType<typeof createSellercloudCustomerLogins>
       > | null = null;
@@ -616,24 +1063,24 @@ export async function POST(req: Request) {
           admin,
           accountId: effectiveAccountId,
           inviteAccountId: account_id,
+          sourceRows: normalized.sourceRows,
         });
       }
 
+      const basePayload =
+        edgeResult ?? {
+          success: true,
+          message: "Sync completed with empty response body",
+        };
+
       return new Response(
-        JSON.stringify(
-          customerProvision
-            ? {
-                ...(edgeResult ?? {
-                  success: true,
-                  message: "Sync completed with empty response body",
-                }),
-                customer_provision: customerProvision,
-              }
-            : (edgeResult ?? {
-                success: true,
-                message: "Sync completed with empty response body",
-              }),
-        ),
+        JSON.stringify({
+          ...basePayload,
+          imported_universal: normalized.importedCount,
+          ...(customerProvision
+            ? { customer_provision: customerProvision }
+            : {}),
+        }),
         {
           status: edgeResponse.status,
           headers: { "Content-Type": "application/json" },
@@ -654,12 +1101,17 @@ export async function POST(req: Request) {
           admin,
           accountId: effectiveAccountId,
           inviteAccountId: account_id,
+          sourceRows: Array.isArray((fallback as any)?.source_rows)
+            ? (fallback as any).source_rows
+            : undefined,
         });
+        const { source_rows, ...fallbackPublic } = fallback as any;
 
         return new Response(
           JSON.stringify({
-            ...fallback,
+            ...fallbackPublic,
             customer_provision: customerProvision,
+            imported_universal: fallbackPublic.imported,
             fallback_warning:
               edgeResult?.error ||
               (edgeRaw ? edgeRaw.substring(0, 500) : null) ||

@@ -146,45 +146,35 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
       setAccountId(userAccountId);
 
-      let query = supabase
-        .from("sellercloud_orders")
-        .select("*")
-        .gte("order_date", startDate)
-        .lte("order_date", endDate);
-
-      if (userRole === "client" || userRole === "staff-client") {
-        query = query.eq("channel_account_id", userAccountId);
-      } else {
-        query = query.eq("account_id", userAccountId);
-      }
-
-      const PAGE_SIZE = 1000;
-      let from = 0;
-      const allOrders: any[] = [];
-
-      while (true) {
-        const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
-
-        if (error) {
-          console.error("❌ Error fetching orders (paginated):", error.message);
+      try {
+        const params = new URLSearchParams({
+          page: "1",
+          pageSize: "5000",
+          source: "all",
+          search: "",
+          startDate,
+          endDate,
+        });
+        const response = await fetch(`/api/orders/list?${params.toString()}`, {
+          cache: "no-store",
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) {
+          console.error(
+            "❌ Error fetching dashboard orders:",
+            result?.error || response.statusText,
+          );
+          setOrders([]);
           return;
         }
-
-        if (!data || data.length === 0) {
-          break;
-        }
-
-        allOrders.push(...data);
-
-        if (data.length < PAGE_SIZE) {
-          // última página
-          break;
-        }
-
-        from += PAGE_SIZE;
+        setOrders(Array.isArray(result?.rows) ? result.rows : []);
+      } catch (error: any) {
+        console.error(
+          "❌ Error fetching dashboard orders:",
+          error?.message || String(error),
+        );
+        setOrders([]);
       }
-
-      setOrders(allOrders);
     }
 
     fetchData();

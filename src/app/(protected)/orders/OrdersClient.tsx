@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSupabase } from '@/components/supabase-provider'
 import { Button } from '@/components/ui/button'
 import OrderDetailsSc from '@/components/modals/OrderDetailsSc'
 import { SyncOrdersButton } from '@/components/buttons/SyncOrdersButton'
@@ -12,7 +11,6 @@ import { startOfMonth, endOfMonth, subYears } from 'date-fns'
 import '@/styles/daypicker-custom.css'
 
 export default function OrdersClient({ userId }: { userId: string }) {
-  const supabase = useSupabase()
   const [orders, setOrders] = useState<any[]>([])
   const [accountId, setAccountId] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
@@ -35,6 +33,12 @@ export default function OrdersClient({ userId }: { userId: string }) {
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
 
+  const isCustomerRole =
+    userRole === 'client' ||
+    userRole === 'staff-client' ||
+    userRole === 'staff-user' ||
+    userRole === 'client-user'
+
   const totalPages = Math.ceil(totalCount / itemsPerPage)
 
   const getMarketplaceLogo = (name: string | null | undefined) => {
@@ -54,278 +58,44 @@ export default function OrdersClient({ userId }: { userId: string }) {
     return logos[normalized] || null
   }
 
-  const deriveCustomerName = (row: any) => {
-    const first = String(row?.metadata?.FirstName || '').trim()
-    const last = String(row?.metadata?.LastName || '').trim()
-    const full = `${first} ${last}`.trim()
-    if (full) return full
-
-    const current = String(row?.client_name || '').trim()
-    if (current) return current
-
-    const company = String(row?.metadata?.CompanyName || '').trim()
-    if (company) return company
-
-    const email = String(row?.metadata?.CustomerEmail || '').trim()
-    return email || null
-  }
-
   useEffect(() => {
     async function fetchData() {
-      const start = (currentPage - 1) * itemsPerPage
-      const end = start + itemsPerPage - 1
+      try {
+        const params = new URLSearchParams({
+          page: String(currentPage),
+          pageSize: String(itemsPerPage),
+          source: sourceFilter,
+          search: searchTerm,
+          startDate,
+          endDate,
+        })
+        if (statusFilter) params.set('status', statusFilter)
 
-      const { data: userRecord } = await supabase.from('users').select('account_id, role').eq('id', userId).maybeSingle()
+        const res = await fetch(`/api/orders/list?${params.toString()}`, {
+          cache: 'no-store',
+        })
+        const result = await res.json().catch(() => null)
 
-      if (!userRecord) return
-
-      const userAccountId = userRecord.account_id
-      const userRole = userRecord.role
-      if (!userAccountId) return
-      const isCustomerUser = userRole === 'client' || userRole === 'staff-client'
-
-      const { data: accountRecord, error: accountError } = await supabase
-        .from('accounts')
-        .select('source, parent_account_id')
-        .eq('id', userAccountId)
-        .maybeSingle()
-
-      if (accountError) {
-        console.error('❌ Error fetching account source:', accountError.message)
-      }
-
-      const effectiveAccountId =
-        isCustomerUser
-          ? userAccountId
-          : accountRecord?.parent_account_id || userAccountId
-
-      setAccountId(effectiveAccountId)
-
-      const isExtensiv = (accountRecord?.source || '').toLowerCase() === 'extensiv'
-      const ordersTable = isExtensiv ? 'extensiv_orders' : 'ai_orders_unified_6'
-      const orderDateField = isExtensiv ? 'creation_date' : 'order_date'
-
-      const statusField = isExtensiv ? 'status' : 'order_status'
-      const statusFilterField =
-        isCustomerUser
-          ? (isExtensiv ? 'account_id_channel' : 'channel_account_id')
-          : 'account_id'
-
-      let customerScopedOrderIds: string[] | null = null
-      if (isCustomerUser && !isExtensiv) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-
-        const wmsUserIdentifier = String(
-          (session?.user?.user_metadata as any)?.wms_user_identifier || ''
-        ).trim()
-        const customerEmail = String(session?.user?.email || '')
-          .trim()
-          .toLowerCase()
-        const customerName = String(userRecord?.name || '')
-          .trim()
-          .toLowerCase()
-
-        let customerScopeQuery = supabase
-          .from('sellercloud_orders')
-          .select('order_id, sellercloud_customer_id, client_name, metadata, order_date')
-          .eq('account_id', effectiveAccountId)
-
-        if (startDate) {
-          customerScopeQuery = customerScopeQuery.gte('order_date', startDate)
-        }
-        if (endDate) {
-          customerScopeQuery = customerScopeQuery.lte('order_date', endDate)
-        }
-
-        const { data: customerScopeRows, error: customerScopeError } =
-          await customerScopeQuery.limit(5000)
-
-        if (customerScopeError) {
-          console.error('❌ Error fetching customer-scoped sellercloud orders:', customerScopeError.message)
-          setOrders([])
-          setTotalCount(0)
-          setAllStatusOptions([])
-          setUserRole(userRecord.role)
+        if (!res.ok) {
+          console.error('❌ Error fetching orders:', result?.error || res.statusText)
           return
         }
 
-        const scopedIds = new Set<string>()
-        for (const row of customerScopeRows || []) {
-          const sellerId = String(
-            (row as any)?.sellercloud_customer_id || (row as any)?.metadata?.CustomerID || ''
-          ).trim()
-          const rowEmail = String((row as any)?.metadata?.CustomerEmail || '')
-            .trim()
-            .toLowerCase()
-          const rowName = deriveCustomerName(row).toLowerCase()
-
-          const isMatch =
-            (wmsUserIdentifier && sellerId === wmsUserIdentifier) ||
-            (customerEmail && rowEmail === customerEmail) ||
-            (customerName && rowName === customerName)
-
-          if (isMatch && row?.order_id) {
-            scopedIds.add(String(row.order_id))
-          }
-        }
-
-        customerScopedOrderIds = Array.from(scopedIds)
-        if (!customerScopedOrderIds.length) {
-          setOrders([])
-          setTotalCount(0)
-          setAllStatusOptions([])
-          setUserRole(userRecord.role)
-          return
-        }
-      }
-
-      let statusQuery = supabase.from(ordersTable).select(statusField)
-      if (isCustomerUser) {
-        if (!isExtensiv && customerScopedOrderIds?.length) {
-          statusQuery = statusQuery.in('order_id', customerScopedOrderIds)
-        } else {
-          statusQuery = statusQuery.eq(statusFilterField, effectiveAccountId)
-        }
-      } else {
-        statusQuery = statusQuery.eq(statusFilterField, effectiveAccountId)
-      }
-      const { data: statusRows, error: statusError } = await statusQuery
-
-      if (statusError) {
-        console.error('❌ Error fetching status options:', statusError.message)
-      } else {
-        const allStatuses = Array.from(
-          new Set(
-            (statusRows || [])
-              .map((r: any) => r?.[statusField])
-              .filter((v: any) => v !== null && v !== undefined)
-              .map((v: any) => String(v))
-          )
-        )
-        setAllStatusOptions(allStatuses)
-      }
-
-      let query = supabase
-        .from(ordersTable)
-        .select(
-          isExtensiv
-            ? 'id, account_id, account_id_channel, external_id, order_number, customer_name, facility_name, status, source, creation_date, process_date, tracking_number'
-            : 'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id',
-          { count: 'exact' }
-        )
-
-      // ✅ Filtrar corretamente dependendo da role
-      if (isCustomerUser) {
-        if (!isExtensiv && customerScopedOrderIds?.length) {
-          query = query.in('order_id', customerScopedOrderIds)
-        } else {
-          query = query.eq(isExtensiv ? 'account_id_channel' : 'channel_account_id', effectiveAccountId)
-        }
-      } else {
-        query = query.eq('account_id', effectiveAccountId)
-      }
-
-      if (sourceFilter !== 'all') {
-        query = query.eq('source', sourceFilter)
-      }
-
-      if (statusFilter) {
-        if (isExtensiv) {
-          const numericStatus = Number(statusFilter)
-          query = query.eq('status', Number.isNaN(numericStatus) ? statusFilter : numericStatus)
-        } else {
-          query = query.eq('order_status', statusFilter)
-        }
-      }
-
-      if (startDate) {
-        query = query.gte(orderDateField, startDate)
-      }
-
-      if (endDate) {
-        query = query.lte(orderDateField, endDate)
-      }
-
-      if (searchTerm) {
-        query = query.or(
-          isExtensiv
-            ? `order_number.ilike.%${searchTerm}%,external_id.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%,tracking_number.ilike.%${searchTerm}%`
-            : `order_id.ilike.%${searchTerm}%,marketplace_name.ilike.%${searchTerm}%,client_name.ilike.%${searchTerm}%,order_source_order_id.ilike.%${searchTerm}%`
-        )
-      }
-
-      // ✅ Ordenação por data decrescente
-      query = query.order(orderDateField, { ascending: false })
-
-      const { data, count, error } = await query.range(start, end)
-
-      if (error) {
-        console.error('❌ Error fetching orders:', error.message)
+        setOrders(Array.isArray(result?.rows) ? result.rows : [])
+        setTotalCount(Number(result?.totalCount || 0))
+        setAllStatusOptions(Array.isArray(result?.statuses) ? result.statuses : [])
+        setUserRole(result?.role || null)
+        setAccountId(result?.accountId || null)
+      } catch (e: any) {
+        console.error('❌ Error fetching orders:', e?.message || String(e))
         return
       }
-
-      let normalizedOrders = isExtensiv
-        ? (data || []).map((row: any) => ({
-          order_uuid: row.external_id ?? String(row.id),
-          order_id: row.order_number ?? row.external_id ?? String(row.id),
-          order_source_order_id: row.external_id ?? row.order_number ?? '—',
-          client_name: row.customer_name ?? '—',
-          grand_total: null,
-          order_date: row.creation_date ?? row.process_date ?? null,
-          order_status: row.status_closed ? 'Closed' : row.status !== null && row.status !== undefined ? String(row.status) : '—',
-          source: (row.source || 'extensiv') as string,
-          marketplace_name: row.facility_name ?? 'extensiv',
-          channel_account_id: row.account_id_channel ?? null,
-        }))
-        : data || []
-
-      if (!isExtensiv) {
-        const orderIds = Array.from(
-          new Set(
-            (normalizedOrders || [])
-              .map((row: any) => row?.order_id)
-              .filter((id: any) => id !== null && id !== undefined)
-              .map((id: any) => String(id))
-          )
-        )
-
-        if (orderIds.length > 0) {
-          const { data: sellerRows } = await supabase
-            .from('sellercloud_orders')
-            .select('order_id, client_name, metadata')
-            .eq('account_id', effectiveAccountId)
-            .in('order_id', orderIds)
-
-          if (sellerRows?.length) {
-            const byOrderId = new Map(
-              sellerRows.map((row: any) => [String(row.order_id), row])
-            )
-
-            normalizedOrders = normalizedOrders.map((row: any) => {
-              const match = byOrderId.get(String(row.order_id))
-              if (!match) return row
-              return {
-                ...row,
-                client_name: deriveCustomerName(match),
-              }
-            })
-          }
-        }
-      }
-
-      setOrders(normalizedOrders)
-      setTotalCount(count || 0)
-      setUserRole(userRecord.role)
     }
 
     fetchData()
   }, [
-    userId,
     currentPage,
     itemsPerPage,
-    supabase,
     sourceFilter,
     statusFilter,
     startDate,
@@ -363,7 +133,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
             date={selectedRange}
             setDate={setSelectedRange}
           />
-          {accountId && userRole !== 'client' && userRole !== 'staff-client' && (
+          {accountId && !isCustomerRole && (
             <SyncOrdersButton
               accountId={accountId}
               onImported={() => setReloadToken((prev) => prev + 1)}
@@ -375,7 +145,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
       <FilterBar
         title="Unified Orders"
         placeholder={
-          userRole === 'client' || userRole === 'staff-client'
+          isCustomerRole
             ? 'Search by Order ID or Marketplace'
             : 'Search by Order ID, Client, or Marketplace'
         }
@@ -390,6 +160,9 @@ export default function OrdersClient({ userId }: { userId: string }) {
         }}
         filters={[
           ...(userRole !== 'client'
+            && userRole !== 'staff-client'
+            && userRole !== 'staff-user'
+            && userRole !== 'client-user'
             ? [
               {
                 label: 'Source',
@@ -437,7 +210,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
               <th className="py-3 px-4 text-left font-medium">Order ID</th>
               <th className="py-3 px-4 text-left font-medium">Marketplace</th>
               <th className="py-3 px-4 text-left font-medium">Order Marketplace ID</th>
-              {userRole !== 'client' && (
+              {!isCustomerRole && (
                 <th className="py-3 px-4 text-left font-medium">Source</th>
               )}
               <th className="py-3 px-4 text-left font-medium">Order Date</th>
@@ -469,7 +242,7 @@ export default function OrdersClient({ userId }: { userId: string }) {
                 </td>
                 <td className="py-3 px-4 text-gray-700">
                   {order.order_source_order_id || '—'}
-                </td>{userRole !== 'client' && (
+                </td>{!isCustomerRole && (
                   <td className="py-3 px-4">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${order.source === 'sellercloud'

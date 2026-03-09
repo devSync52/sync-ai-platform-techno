@@ -54,17 +54,35 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
   }
 
   useEffect(() => {
-    if (!open || !order?.order_id) return;
+    if (!open || (!order?.order_id && !order?.order_uuid && !order?.id)) return;
 
     async function fetchOrderAndItems() {
-      console.log('[🧪 Debug] order.order_id confirmado:', order.order_id);
+      console.log('[🧪 Debug] order confirmado:', order);
       setLoading(true);
+      setItems([]);
 
-      const { data: full, error: fullErr } = await supabase
-        .from('sellercloud_orders')
-        .select('*')
-        .eq('order_id', order.order_id)
-        .maybeSingle()
+      const orderUuid = order?.order_uuid || order?.id || null
+
+      let full: any = null
+      let fullErr: any = null
+
+      if (orderUuid) {
+        const result = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', orderUuid)
+          .maybeSingle()
+        full = result.data
+        fullErr = result.error
+      } else if (order?.order_id) {
+        const result = await supabase
+          .from('orders')
+          .select('*')
+          .eq('order_number', order.order_id)
+          .maybeSingle()
+        full = result.data
+        fullErr = result.error
+      }
 
       if (fullErr) {
         console.error('❌ Erro ao buscar order completo:', fullErr.message);
@@ -72,28 +90,27 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
         setFullOrder(full);
       }
 
-      const orderUuid =
-        full?.id ||
-        order?.id ||
-        order?.order_uuid ||
-        null
+      let itemsData: any[] = []
+      if (orderUuid) {
+        const { data: savedItems, error: savedItemsErr } = await supabase
+          .from('order_items')
+          .select('*')
+          .eq('order_id', orderUuid)
 
-      const { data: itemsData, error: itemsErr } = await supabase
-        .from('sellercloud_order_items')
-        .select('*')
-        .eq('order_uuid', orderUuid)
-
-      if (itemsErr) {
-        console.error('❌ Erro ao buscar itens do pedido:', itemsErr.message);
-      } else {
-        console.log('[✅] Itens encontrados:', itemsData);
-        setItems(itemsData || []);
+        if (savedItemsErr) {
+          console.error('❌ Erro ao buscar itens do pedido (order_items):', savedItemsErr.message);
+        } else if (Array.isArray(savedItems) && savedItems.length > 0) {
+          itemsData = savedItems
+          setItems(savedItems)
+        }
       }
 
-      // Fallback: render line items directly from sellercloud_orders.metadata.Items
-      // when sellercloud_order_items is empty for this order.
+      // Fallback: render line items directly from orders.metadata.Items
+      // when order_items is empty for this order.
       const hasDbItems = Array.isArray(itemsData) && itemsData.length > 0
-      const rawItems = Array.isArray(full?.metadata?.Items) ? full.metadata.Items : []
+      const rawItems = Array.isArray((full || fullOrder)?.metadata?.Items)
+        ? (full || fullOrder).metadata.Items
+        : []
       if (!hasDbItems && rawItems.length > 0) {
         const mapped = rawItems.map((item: any, index: number) => {
           const quantity = Number(item?.Qty ?? item?.Quantity ?? 0)
@@ -117,7 +134,7 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
     }
 
     fetchOrderAndItems();
-  }, [open, order?.id, order?.order_id, supabase])
+  }, [open, order?.id, order?.order_id, order?.order_uuid, order?.source, supabase])
 
   return (
     <Dialog open={open} onOpenChange={onCloseAction}>
