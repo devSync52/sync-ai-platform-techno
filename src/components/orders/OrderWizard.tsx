@@ -616,14 +616,50 @@ export default function OrderWizard() {
     if (!quoteData?.id) return
   
     try {
+      const prefs: any = quoteData?.preferences ?? {}
+      const externalService = String(prefs?.external_service ?? '').toLowerCase()
+
       await updateDraft(
         {
-          order: true,
           status: 'converted',
-
           step: 4,
         } as any
       )
+
+      if (externalService === 'sellercloud') {
+        const createOrderRes = await fetch('/api/orders/sellercloud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ draftId: quoteData.id }),
+        })
+
+        const createOrderJson = await createOrderRes.json().catch(() => ({}))
+        if (!createOrderRes.ok || !createOrderJson?.success) {
+          const message =
+            createOrderJson?.error ||
+            createOrderJson?.message ||
+            'Failed to create order in Sellercloud'
+          throw new Error(String(message))
+        }
+
+        const sellercloudOrderId =
+          createOrderJson?.sellercloudOrderId ??
+          createOrderJson?.sellercloud?.ID ??
+          null
+
+        const { error: persistError } = await supabase
+          .from('saip_quote_drafts')
+          .update({
+            sellercloud_status: 'success',
+            sellercloud_order_id: sellercloudOrderId,
+          } as any)
+          .eq('id', quoteData.id)
+
+        if (persistError) {
+          console.error('❌ Failed to persist Sellercloud status after create:', persistError)
+        }
+      }
   
       router.push('/orders/create-order')
     } catch (e: any) {

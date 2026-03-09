@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button'
 type Warehouse = {
   id: string
   name: string | null
+  source?: string | null
+  wms_facility_id?: string | null
+  sellercloud_id?: string | null
   address_line1?: string | null
   address_line2?: string | null
   city?: string | null
@@ -46,17 +49,32 @@ export function Step2WarehouseSelection({
         data: { session },
       } = await supabase.auth.getSession()
 
-      // Preferred: use session metadata when available.
-      // Fallback: use the draft.account_id to locate warehouses.
-      const sessionAccountId = session?.user?.user_metadata?.account_id as string | undefined
-      const role = session?.user?.user_metadata?.role as string | undefined
+      // Resolve role/account from DB first (more reliable than auth metadata).
+      let resolvedRole: string | null = null
+      let resolvedAccountId: string | null = null
+      const sessionUserId = session?.user?.id ?? null
+      if (sessionUserId) {
+        const { data: me } = await supabase
+          .from('users')
+          .select('role, account_id')
+          .eq('id', sessionUserId)
+          .maybeSingle()
+        if (me) {
+          resolvedRole = (me as any).role ? String((me as any).role) : null
+          resolvedAccountId = (me as any).account_id ? String((me as any).account_id) : null
+        }
+      }
+
+      // Fallback to metadata only if DB lookup is unavailable.
+      const metaAccountId = (session?.user?.user_metadata?.account_id as string | undefined) ?? null
+      const metaRole = (session?.user?.user_metadata?.role as string | undefined) ?? null
 
       // Always fetch the draft so we can:
       // - read current ship_from.warehouse_id
       // - fallback to draft.account_id when session is missing
       const { data: draftData, error: draftError } = await supabase
         .from('saip_quote_drafts')
-        .select('ship_from, account_id')
+        .select('ship_from, account_id, preferences')
         .eq('id', draftId)
         .single()
 
@@ -68,7 +86,22 @@ export function Step2WarehouseSelection({
       }
 
       const draftAccountId = (draftData as any)?.account_id as string | null
-      const accountId = sessionAccountId || draftAccountId
+      const accountId = resolvedAccountId || metaAccountId || draftAccountId
+      const role = (resolvedRole || metaRole || '').toLowerCase()
+      const preferences = (draftData as any)?.preferences
+      const prefsObj =
+        preferences && typeof preferences === 'object'
+          ? preferences
+          : typeof preferences === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(preferences)
+                } catch {
+                  return {}
+                }
+              })()
+            : {}
+      const externalService = String((prefsObj as any)?.external_service ?? '').toLowerCase()
 
       if (!accountId) {
         toast.error('Missing account ID')
@@ -76,21 +109,8 @@ export function Step2WarehouseSelection({
         return
       }
 
-      let effectiveAccountId = accountId
-
-      // If we have a session role indicating client, resolve parent account.
-      // If we don't have a session, also attempt parent resolution as a best-effort.
-      if (role === 'client' || role === 'staff-client' || !session) {
-        const { data: parentData, error: parentError } = await supabase
-          .from('accounts')
-          .select('parent_account_id')
-          .eq('id', accountId)
-          .single()
-
-        if (!parentError && parentData?.parent_account_id) {
-          effectiveAccountId = parentData.parent_account_id
-        }
-      }
+      // Role currently not used for filtering because we now read from billing warehouses API.
+      void role
 
       // If caller provided an initial warehouse id, prefer it for UI selection.
       if (initialWarehouse) {
@@ -111,21 +131,39 @@ export function Step2WarehouseSelection({
       if (shipFromObj?.warehouse_id) {
         setSelectedWarehouse(String(shipFromObj.warehouse_id))
       }
+      if (shipFromObj?.sellercloud_warehouse_id) {
+        setSelectedWarehouse(String(shipFromObj.sellercloud_warehouse_id))
+      }
 
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('id, name, address_line1, address_line2, city, state, zip_code, country, phone, email')
-        .eq('account_id', effectiveAccountId)
-        .order('name')
-
-      if (error) {
-        console.error('❌ Error fetching warehouses:', error)
+      // Read warehouses from Billing module (single source of truth).
+      const res = await fetch('/api/billing/warehouses', {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        console.error('❌ Error loading billing warehouses:', json)
         toast.error('Failed to load warehouses')
         setLoadingDraft(false)
         return
       }
 
-      setWarehouses(data)
+      const allRows: Warehouse[] = Array.isArray(json?.data)
+        ? json.data.map((row: any) => ({
+            id: String(row?.id || ''),
+            name: String(row?.name || 'Unnamed Warehouse'),
+            city: row?.city ?? null,
+            state: row?.state ?? null,
+            source: row?.source ?? null,
+            wms_facility_id: row?.wms_facility_id ?? null,
+          }))
+        : []
+
+      const filtered =
+        externalService === 'sellercloud'
+          ? allRows.filter((w) => String(w.source || '').toLowerCase() === 'sellercloud')
+          : allRows
+      setWarehouses(filtered.filter((w) => w.id))
 
       setLoadingDraft(false)
     }
@@ -147,9 +185,29 @@ export function Step2WarehouseSelection({
       .single()
 
     const selectedWarehouseData = warehouses.find(w => w.id === selectedWarehouse)
+    const { data: draftData } = await supabase
+      .from('saip_quote_drafts')
+      .select('preferences')
+      .eq('id', draftId)
+      .maybeSingle()
+
+    const prefObj =
+      (draftData as any)?.preferences && typeof (draftData as any).preferences === 'object'
+        ? (draftData as any).preferences
+        : {}
+    const externalService = String(prefObj?.external_service ?? '').toLowerCase()
 
     const updatedShipFrom = {
-      warehouse_id: selectedWarehouseData?.id,
+      warehouse_id: selectedWarehouseData?.id ?? null,
+      sellercloud_warehouse_id:
+        externalService === 'sellercloud'
+          ? String(
+              selectedWarehouseData?.wms_facility_id ||
+                selectedWarehouseData?.sellercloud_id ||
+                selectedWarehouseData?.id ||
+                ''
+            )
+          : null,
       name: selectedWarehouseData?.name,
       address: {
         line1: selectedWarehouseData?.address_line1,
@@ -211,13 +269,20 @@ export function Step2WarehouseSelection({
                 </div>
                 <div>
                   <h3 className="text-md font-semibold">{wh.name}</h3>
-                  <p className="text-sm text-muted-foreground">Warehouse ID: {wh.id.slice(0, 8)}...</p>
+                  <p className="text-sm text-muted-foreground">
+                    Source: {String(wh.source || 'manual').toUpperCase()} • ID: {wh.id.slice(0, 8)}...
+                  </p>
                 </div>
               </div>
             </button>
           )
         })}
       </div>
+      {warehouses.length === 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          No warehouses found for this account. Add a warehouse first in Billing/Warehouses.
+        </div>
+      )}
 
       <div className="flex justify-between pt-4">
         <Button variant="outline" onClick={onBack}>Back</Button>

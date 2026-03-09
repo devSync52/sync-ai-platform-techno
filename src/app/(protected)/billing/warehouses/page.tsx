@@ -33,6 +33,7 @@ export default function WarehousesPage() {
   const [error, setError] = useState<string | null>(null)
   const [openAdd, setOpenAdd] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [syncingSellercloud, setSyncingSellercloud] = useState(false)
   const [draft, setDraft] = useState<WarehouseRow>({ id: '', name: '', city: '', state: '', is_default: false })
   const supabase = useSupabase()
 
@@ -146,6 +147,24 @@ export default function WarehousesPage() {
     }
   }
 
+  const syncSellercloudWarehouses = async () => {
+    setSyncingSellercloud(true)
+    setError(null)
+    try {
+      const res = await authFetch('/api/billing/warehouses', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'syncSellercloud' }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to sync Sellercloud warehouses')
+      setRows(Array.isArray(json.data) ? (json.data as WarehouseRow[]) : [])
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setSyncingSellercloud(false)
+    }
+  }
+
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
@@ -157,6 +176,9 @@ export default function WarehousesPage() {
         <div className="flex gap-2">
           <Input placeholder="Search warehouses…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" />
           <Button variant="outline" onClick={() => location.reload()}>Refresh</Button>
+          <Button variant="outline" onClick={syncSellercloudWarehouses} disabled={syncingSellercloud}>
+            {syncingSellercloud ? 'Syncing…' : 'Sync Sellercloud'}
+          </Button>
           <Button onClick={() => setOpenAdd(true)} disabled={saving}>{saving ? 'Saving…' : 'Add warehouse'}</Button>
         </div>
       </div>
@@ -175,6 +197,7 @@ export default function WarehousesPage() {
               <tr className="text-left border-b">
                 <th className="py-2 pr-3">Name</th>
                 <th className="py-2 pr-3">Location</th>
+                <th className="py-2 pr-3">Source</th>
                 <th className="py-2 pr-3">ID</th>
                 <th className="py-2 text-right">Actions</th>
               </tr>
@@ -182,7 +205,7 @@ export default function WarehousesPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
                     <div className="inline-flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Loading warehouses…
@@ -197,6 +220,11 @@ export default function WarehousesPage() {
                     {w.is_default && <span className="ml-2 text-xs rounded bg-muted px-2 py-0.5 align-middle">Default</span>}
                   </td>
                   <td className="py-2 pr-3">{formatLocation(w.city, w.state)}</td>
+                  <td className="py-2 pr-3">
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs uppercase">
+                      {String(w.source || 'manual')}
+                    </span>
+                  </td>
                   <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{w.id}</td>
                   <td className="py-2 text-right space-x-2">
                     
@@ -206,7 +234,7 @@ export default function WarehousesPage() {
               ))}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-muted-foreground">No warehouses found.</td>
+                  <td colSpan={5} className="py-6 text-center text-muted-foreground">No warehouses found.</td>
                 </tr>
               )}
             </tbody>

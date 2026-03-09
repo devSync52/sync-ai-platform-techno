@@ -3,17 +3,6 @@ import type { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 
-function getAccountContext(user: any) {
-  const role = user?.user_metadata?.role ?? user?.app_metadata?.role ?? null
-  const accountId =
-    user?.app_metadata?.account_id ??
-    user?.user_metadata?.account_id ??
-    user?.app_metadata?.parent_account_id ??
-    user?.user_metadata?.parent_account_id ??
-    null
-  return { role, accountId }
-}
-
 export async function GET(_req: NextRequest) {
   const cookieStore = (await cookies()) as any
   const supabase = createServerClient(
@@ -47,10 +36,19 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { role, accountId } = getAccountContext(user)
-  if (!accountId) {
+  // Resolve role + account from DB to avoid stale/missing auth metadata.
+  const { data: currentUserRow, error: currentUserError } = await supabase
+    .from('users')
+    .select('role, account_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (currentUserError || !currentUserRow?.account_id) {
     return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
   }
+
+  const role = String(currentUserRow.role || '').toLowerCase()
+  const accountId = String(currentUserRow.account_id)
 
   // Se for client/staff-client, devolve só a própria conta
   if (role === 'client' || role === 'staff-client') {
@@ -65,13 +63,25 @@ export async function GET(_req: NextRequest) {
   }
 
   // Caso contrário, devolve os filhos
-  const { data, error } = await supabase
+  const { data: children, error } = await supabase
     .from('accounts')
     .select('*')
     .eq('parent_account_id', accountId)
-    .not('external_id', 'is', null)
     .order('name', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ clients: data ?? [] })
+
+  // Fallback: if no child accounts, allow selecting own account.
+  if (!children || children.length === 0) {
+    const { data: ownAccount, error: ownError } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('id', accountId)
+      .maybeSingle()
+
+    if (ownError) return NextResponse.json({ error: ownError.message }, { status: 500 })
+    return NextResponse.json({ clients: ownAccount ? [ownAccount] : [] })
+  }
+
+  return NextResponse.json({ clients: children })
 }

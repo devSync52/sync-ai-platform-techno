@@ -228,7 +228,11 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
     
         setClientId(String(draft.client))
     
-        const wh = (draft as any)?.ship_from?.warehouse_id ?? (draft as any)?.ship_from?.warehouseId ?? ''
+        const wh =
+          (draft as any)?.ship_from?.warehouse_id ??
+          (draft as any)?.ship_from?.warehouseId ??
+          (draft as any)?.ship_from?.sellercloud_warehouse_id ??
+          ''
         const shipName = (draft as any)?.ship_from?.name ?? ''
     
         setWarehouseId(String(wh || ''))

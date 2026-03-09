@@ -106,7 +106,7 @@ export async function GET() {
 
   const { data: customers, error } = await supabaseAdmin
     .from('users')
-    .select('id, name, email, role, created_at, last_login_at, has_logged_in')
+    .select('id, account_id, name, email, role, created_at, last_login_at, has_logged_in')
     .eq('account_id', context.accountId)
     .in('role', ['client', 'staff-client', 'staff-user', 'client-user'])
     .order('created_at', { ascending: false })
@@ -140,6 +140,7 @@ export async function GET() {
 
     return {
       ...customer,
+      account_id: (customer as any)?.account_id ?? context.accountId,
       auth_type: authType,
       wms_user_identifier:
         (userMetadata.wms_user_identifier as string | undefined) ??
@@ -200,6 +201,7 @@ export async function GET() {
       created_at: (row as any)?.created_at ?? null,
       last_login_at: null,
       has_logged_in: null,
+      account_id: context.accountId,
       auth_type: 'wms_extensiv',
       wms_user_identifier: wmsId || null,
       status: 'active',
