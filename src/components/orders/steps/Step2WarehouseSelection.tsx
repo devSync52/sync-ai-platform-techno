@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Warehouse as WarehouseIcon } from 'lucide-react'
+import { CheckCircle2, Circle, Warehouse as WarehouseIcon } from 'lucide-react'
 import { useSupabase } from '@/components/supabase-provider'
 import type { Database } from '@/types/supabase'
 import { toast } from 'sonner'
@@ -128,10 +128,10 @@ export function Step2WarehouseSelection({
         }
       })() : shipFrom
 
+      // Prefer billing/public warehouse id first; fallback to sellercloud id if that's how it's stored.
       if (shipFromObj?.warehouse_id) {
         setSelectedWarehouse(String(shipFromObj.warehouse_id))
-      }
-      if (shipFromObj?.sellercloud_warehouse_id) {
+      } else if (shipFromObj?.sellercloud_warehouse_id) {
         setSelectedWarehouse(String(shipFromObj.sellercloud_warehouse_id))
       }
 
@@ -251,7 +251,19 @@ export function Step2WarehouseSelection({
 
   return (
     <div className="space-y-6 p-4 bg-white">
-      <h2 className="text-lg font-semibold">Select a Warehouse</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Select a Warehouse</h2>
+        {selectedWarehouse ? (
+          <span className="text-sm text-primary flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary" />
+            Selected •{' '}
+            {warehouses.find((w) => w.id === selectedWarehouse)?.name ?? 'Warehouse'}
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">Tap a card to select</span>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-1 gap-4">
         {warehouses.map((wh) => {
           const isSelected = selectedWarehouse === wh.id
@@ -259,10 +271,14 @@ export function Step2WarehouseSelection({
             <button
               key={wh.id}
               onClick={() => setSelectedWarehouse(wh.id)}
-              className={`w-full border rounded-lg p-4 text-left transition-all duration-200
-                ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-300 bg-white'}
+              aria-pressed={isSelected}
+              className={`group relative w-full rounded-lg border p-4 text-left transition-all duration-200
+                ${isSelected ? 'border-primary bg-primary/10 ring-2 ring-primary/20' : 'border-gray-200 bg-white hover:border-primary/50'}
                 hover:shadow-md`}
             >
+              <div className="absolute right-3 top-3 text-primary">
+                {isSelected ? <CheckCircle2 size={20} /> : <Circle size={20} className="text-muted-foreground" />}
+              </div>
               <div className="flex items-center space-x-4">
                 <div className="p-3 rounded-full bg-white text-primary">
                   <WarehouseIcon size={28} />
@@ -286,7 +302,9 @@ export function Step2WarehouseSelection({
 
       <div className="flex justify-between pt-4">
         <Button variant="outline" onClick={onBack}>Back</Button>
-        <Button onClick={handleNext}>Next</Button>
+        <Button onClick={handleNext} disabled={!selectedWarehouse}>
+          Next
+        </Button>
       </div>
     </div>
   )

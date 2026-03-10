@@ -21,17 +21,24 @@ type ClientOption = {
 export function Step1ClientSelection({
   draftId,
   initialClient,
+  initialClientUserId,
   onNext,
   onClientChange,
+  onClientSaved,
 }: {
   draftId: string
   initialClient: any
+  initialClientUserId?: string | null
   onNext: () => void
   onClientChange?: (clientId: string | null) => void
+  onClientSaved?: (clientAccountId: string, clientUserId?: string) => void
 }) {
   const [clients, setClients] = useState<ClientOption[]>([])
   const [selectedClientId, setSelectedClientId] = useState('')
   const [draftClientAccountId, setDraftClientAccountId] = useState<string | null>(null)
+  const [draftClientUserId, setDraftClientUserId] = useState<string | null>(null)
+  const [draftShipToEmail, setDraftShipToEmail] = useState<string | null>(null)
+  const [draftShipToName, setDraftShipToName] = useState<string | null>(null)
   const [isLoadingDraft, setIsLoadingDraft] = useState(true)
 
   useEffect(() => {
@@ -86,8 +93,9 @@ export function Step1ClientSelection({
 
   useEffect(() => {
     const fetchInitialClient = async () => {
-      if (initialClient) {
+      if (initialClient || initialClientUserId) {
         setDraftClientAccountId(String(initialClient))
+        if (initialClientUserId) setDraftClientUserId(String(initialClientUserId))
         setIsLoadingDraft(false)
         return
       }
@@ -107,6 +115,22 @@ export function Step1ClientSelection({
           console.error('❌ Error loading draft via API:', json)
         } else if (json?.draft?.client) {
           setDraftClientAccountId(String(json.draft.client))
+          if (json?.draft?.client_user_id) setDraftClientUserId(String(json.draft.client_user_id))
+          const shipToRaw = json?.draft?.ship_to
+          if (shipToRaw) {
+            const shipToObj =
+              typeof shipToRaw === 'string'
+                ? (() => {
+                    try {
+                      return JSON.parse(shipToRaw)
+                    } catch {
+                      return {}
+                    }
+                  })()
+                : shipToRaw
+            setDraftShipToEmail(shipToObj?.email ? String(shipToObj.email) : null)
+            setDraftShipToName(shipToObj?.full_name ? String(shipToObj.full_name) : null)
+          }
         }
       } catch (err) {
         console.error('❌ Error loading draft via API:', err)
@@ -119,9 +143,47 @@ export function Step1ClientSelection({
   }, [initialClient, draftId])
 
   useEffect(() => {
-    if (isLoadingDraft || selectedClientId || !draftClientAccountId || clients.length === 0) return
+    if (isLoadingDraft || selectedClientId || clients.length === 0) return
 
-    const match = clients.find((c) => c.account_id === draftClientAccountId)
+    // Prefer exact user id match if available on draft.
+    if (draftClientUserId) {
+      const byUser = clients.find((c) => c.id === draftClientUserId)
+      if (byUser) {
+        setSelectedClientId(byUser.id)
+        if (onClientChange) onClientChange(byUser.account_id)
+        return
+      }
+    }
+
+    // Next, try to match by email from ship_to
+    if (draftShipToEmail) {
+      const byEmail = clients.find(
+        (c) => String(c.email || '').toLowerCase() === String(draftShipToEmail || '').toLowerCase()
+      )
+      if (byEmail) {
+        setSelectedClientId(byEmail.id)
+        if (onClientChange) onClientChange(byEmail.account_id)
+        return
+      }
+    }
+
+    // Next, try to match by name from ship_to
+    if (draftShipToName) {
+      const byName = clients.find(
+        (c) => String(c.name || '').toLowerCase() === String(draftShipToName || '').toLowerCase()
+      )
+      if (byName) {
+        setSelectedClientId(byName.id)
+        if (onClientChange) onClientChange(byName.account_id)
+        return
+      }
+    }
+
+    if (!draftClientAccountId) return
+
+    const match =
+      clients.find((c) => c.id === draftClientAccountId) ??
+      clients.find((c) => c.account_id === draftClientAccountId)
     if (!match) return
 
     setSelectedClientId(match.id)
@@ -132,7 +194,7 @@ export function Step1ClientSelection({
     if (!isLoadingDraft && !selectedClientId && clients.length === 1) {
       const onlyClient = clients[0]
       setSelectedClientId(onlyClient.id)
-      if (onClientChange) onClientChange(onlyClient.account_id)
+      if (onClientChange) onClientChange(onlyClient.id)
     }
   }, [isLoadingDraft, selectedClientId, clients, onClientChange])
 
@@ -180,11 +242,43 @@ export function Step1ClientSelection({
               const selected = clients.find((c) => c.id === selectedClientId)
               const clientAccountId = selected?.account_id || selectedClientId
 
+              // Try to prefill contact data for Step 3 with the customer's name/email.
+              let nextShipTo: any = null
+              try {
+                const draftRes = await fetch(`/api/quotes/drafts/${draftId}`, {
+                  credentials: 'include',
+                })
+                const draftJson = await draftRes.json().catch(() => ({}))
+                const rawShipTo = draftJson?.draft?.ship_to
+                const shipToObj =
+                  rawShipTo && typeof rawShipTo === 'string'
+                    ? (() => {
+                        try {
+                          return JSON.parse(rawShipTo)
+                        } catch {
+                          return {}
+                        }
+                      })()
+                    : rawShipTo || {}
+
+                nextShipTo = {
+                  ...shipToObj,
+                  full_name: shipToObj?.full_name || selected?.name || '',
+                  email: shipToObj?.email || selected?.email || '',
+                }
+              } catch (err) {
+                console.warn('⚠️ Could not prefill ship_to from draft:', err)
+              }
+
               const res = await fetch(`/api/quotes/drafts/${draftId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ client: clientAccountId }),
+                body: JSON.stringify({
+                  client: clientAccountId,
+                  client_user_id: selected?.id ?? selectedClientId,
+                  ...(nextShipTo ? { ship_to: nextShipTo } : {}),
+                }),
               })
 
               const json = await res.json()
@@ -197,6 +291,7 @@ export function Step1ClientSelection({
 
               toast.success('Customer selected successfully')
               if (onClientChange) onClientChange(clientAccountId)
+              if (onClientSaved) onClientSaved(clientAccountId, selected?.id ?? selectedClientId)
               onNext()
             }}
             className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90"

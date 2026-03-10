@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
 import QuoteStepsHeader, { QuoteStepsHeaderProps } from './QuoteStepsHeader'
@@ -105,6 +105,45 @@ export default function OrderWizard() {
     const next = extractClientId(quoteData?.client)
     setClientId(next)
   }, [quoteData?.client])
+
+  const hasSelectedWarehouse = () => {
+    const shipFrom = parseJsonMaybe<any>(quoteData?.ship_from) ?? {}
+    return Boolean(
+      String(
+        shipFrom?.warehouse_id ??
+          shipFrom?.warehouseId ??
+          shipFrom?.sellercloud_warehouse_id ??
+          ''
+      ).trim(),
+    )
+  }
+
+  const hasSelectedCustomer = () => {
+    const selected = extractClientId(quoteData?.client)
+    return Boolean(String(selected || '').trim())
+  }
+
+  const hasCompletedShipTo = () => {
+    const shipTo = parseJsonMaybe<any>(quoteData?.ship_to) ?? {}
+    const required = [
+      String(shipTo?.zip_code ?? shipTo?.zip ?? '').trim(),
+      String(shipTo?.address_line1 ?? shipTo?.address_1 ?? '').trim(),
+      String(shipTo?.city ?? '').trim(),
+      String(shipTo?.state ?? '').trim(),
+      String(shipTo?.country ?? '').trim(),
+      String(shipTo?.full_name ?? '').trim(),
+      String(shipTo?.email ?? '').trim(),
+    ]
+    if (required.some((v) => !v)) return false
+    const email = String(shipTo?.email ?? '').trim()
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
+
+  const hasItems = () => {
+    const parsed = parseJsonMaybe<any[]>(quoteData?.items)
+    if (Array.isArray(parsed)) return parsed.length > 0
+    return Array.isArray(quoteData?.items) && (quoteData?.items as any[]).length > 0
+  }
 
   const openFilePicker = () => {
     if (!canUseDocs) {
@@ -614,6 +653,27 @@ export default function OrderWizard() {
 
   const handleSaveOrder = async () => {
     if (!quoteData?.id) return
+
+    if (!hasSelectedCustomer()) {
+      alert('Step 1 is mandatory. Please select a customer first.')
+      setCurrentStep(0)
+      return
+    }
+    if (!hasSelectedWarehouse()) {
+      alert('Step 2 is mandatory. Please select a warehouse first.')
+      setCurrentStep(1)
+      return
+    }
+    if (!hasCompletedShipTo()) {
+      alert('Step 3 is mandatory. Please complete Shipping Origin and Contact Data first.')
+      setCurrentStep(2)
+      return
+    }
+    if (!hasItems()) {
+      alert('Step 4 is mandatory. Please add at least one item first.')
+      setCurrentStep(3)
+      return
+    }
   
     try {
       const prefs: any = quoteData?.preferences ?? {}
@@ -688,6 +748,17 @@ export default function OrderWizard() {
       alert(e?.message || 'Failed to save order')
     }
   }
+
+  const handleItemsChange = useCallback((nextItems: any) =>
+    setQuoteData((prev) =>
+      prev
+        ? ({
+            ...prev,
+            items: nextItems as any,
+          } as any)
+        : prev,
+    )
+  , [])
 
   const uploadViaApi = async (draftId: string, file: File) => {
     const form = new FormData()
@@ -966,7 +1037,28 @@ export default function OrderWizard() {
       {/* Sticky / scrollable steps header on mobile */}
       <div className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 border-b bg-background/90 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:backdrop-blur-0">
         <div className="overflow-x-auto px-3 md:overflow-visible md:px-0">
-          <QuoteStepsHeader currentStep={currentStep} onStepClick={(idx) => setCurrentStep(Math.min(idx, 3))} />
+          <QuoteStepsHeader
+            currentStep={currentStep}
+            onStepClick={(idx) => {
+              const nextStep = Math.min(idx, 3)
+              if (nextStep >= 1 && !hasSelectedCustomer()) {
+                alert('Step 1 is mandatory. Please select a customer first.')
+                setCurrentStep(0)
+                return
+              }
+              if (nextStep >= 2 && !hasSelectedWarehouse()) {
+                alert('Warehouse selection is mandatory. Please complete Step 2 first.')
+                setCurrentStep(1)
+                return
+              }
+              if (nextStep >= 3 && !hasCompletedShipTo()) {
+                alert('Step 3 is mandatory. Please complete Shipping Origin and Contact Data first.')
+                setCurrentStep(2)
+                return
+              }
+              setCurrentStep(nextStep)
+            }}
+          />
         </div>
       </div>
 
@@ -977,7 +1069,21 @@ export default function OrderWizard() {
             <Step1ClientSelection
               draftId={quoteData!.id}
               initialClient={clientId}
+              initialClientUserId={
+                quoteData?.client_user_id ? String(quoteData.client_user_id) : null
+              }
               onClientChange={(newClientId) => setClientId(newClientId)}
+              onClientSaved={(clientAccountId, clientUserId) =>
+                setQuoteData((prev) =>
+                  prev
+                    ? ({
+                        ...prev,
+                        client: clientAccountId,
+                        client_user_id: clientUserId ?? (prev as any)?.client_user_id ?? null,
+                      } as any)
+                    : prev
+                )
+              }
               onNext={() => setCurrentStep(1)}
             />
           )}
@@ -1002,6 +1108,9 @@ export default function OrderWizard() {
               draftId={quoteData!.id}
               initialShipTo={quoteData!.ship_to}
               initialPreferences={quoteData!.preferences}
+              onShipToSaved={(shipTo) =>
+                setQuoteData((prev) => (prev ? ({ ...prev, ship_to: shipTo } as any) : prev))
+              }
               onNext={() => setCurrentStep(3)}
               onBack={() => setCurrentStep(1)}
             />
@@ -1010,9 +1119,11 @@ export default function OrderWizard() {
             <Step4PackageDetails
               draftId={quoteData!.id}
               initialItems={(quoteData!.items as any[]) || []}
+              onItemsChange={handleItemsChange}
               onNext={handleSaveOrder}
               onBack={() => setCurrentStep(2)}
               nextLabel="Save Order"
+              initialWarehouseId={getShipFromWarehouseId()}
             />
           )}
         </div>

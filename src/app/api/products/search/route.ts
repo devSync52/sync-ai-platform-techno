@@ -125,7 +125,7 @@ export async function GET(req: Request) {
 
     // Resolve to an effective client_account_id (scoped to this caller's parent account)
     let effectiveClientId = clientIdParam
-    let clientIdResolvedFrom: 'client_account_id' | 'account_id' | 'unknown' = 'unknown'
+    let clientIdResolvedFrom: 'client_account_id' | 'account_id' | 'user_id' | 'unknown' = 'unknown'
 
     const { data: directClient, error: directClientErr } = await (supabase as any)
       .from('vw_products_master_enriched')
@@ -156,6 +156,24 @@ export async function GET(req: Request) {
       if (fromAccount && fromAccount.length > 0) {
         effectiveClientId = String((fromAccount[0] as any).client_account_id)
         clientIdResolvedFrom = 'account_id'
+      }
+    }
+
+    if (clientIdResolvedFrom === 'unknown') {
+      // As a fallback, treat clientId as a user/customer id and resolve account_id.
+      const { data: userRow, error: userErr } = await (supabase as any)
+        .from('users')
+        .select('account_id')
+        .eq('id', clientIdParam)
+        .maybeSingle()
+
+      if (userErr) {
+        return NextResponse.json({ error: userErr.message }, { status: 500 })
+      }
+
+      if (userRow?.account_id) {
+        effectiveClientId = String((userRow as any).account_id)
+        clientIdResolvedFrom = 'user_id'
       }
     }
 
