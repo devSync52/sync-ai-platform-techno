@@ -1,55 +1,59 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { useCurrentUser } from '@/hooks/useCurrentUser'
-import { Database } from '@/types/supabase'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
-import { computeMultiBoxFromItems } from '@/lib/shipping/multibox'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from "react";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { Database } from "@/types/supabase";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { computeMultiBoxFromItems } from "@/lib/shipping/multibox";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 type PackageItem = {
-  sku: string
-  product_name?: string
-  quantity: number
-  length: number
-  width: number
-  height: number
-  weight_lbs: number
-  stackable?: boolean
-  hazardous?: boolean
-  freight_class?: string
-  price?: number
-  subtotal?: number
-}
+  sku: string;
+  product_name?: string;
+  quantity: number;
+  length: number;
+  width: number;
+  height: number;
+  weight_lbs: number;
+  stackable?: boolean;
+  hazardous?: boolean;
+  freight_class?: string;
+  price?: number;
+  subtotal?: number;
+};
 
-type Json = any
+type Json = any;
 
 const containsHtml = (value?: string | null) => {
-  if (!value) return false
-  return /<\/?[a-z][\s\S]*>/i.test(value)
-}
+  if (!value) return false;
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+};
 
 const sanitizeHtmlForPreview = (value?: string | null) => {
-  if (!value) return ''
+  if (!value) return "";
   return value
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
-    .replace(/\son\w+="[^"]*"/gi, '')
-    .replace(/\son\w+='[^']*'/gi, '')
-    .replace(/\s(href|src)=["']javascript:[^"']*["']/gi, '')
-}
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/\s(href|src)=["']javascript:[^"']*["']/gi, "");
+};
 
 interface Step4PackageDetailsProps {
-  draftId: string
-  initialItems: Json
-  onNext: () => void
-  onBack: () => void
+  draftId: string;
+  initialItems: Json;
+  onNext: () => void;
+  onBack: () => void;
+  onItemsChange?: (items: PackageItem[]) => void;
   /** Optional override for the primary CTA label (Orders flow uses "Save Order") */
-  nextLabel?: string
+  nextLabel?: string;
+  /** Optional initial warehouse id (billing/public id) already selected in Step 2 */
+  initialWarehouseId?: string | null;
 }
 
 function ProductSearchModal({
@@ -60,82 +64,106 @@ function ProductSearchModal({
   warehouseId,
   shipFromName,
 }: {
-  show: boolean
-  onClose: () => void
-  onAddProduct: (product: PackageItem) => void
-  clientId: string
-  warehouseId?: string
-  shipFromName?: string
+  show: boolean;
+  onClose: () => void;
+  onAddProduct: (product: PackageItem) => void;
+  clientId: string;
+  warehouseId?: string;
+  shipFromName?: string;
 }) {
-
-  const [searchTerm, setSearchTerm] = useState('')
-  const [results, setResults] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize] = useState(10)
-  const [totalItems, setTotalItems] = useState(0)
-  const [totalPages, setTotalPages] = useState(1)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const fetchProducts = async (page = 1) => {
-    if (!clientId) return
+    if (!clientId) return;
 
-    setLoading(true)
+    setLoading(true);
+    setSearchError(null);
 
     try {
       const params = new URLSearchParams({
         clientId,
-        warehouseId: warehouseId || '',
-        shipFromName: shipFromName || '',
-        term: searchTerm || '',
+        warehouseId: warehouseId || "",
+        shipFromName: shipFromName || "",
+        term: searchTerm || "",
         page: String(page),
         pageSize: String(pageSize),
-      })
+      });
 
       const res = await fetch(`/api/products/search?${params.toString()}`, {
-        credentials: 'include',
-      })
+        credentials: "include",
+      });
 
-      const json = await res.json().catch(() => ({}))
+      const json = await res.json().catch(async () => {
+        try {
+          return await res.text();
+        } catch {
+          return {};
+        }
+      });
 
       if (!res.ok) {
-        console.error('[Step4][ProductSearch] SSR search failed', json)
-        setResults([])
-        setTotalItems(0)
-        setTotalPages(1)
-        return
+        const errorMessage =
+          (json as any)?.error ||
+          (json as any)?.message ||
+          (typeof json === "string" && json.length ? json : null) ||
+          `Search failed (${res.status})`;
+
+        console.error("[Step4][ProductSearch] SSR search failed", {
+          status: res.status,
+          json,
+          params: params.toString(),
+        });
+
+        toast.error(errorMessage);
+        setSearchError(errorMessage);
+        setResults([]);
+        setTotalItems(0);
+        setTotalPages(1);
+        return;
       }
 
-      setResults(json?.products || [])
-      const nextPage = Number(json?.pagination?.page || page)
-      const nextPageSize = Number(json?.pagination?.pageSize || pageSize)
-      const nextTotal = Number(json?.pagination?.total || (json?.products || []).length || 0)
+      setResults(json?.products || []);
+      const nextPage = Number(json?.pagination?.page || page);
+      const nextPageSize = Number(json?.pagination?.pageSize || pageSize);
+      const nextTotal = Number(
+        json?.pagination?.total || (json?.products || []).length || 0,
+      );
       const nextTotalPages = Number(
-        json?.pagination?.totalPages || Math.max(1, Math.ceil(nextTotal / nextPageSize))
-      )
-      setCurrentPage(nextPage)
-      setTotalItems(nextTotal)
-      setTotalPages(Math.max(1, nextTotalPages))
+        json?.pagination?.totalPages ||
+          Math.max(1, Math.ceil(nextTotal / nextPageSize)),
+      );
+      setCurrentPage(nextPage);
+      setTotalItems(nextTotal);
+      setTotalPages(Math.max(1, nextTotalPages));
+      setSearchError(null);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSearch = async () => {
-    await fetchProducts(1)
-  }
+    await fetchProducts(1);
+  };
 
   useEffect(() => {
-    if (!show) return
-    if (!warehouseId) return
-    if (!clientId) return
-    fetchProducts(1)
-  }, [show, clientId, warehouseId, shipFromName])
+    if (!show) return;
+    if (!warehouseId) return;
+    if (!clientId) return;
+    fetchProducts(1);
+  }, [show, clientId, warehouseId, shipFromName]);
 
   const handleAdd = (product: any) => {
-    const length = Number(product.pkg_length_in ?? 0)
-    const width = Number(product.pkg_width_in ?? 0)
-    const height = Number(product.pkg_height_in ?? 0)
-    const weight = Number(product.pkg_weight_lb ?? 0)
+    const length = Number(product.pkg_length_in ?? 0);
+    const width = Number(product.pkg_width_in ?? 0);
+    const height = Number(product.pkg_height_in ?? 0);
+    const weight = Number(product.pkg_weight_lb ?? 0);
     const productPrice = Number(
       product.price ??
         product.site_price ??
@@ -143,11 +171,11 @@ function ProductSearchModal({
         product.sale_price ??
         product.list_price ??
         0,
-    )
+    );
 
     const packageItem: PackageItem = {
       sku: product.sku,
-      product_name: product.description || '',
+      product_name: product.description || "",
       quantity: 1,
       length,
       width,
@@ -155,24 +183,27 @@ function ProductSearchModal({
       weight_lbs: weight,
       stackable: false,
       hazardous: false,
-      freight_class: '',
+      freight_class: "",
       price: Number.isFinite(productPrice) ? productPrice : 0,
       subtotal: Number.isFinite(productPrice) ? productPrice : 0,
-    }
-    onAddProduct(packageItem)
-    onClose()
-  }
+    };
+    onAddProduct(packageItem);
+    // Keep modal open so multiple products can be added without reopening.
+  };
 
-  if (!show) return null
+  if (!show) return null;
 
-  const warehouseMissing = !warehouseId
+  const warehouseMissing = !warehouseId;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white md:rounded-md rounded-none p-4 md:p-6 w-full md:w-[90vw] max-w-3xl h-[100dvh] md:h-auto md:max-h-[80vh] overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">Search Products</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 font-bold text-xl leading-none">
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 font-bold text-xl leading-none"
+          >
             ×
           </button>
         </div>
@@ -183,23 +214,39 @@ function ProductSearchModal({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                handleSearch()
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSearch();
               }
             }}
           />
-          <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={loading || warehouseMissing}>
-            {warehouseMissing ? 'Select a warehouse first' : loading ? 'Searching...' : 'Search'}
+        <Button
+          className="w-full sm:w-auto"
+          onClick={handleSearch}
+          disabled={loading || warehouseMissing}
+        >
+            {warehouseMissing
+              ? "Select a warehouse first"
+              : loading
+                ? "Searching..."
+                : "Search"}
           </Button>
         </div>
+        {searchError ? (
+          <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {searchError}
+          </div>
+        ) : null}
         <div>
           {warehouseMissing && (
             <p className="text-sm text-amber-700 mb-2">
-              Warehouse not selected yet. Go back to Step 2 and select a Ship From warehouse.
+              Warehouse not selected yet. Go back to Step 2 and select a Ship
+              From warehouse.
             </p>
           )}
-          {results.length === 0 && !loading && <p className="text-muted-foreground">No products found.</p>}
+          {results.length === 0 && !loading && (
+            <p className="text-muted-foreground">No products found.</p>
+          )}
           <ul className="divide-y divide-gray-200 max-h-64 overflow-auto">
             {results.map((product, idx) => (
               <li key={idx} className="py-2 flex justify-between items-center">
@@ -218,9 +265,14 @@ function ProductSearchModal({
                   </div>
                   <p className="text-sm text-gray-500">SKU: {product.sku}</p>
                   <p className="text-sm text-gray-500">
-                    Available: {Number(product.available ?? 0).toLocaleString('en-US')}
-                    {product.on_hand != null ? ` · On hand: ${Number(product.on_hand ?? 0).toLocaleString('en-US')}` : ''}
-                    {product.allocated != null ? ` · Allocated: ${Number(product.allocated ?? 0).toLocaleString('en-US')}` : ''}
+                    Available:{" "}
+                    {Number(product.available ?? 0).toLocaleString("en-US")}
+                    {product.on_hand != null
+                      ? ` · On hand: ${Number(product.on_hand ?? 0).toLocaleString("en-US")}`
+                      : ""}
+                    {product.allocated != null
+                      ? ` · Allocated: ${Number(product.allocated ?? 0).toLocaleString("en-US")}`
+                      : ""}
                   </p>
                 </div>
                 <Button
@@ -238,8 +290,9 @@ function ProductSearchModal({
           {!warehouseMissing && (
             <div className="mt-3 flex items-center justify-between gap-2 text-sm">
               <p className="text-gray-500">
-                Showing {results.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
-                {' '}to {Math.min(currentPage * pageSize, totalItems)} of {totalItems}
+                Showing{" "}
+                {results.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{" "}
+                {Math.min(currentPage * pageSize, totalItems)} of {totalItems}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -267,125 +320,173 @@ function ProductSearchModal({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default function Step4PackageDetails({ draftId, initialItems, onNext, onBack, nextLabel = 'Next' }: Step4PackageDetailsProps) {
-  const [items, setItems] = useState<PackageItem[]>([])
-  const [showProductSearchModal, setShowProductSearchModal] = useState(false)
-  const [clientId, setClientId] = useState<string>('')
-  const [warehouseId, setWarehouseId] = useState<string>('')
-  const [shipFromName, setShipFromName] = useState<string>('')
-  const [isCalculating, setIsCalculating] = useState(false)
+export default function Step4PackageDetails({
+  draftId,
+  initialItems,
+  onNext,
+  onBack,
+  onItemsChange,
+  nextLabel = "Next",
+  initialWarehouseId = null,
+}: Step4PackageDetailsProps) {
+  const [items, setItems] = useState<PackageItem[]>([]);
+  const [showProductSearchModal, setShowProductSearchModal] = useState(false);
+  const [clientId, setClientId] = useState<string>("");
+  const [warehouseId, setWarehouseId] = useState<string>(initialWarehouseId || "");
+  const [shipFromName, setShipFromName] = useState<string>("");
+  const [isCalculating, setIsCalculating] = useState(false);
 
-
-  const currentUser = useCurrentUser()
+  const currentUser = useCurrentUser();
 
   const getDraft = async () => {
-    const res = await fetch(`/api/quotes/drafts/${draftId}`, { credentials: 'include' })
-    const json = await res.json().catch(() => ({}))
+    const res = await fetch(`/api/quotes/drafts/${draftId}`, {
+      credentials: "include",
+    });
+    const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json?.error || json?.message || 'Failed to load draft')
+      throw new Error(json?.error || json?.message || "Failed to load draft");
     }
-    return (json?.draft ?? json?.data?.draft ?? null) as any
-  }
-  
+    return (json?.draft ?? json?.data?.draft ?? null) as any;
+  };
+
   const patchDraft = async (patch: any) => {
     const res = await fetch(`/api/quotes/drafts/${draftId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(patch),
-    })
-  
-    const json = await res.json().catch(() => ({}))
+    });
+
+    const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json?.error || json?.message || 'Failed to update draft')
+      throw new Error(json?.error || json?.message || "Failed to update draft");
     }
-  
-    return (json?.draft ?? json?.data?.draft ?? null) as any
-  }
+
+    return (json?.draft ?? json?.data?.draft ?? null) as any;
+  };
 
   useEffect(() => {
     async function fetchClientId() {
-      if (!currentUser?.account_id) return
-    
+      if (!currentUser?.account_id) return;
+
       try {
-        const draft = await getDraft()
-    
+        const draft = await getDraft();
+
         if (!draft?.client) {
-          console.error('❌ Failed to fetch client ID: missing client on draft')
-          return
+          console.error(
+            "❌ Failed to fetch client ID: missing client on draft",
+          );
+          return;
         }
-    
-        setClientId(String(draft.client))
-    
-        const wh =
-          (draft as any)?.ship_from?.warehouse_id ??
-          (draft as any)?.ship_from?.warehouseId ??
-          (draft as any)?.ship_from?.sellercloud_warehouse_id ??
-          ''
-        const shipName = (draft as any)?.ship_from?.name ?? ''
-    
-        setWarehouseId(String(wh || ''))
-        setShipFromName(String(shipName || ''))
-    
-        console.log('[Step4] Draft context loaded', {
+
+        setClientId(String(draft.client));
+
+      const wh =
+        (draft as any)?.ship_from?.warehouse_id ??
+        (draft as any)?.ship_from?.warehouseId ??
+        (draft as any)?.ship_from?.sellercloud_warehouse_id ??
+        "";
+        const shipName = (draft as any)?.ship_from?.name ?? "";
+
+        setWarehouseId(String(wh || ""));
+        setShipFromName(String(shipName || ""));
+
+        console.log("[Step4] Draft context loaded", {
           draftId,
           clientId: String(draft.client),
-          warehouseId: String(wh || ''),
-          shipFromName: String(shipName || ''),
+          warehouseId: String(wh || ""),
+          shipFromName: String(shipName || ""),
           shipFrom: (draft as any)?.ship_from ?? null,
-        })
-    
+        });
+
         if ((draft as any)?.items) {
-          setItems((draft as any).items)
+          setItems((draft as any).items);
         }
       } catch (e) {
-        console.error('❌ Failed to load draft context:', e)
+        console.error("❌ Failed to load draft context:", e);
       }
     }
 
-    fetchClientId()
-  }, [draftId, currentUser])
+    fetchClientId();
+  }, [draftId, currentUser]);
 
-  const handleItemChange = (index: number, field: keyof PackageItem, value: any) => {
-    const updated = [...items]
-    const currentItem = updated[index]
-    const updatedItem = { ...currentItem, [field]: value }
+  // Keep warehouseId in sync if parent provides one and we don't have it yet.
+  useEffect(() => {
+    if (initialWarehouseId && !warehouseId) {
+      setWarehouseId(String(initialWarehouseId));
+    }
+  }, [initialWarehouseId, warehouseId]);
 
-    if (field === 'quantity' || field === 'price') {
-      const priceRaw = field === 'price' ? value : currentItem.price
-      const qtyRaw = field === 'quantity' ? value : currentItem.quantity
-    
-      const price = Number(priceRaw ?? 0)
-      const quantity = Number(qtyRaw ?? 1)
-    
+  const handleItemChange = (
+    index: number,
+    field: keyof PackageItem,
+    value: any,
+  ) => {
+    const updated = [...items];
+    const currentItem = updated[index];
+    const updatedItem = { ...currentItem, [field]: value };
+
+    if (field === "quantity" || field === "price") {
+      const priceRaw = field === "price" ? value : currentItem.price;
+      const qtyRaw = field === "quantity" ? value : currentItem.quantity;
+
+      const price = Number(priceRaw ?? 0);
+      const quantity = Number(qtyRaw ?? 1);
+
       updatedItem.subtotal =
-        (Number.isFinite(price) ? price : 0) * (Number.isFinite(quantity) ? quantity : 1)
+        (Number.isFinite(price) ? price : 0) *
+        (Number.isFinite(quantity) ? quantity : 1);
     }
 
-    updated[index] = updatedItem
-    setItems(updated)
-  }
+    updated[index] = updatedItem;
+    setItems(updated);
+  };
 
   const handleAddProductFromSearch = (product: PackageItem) => {
-    const enriched = {
-      ...product,
-      price: product.price || 0,
-      subtotal: (product.price || 0) * (product.quantity || 1),
+    const qtyToAdd = Number(product.quantity ?? 1) > 0 ? Number(product.quantity ?? 1) : 1;
+    const price = Number.isFinite(product.price) ? Number(product.price) : 0;
+
+    const existingIdx = items.findIndex(
+      (it) => String(it.sku || "").toLowerCase() === String(product.sku || "").toLowerCase(),
+    );
+
+    if (existingIdx >= 0) {
+      const updated = [...items];
+      const current = updated[existingIdx];
+      const nextQty = Math.max(1, Number(current.quantity ?? 1) + qtyToAdd);
+      updated[existingIdx] = {
+        ...current,
+        quantity: nextQty,
+        price,
+        subtotal: price * nextQty,
+      };
+      setItems(updated);
+    } else {
+      const enriched = {
+        ...product,
+        quantity: qtyToAdd,
+        price,
+        subtotal: price * qtyToAdd,
+      };
+      setItems([...items, enriched]);
     }
-    setItems([...items, enriched])
-  }
+  };
 
   const handleRemoveItem = (index: number) => {
-    const updated = [...items]
-    updated.splice(index, 1)
-    setItems(updated)
-  }
+    const updated = [...items];
+    updated.splice(index, 1);
+    setItems(updated);
+  };
+
+  useEffect(() => {
+    onItemsChange?.(items);
+  }, [items, onItemsChange]);
 
   const handleSaveAndNext = async () => {
-    setIsCalculating(true)
+    setIsCalculating(true);
     try {
       const itemsForCalc = items.map((item) => ({
         length: item.length,
@@ -393,26 +494,32 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
         height: item.height,
         weight_lbs: item.weight_lbs,
         quantity: item.quantity,
-      }))
-  
-      const { totalWeight, totalVolume, box } = computeMultiBoxFromItems(itemsForCalc as any, {
-        maxWeightPerBox: 145,
-        maxLengthPlusGirth: 165,
-      })
-  
-      const maxLength = items.length > 0 ? Math.max(...items.map((i) => i.length || 0)) : 0
-      const maxWidth = items.length > 0 ? Math.max(...items.map((i) => i.width || 0)) : 0
-      const maxHeight = items.length > 0 ? Math.max(...items.map((i) => i.height || 0)) : 0
-  
-      console.log('[MULTIBOX][Step4] Preview box from items:', {
+      }));
+
+      const { totalWeight, totalVolume, box } = computeMultiBoxFromItems(
+        itemsForCalc as any,
+        {
+          maxWeightPerBox: 145,
+          maxLengthPlusGirth: 165,
+        },
+      );
+
+      const maxLength =
+        items.length > 0 ? Math.max(...items.map((i) => i.length || 0)) : 0;
+      const maxWidth =
+        items.length > 0 ? Math.max(...items.map((i) => i.width || 0)) : 0;
+      const maxHeight =
+        items.length > 0 ? Math.max(...items.map((i) => i.height || 0)) : 0;
+
+      console.log("[MULTIBOX][Step4] Preview box from items:", {
         totalWeight,
         totalVolume,
         box,
-      })
-  
+      });
+
       const optimizedPackages = [
         {
-          sku: 'mixed',
+          sku: "mixed",
           length: Number(box.length.toFixed(2)),
           width: Number(box.width.toFixed(2)),
           height: Number(box.height.toFixed(2)),
@@ -420,7 +527,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
           quantity: box.boxCount,
           package_type: true,
         },
-      ]
+      ];
 
       const preferences = {
         // Totais da carga
@@ -443,49 +550,49 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
 
         // Outros campos existentes
         residential: false,
-        confirmation: '',
-        package_type: '',
-        service_class: '',
-      }
-  
+        confirmation: "",
+        package_type: "",
+        service_class: "",
+      };
+
       try {
         await patchDraft({
           items,
           preferences,
           // Always clear previous quote results when package details change
           quote_results: null,
-        })
+        });
       } catch (e) {
-        console.error('❌ Failed to save quote items:', e)
-        return
+        console.error("❌ Failed to save quote items:", e);
+        return;
       }
-    
-      
-    
-      onNext()
+
+      onNext();
     } finally {
       setIsCalculating(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-4 p-3 md:p-4 bg-white min-h-[60vh] pb-[env(safe-area-inset-bottom)]">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <h2 className="text-lg font-semibold sm:text-xl">Package Details</h2>
-      <Button
-        size="sm"
-        className="w-full sm:w-auto"
-        onClick={() => {
-          if (!warehouseId) {
-            alert('Please select a Ship From warehouse in Step 2 before searching products.')
-            return
-          }
-          setShowProductSearchModal(true)
-        }}
-      >
-        + Search Product
-      </Button>
-    </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-semibold sm:text-xl">Package Details</h2>
+        <Button
+          size="sm"
+          className="w-full sm:w-auto"
+          onClick={() => {
+            if (!warehouseId) {
+              alert(
+                "Please select a Ship From warehouse in Step 2 before searching products.",
+              );
+              return;
+            }
+            setShowProductSearchModal(true);
+          }}
+        >
+          + Search Product
+        </Button>
+      </div>
 
       {items.length === 0 && (
         <p className="text-muted-foreground italic">
@@ -499,8 +606,9 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
             <div>
               <Label>SKU</Label>
               <Input
-                value={item.sku} disabled
-                onChange={(e) => handleItemChange(index, 'sku', e.target.value)}
+                value={item.sku}
+                disabled
+                onChange={(e) => handleItemChange(index, "sku", e.target.value)}
               />
             </div>
             <div>
@@ -514,7 +622,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
                     }}
                   />
                 ) : (
-                  <span>{item.product_name || '-'}</span>
+                  <span>{item.product_name || "-"}</span>
                 )}
               </div>
             </div>
@@ -524,43 +632,55 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
                 type="number"
                 value={item.quantity}
                 onChange={(e) => {
-                  const v = parseInt(e.target.value, 10)
-                  handleItemChange(index, 'quantity', Number.isFinite(v) ? v : 0)
+                  const v = parseInt(e.target.value, 10);
+                  handleItemChange(
+                    index,
+                    "quantity",
+                    Number.isFinite(v) ? Math.max(1, v) : 1,
+                  );
                 }}
+                min={1}
               />
             </div>
             <div>
-            <Label>Price</Label>
-<Input
-  type="number"
-  step="0.01"
-  value={item.price ?? ''}
-  onChange={(e) => {
-    const numericValue = parseFloat(e.target.value)
-    handleItemChange(index, 'price', Number.isFinite(numericValue) ? numericValue : 0)
-  }}
-/>
+              <Label>Price</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={item.price ?? ""}
+                disabled
+              />
             </div>
             <div>
               <Label>Subtotal</Label>
               <Input
                 type="text"
-                value={(item.subtotal || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                value={(item.subtotal || 0).toLocaleString("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                })}
                 disabled
               />
-            </div></div>
-            
-           <div className="flex justify-end">
-             <Button variant="destructive" size="sm" onClick={() => handleRemoveItem(index)}>
-               Remove
-             </Button>
-           </div>
+            </div>
           </div>
-       
+
+          <div className="flex justify-end">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleRemoveItem(index)}
+            >
+              Remove
+            </Button>
+          </div>
+        </div>
       ))}
 
       <div className="text-right font-semibold text-base sm:text-lg">
-        Total: {(items.reduce((acc, item) => acc + (item.subtotal || 0), 0)).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+        Total:{" "}
+        {items
+          .reduce((acc, item) => acc + (item.subtotal || 0), 0)
+          .toLocaleString("en-US", { style: "currency", currency: "USD" })}
       </div>
 
       {/* Desktop actions */}
@@ -569,7 +689,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
           ← Back
         </Button>
         <div className="space-x-2">
-          <Button
+          {/* <Button
             variant="secondary"
             onClick={() => {
               if (!warehouseId) {
@@ -580,9 +700,12 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
             }}
           >
             + Search Product
-          </Button>
-          <Button onClick={handleSaveAndNext} disabled={items.length === 0 || isCalculating}>
-          {isCalculating ? 'Saving order...' : nextLabel}
+          </Button> */}
+          <Button
+            onClick={handleSaveAndNext}
+            disabled={items.length === 0 || isCalculating}
+          >
+            {isCalculating ? "Saving order..." : nextLabel}
           </Button>
         </div>
       </div>
@@ -596,16 +719,22 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
           className="w-1/3"
           onClick={() => {
             if (!warehouseId) {
-              alert('Please select a Ship From warehouse in Step 2 before searching products.')
-              return
+              alert(
+                "Please select a Ship From warehouse in Step 2 before searching products.",
+              );
+              return;
             }
-            setShowProductSearchModal(true)
+            setShowProductSearchModal(true);
           }}
         >
           + Product
         </Button>
-        <Button className="w-1/3" onClick={handleSaveAndNext} disabled={items.length === 0 || isCalculating}>
-        {isCalculating ? 'Calculating…' : nextLabel}
+        <Button
+          className="w-1/3"
+          onClick={handleSaveAndNext}
+          disabled={items.length === 0 || isCalculating}
+        >
+          {isCalculating ? "Calculating…" : nextLabel}
         </Button>
       </div>
 
@@ -618,5 +747,5 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
         shipFromName={shipFromName}
       />
     </div>
-  )
+  );
 }

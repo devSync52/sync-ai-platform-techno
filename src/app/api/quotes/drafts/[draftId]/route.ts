@@ -13,6 +13,33 @@ function getParentAccountId(user: any) {
   )
 }
 
+async function resolveAllowedAccountIds(supabase: any, user: any): Promise<string[]> {
+  // Prefer DB-backed account context because auth metadata may be stale/missing.
+  const { data: me } = await supabase
+    .from('users')
+    .select('account_id')
+    .eq('id', String(user?.id || ''))
+    .maybeSingle()
+
+  const childAccountId = String((me as any)?.account_id || '').trim()
+  const metaAccountId = String(getParentAccountId(user) || '').trim()
+
+  let parentAccountId = ''
+  if (childAccountId) {
+    const { data: accountRow } = await supabase
+      .from('accounts')
+      .select('parent_account_id')
+      .eq('id', childAccountId)
+      .maybeSingle()
+    parentAccountId = String((accountRow as any)?.parent_account_id || '').trim()
+  }
+
+  const ids = Array.from(
+    new Set([childAccountId, parentAccountId, metaAccountId].filter((v) => v.length > 0)),
+  )
+  return ids
+}
+
 async function resolveWarehouseIdByZip(
   supabase: any,
   accountId: string,
@@ -92,8 +119,8 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const parentAccountId = getParentAccountId(user)
-  if (!parentAccountId) {
+  const allowedAccountIds = await resolveAllowedAccountIds(supabase, user)
+  if (!allowedAccountIds.length) {
     return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
   }
 
@@ -101,7 +128,7 @@ export async function GET(
     .from('saip_quote_drafts')
     .select('*')
     .eq('id', draftId)
-    .eq('account_id', parentAccountId) // ajuste aqui se draft for child/parent diferente
+    .in('account_id', allowedAccountIds)
     .maybeSingle()
 
   if (error) {
@@ -156,8 +183,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const parentAccountId = getParentAccountId(user)
-  if (!parentAccountId) {
+  const allowedAccountIds = await resolveAllowedAccountIds(supabase, user)
+  if (!allowedAccountIds.length) {
     return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
   }
 
@@ -205,7 +232,8 @@ if (body.updated_at !== undefined) patch.updated_at = body.updated_at
           .eq('id', draftId)
           .maybeSingle()
 
-        const childAccountId = String((draftRow as any)?.account_id ?? parentAccountId)
+        const childAccountId = String((draftRow as any)?.account_id ?? allowedAccountIds[0])
+        const parentAccountId = allowedAccountIds[1] || allowedAccountIds[0]
 
         const resolved = await resolveWarehouseIdByZipWithFallback(
           supabase,
@@ -235,7 +263,7 @@ if (body.updated_at !== undefined) patch.updated_at = body.updated_at
     .from('saip_quote_drafts')
     .update(patch)
     .eq('id', draftId)
-    .eq('account_id', parentAccountId)
+    .in('account_id', allowedAccountIds)
     .select('*')
     .maybeSingle()
 
