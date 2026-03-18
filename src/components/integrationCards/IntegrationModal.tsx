@@ -73,7 +73,7 @@ export default function IntegrationModal({
       ...prev,
       [e.target.name]: e.target.value
     }))
-    if (type === 'sellercloud' || type === 'extensiv') {
+    if (type === 'sellercloud' || type === 'extensiv' || type === 'fedex' || type === 'ups') {
       setIsTestPassed(false)
     }
   }
@@ -95,7 +95,11 @@ export default function IntegrationModal({
           ? '/api/integrations/sellercloud'
           : type === 'extensiv'
             ? '/api/integrations/extensiv'
-            : ''
+            : type === 'fedex'
+              ? '/api/integrations/fedex'
+              : type === 'ups'
+                ? '/api/integrations/ups'
+                : ''
 
       if (!testUrl) {
         toast.error('Test connection is not supported for this integration yet')
@@ -109,11 +113,25 @@ export default function IntegrationModal({
               username: formData.username,
               password: formData.password,
             }
-          : {
-              client_id: formData.client_id,
-              client_secret: formData.client_secret,
-              extensiv_id: formData.extensiv_id,
-            }
+          : type === 'extensiv'
+            ? {
+                client_id: formData.client_id,
+                client_secret: formData.client_secret,
+                extensiv_id: formData.extensiv_id,
+              }
+            : type === 'fedex'
+              ? {
+                  account_number: formData.account_number,
+                  client_id: formData.client_id,
+                  client_secret: formData.client_secret,
+                }
+              : type === 'ups'
+                ? {
+                    account_number: formData.account_number,
+                    client_id: formData.client_id,
+                    client_secret: formData.client_secret,
+                  }
+                : {}
 
       const response = await fetch(testUrl, {
         method: 'POST',
@@ -128,27 +146,38 @@ export default function IntegrationModal({
       const result = await response.json()
       if (!response.ok || !result?.success) {
         setIsTestPassed(false)
-        toast.error(
-          result?.error ||
-            (type === 'sellercloud'
-              ? 'Sellercloud connection test failed'
-              : 'Extensiv connection test failed'),
-        )
+        const genericFail =
+          type === 'sellercloud'
+            ? 'Sellercloud connection test failed'
+            : type === 'extensiv'
+              ? 'Extensiv connection test failed'
+              : type === 'fedex'
+                ? 'FedEx connection test failed'
+                : 'UPS connection test failed'
+        toast.error(result?.error || genericFail)
       } else {
         setIsTestPassed(true)
-        toast.success(
+        const genericPass =
           type === 'sellercloud'
             ? 'Sellercloud connection test passed'
-            : 'Extensiv connection test passed',
-        )
+            : type === 'extensiv'
+              ? 'Extensiv connection test passed'
+              : type === 'fedex'
+                ? 'FedEx connection test passed'
+                : 'UPS connection test passed'
+        toast.success(genericPass)
       }
     } catch {
       setIsTestPassed(false)
-      toast.error(
+      const genericFail =
         type === 'sellercloud'
           ? 'Sellercloud connection test failed'
-          : 'Extensiv connection test failed',
-      )
+          : type === 'extensiv'
+            ? 'Extensiv connection test failed'
+            : type === 'fedex'
+              ? 'FedEx connection test failed'
+              : 'UPS connection test failed'
+      toast.error(genericFail)
     } finally {
       setTesting(false)
     }
@@ -164,11 +193,15 @@ export default function IntegrationModal({
       return
     }
 
-    if ((type === 'sellercloud' || type === 'extensiv') && !isTestPassed) {
+    if ((type === 'sellercloud' || type === 'extensiv' || type === 'fedex' || type === 'ups') && !isTestPassed) {
       toast.error(
         type === 'sellercloud'
           ? 'Please test Sellercloud connection before saving'
-          : 'Please test Extensiv connection before saving',
+          : type === 'extensiv'
+            ? 'Please test Extensiv connection before saving'
+            : type === 'fedex'
+              ? 'Please test FedEx connection before saving'
+              : 'Please test UPS connection before saving',
       )
       setLoading(false)
       return
@@ -229,7 +262,7 @@ export default function IntegrationModal({
             </div>
           ))}
 
-          {(type === 'sellercloud' || type === 'extensiv') && (
+          {(type === 'sellercloud' || type === 'extensiv' || type === 'fedex' || type === 'ups') && (
             <button
               onClick={handleTest}
               disabled={testing || loading || isTestPassed}
@@ -239,7 +272,7 @@ export default function IntegrationModal({
             </button>
           )}
 
-          {((type !== 'sellercloud' && type !== 'extensiv') || isTestPassed) && (
+          {((type !== 'sellercloud' && type !== 'extensiv' && type !== 'fedex' && type !== 'ups') || isTestPassed) && (
             <button
               onClick={handleSave}
               disabled={loading}

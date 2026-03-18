@@ -16,14 +16,15 @@ export const integrationFields = {
       { name: 'company_id', label: 'Company ID', type: 'text' },
     ],
     ups: [
+      { name: 'account_number', label: 'Account Number', type: 'text' },
       { name: 'client_id', label: 'Client ID', type: 'text' },
-      { name: 'client_secret', label: 'Client Secret', type: 'text' },
-      { name: 'extensiv_id', label: 'User login e-mail', type: 'text' },
+      { name: 'client_secret', label: 'Client Secret', type: 'password' },
     ],
     fedex: [
-      { name: 'client_id', label: 'Client ID', type: 'text' },
-      { name: 'client_secret', label: 'Client Secret', type: 'text' },
-      { name: 'extensiv_id', label: 'User login e-mail', type: 'text' },
+      { name: 'account_number', label: 'Account Number', type: 'text' },
+      { name: 'client_id', label: 'API Key (Client ID)', type: 'text' },
+      { name: 'client_secret', label: 'API Secret (Client Secret)', type: 'password' },
+      { name: 'scope', label: 'Scope (optional, e.g., CXS)', type: 'text' },
     ],
     quickbooks: [
       { name: 'client_id', label: 'Client ID', type: 'text' },
