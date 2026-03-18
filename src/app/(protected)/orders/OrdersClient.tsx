@@ -349,6 +349,58 @@ function formatOrderTotal(value: unknown): string {
   return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
+function getExtensivGrandTotal(row: any): number | null {
+  const toNumber = (value: any): number | null => {
+    const num = Number(value)
+    return Number.isFinite(num) ? num : null
+  }
+
+  // If the backend starts storing totals directly, prefer that.
+  const direct = toNumber(row?.grand_total ?? row?.total_amount ?? row?.total)
+  if (direct !== null) return direct
+
+  // Fallback: derive from raw_data.billing.billingCharges subtotals
+  let raw = row?.raw_data as any
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw)
+    } catch (error) {
+      raw = null
+    }
+  }
+
+  const pickChargesArray = (): any[] | null => {
+    if (Array.isArray(raw?.billing?.billingCharges)) return raw.billing.billingCharges
+    if (Array.isArray(raw?.billingCharges)) return raw.billingCharges
+    if (Array.isArray(raw?.charges)) return raw.charges
+    return null
+  }
+
+  const charges = pickChargesArray()
+  if (!charges) return null
+
+  const total = charges.reduce((acc: number, charge: any) => {
+    const subtotal = toNumber(charge?.subtotal)
+    if (subtotal !== null) return acc + subtotal
+
+    const detailsTotal = Array.isArray(charge?.details)
+      ? charge.details.reduce((innerAcc: number, detail: any) => {
+          const detailSubtotal = toNumber(detail?.subtotal)
+          if (detailSubtotal !== null) return innerAcc + detailSubtotal
+
+          const perUnit = toNumber(detail?.chargePerUnit)
+          const units = toNumber(detail?.numUnits) ?? 1
+          if (perUnit !== null && units > 0) return innerAcc + perUnit * units
+          return innerAcc
+        }, 0)
+      : 0
+
+    return acc + detailsTotal
+  }, 0)
+
+  return Number.isFinite(total) ? total : null
+}
+
 function getMarketplaceLogoSrc(name: unknown, orderMarketplaceId?: unknown): string {
   const marketplaceId = String(orderMarketplaceId ?? '').trim()
   if (marketplaceId.toUpperCase().startsWith('SYNC-AI-')) {
@@ -364,15 +416,19 @@ function getMarketplaceLogoSrc(name: unknown, orderMarketplaceId?: unknown): str
   return MARKETPLACE_LOGOS[normalized] ?? MARKETPLACE_LOGOS.unknown
 }
 
-function normalizeOrderRow(row: any, sourceMode: 'standard' | 'extensiv' | 'magaya') {
+function normalizeOrderRow(
+  row: any,
+  sourceMode: 'standard' | 'extensiv' | 'magaya' | 'sellercloud'
+) {
   if (sourceMode === 'extensiv') {
+    const grandTotal = getExtensivGrandTotal(row)
     return {
       extensiv_order_id: row.id,
       order_uuid: row.external_id ?? String(row.id),
       order_id: row.external_id ?? row.order_number ?? String(row.id),
       order_source_order_id: row.order_number ?? row.external_id ?? '—',
       client_name: row.customer_name ?? '—',
-      grand_total: null,
+      grand_total: grandTotal,
       order_date: row.creation_date ?? row.process_date ?? null,
       order_status: row.last_event_name
         ? normalizeExtensivStatus(row.last_event_name, {
@@ -387,6 +443,8 @@ function normalizeOrderRow(row: any, sourceMode: 'standard' | 'extensiv' | 'maga
       channel_account_id: row.account_id_channel ?? null,
       last_event_name: row.last_event_name ?? null,
       status_fully_allocated: row.status_fully_allocated ?? null,
+      raw_data: row.raw_data ?? null,
+      metadata: row.metadata ?? null,
     }
   }
 
@@ -404,6 +462,27 @@ function normalizeOrderRow(row: any, sourceMode: 'standard' | 'extensiv' | 'maga
       marketplace_name: 'magaya',
       warehouse_name: null,
       channel_account_id: null,
+      raw_data: row.raw_data ?? null,
+      metadata: row.metadata ?? null,
+    }
+  }
+
+  if (sourceMode === 'sellercloud') {
+    return {
+      order_uuid: row.id ?? row.order_uuid ?? row.order_id ?? null,
+      order_id: row.order_id ?? row.order_source_order_id ?? '—',
+      order_source_order_id:
+        row.order_source_order_id ?? row.external_id ?? row.order_uuid ?? '—',
+      client_name: row.client_name ?? '—',
+      grand_total: row.grand_total ?? row.total ?? null,
+      order_date: row.order_date ?? row.process_date ?? null,
+      order_status: row.shipping_status ?? row.status ?? '—',
+      source: 'sellercloud',
+      marketplace_name: row.marketplace_name ?? row.marketplace ?? 'sellercloud',
+      warehouse_name: row.marketplace_name ?? row.marketplace ?? null,
+      channel_account_id: row.channel_account_id ?? row.account_id ?? null,
+      raw_data: row.raw_data ?? null,
+      metadata: row.metadata ?? null,
     }
   }
 
@@ -491,6 +570,9 @@ export default function OrdersClient({
   const [allWarehouseOptions, setAllWarehouseOptions] = useState<string[]>([])
   const [isExtensivView, setIsExtensivView] = useState(isParentOnlyExtensiv)
   const [isMagayaView, setIsMagayaView] = useState(isParentOnlyMagaya)
+  const [isSellercloudView, setIsSellercloudView] = useState(false)
+  const [availableSources, setAvailableSources] = useState<string[]>([])
+  const [sourceOverride, setSourceOverride] = useState<'auto' | 'sellercloud' | 'extensiv' | 'magaya'>('auto')
 
   const initialSearchTerm = String(searchParams.get('q') ?? '').trim()
   const initialStatusFilter = (() => {
@@ -537,7 +619,9 @@ export default function OrdersClient({
     ? 'All warehouses'
     : isMagayaView
       ? 'All customers'
-      : 'All marketplaces'
+      : isSellercloudView
+        ? 'All marketplaces'
+        : 'All marketplaces'
   const locationLabel = isExtensivView ? 'Warehouse' : isMagayaView ? 'Customer' : 'Marketplace'
 
   const applyMagayaAccountScope = (query: any, accountIds: string[]) => {
@@ -603,8 +687,46 @@ export default function OrdersClient({
       const isExtensivByAccountSource = accountSource === 'extensiv'
       const isMagaya = isParentOnlyMagaya || isMagayaByAccountSource
       const isExtensiv = !isMagaya && (isParentOnlyExtensiv || isExtensivByAccountSource)
-      setIsExtensivView(isExtensiv)
-      setIsMagayaView(isMagaya)
+
+      // Load account integrations to detect sellercloud-only scenario
+      const { data: integrations } = await supabase
+        .from('account_integrations')
+        .select('type,status')
+        .eq('account_id', userAccountId)
+
+      const integrationTypes = new Set(
+        (integrations || [])
+          .map((r: any) => String(r?.type ?? '').trim().toLowerCase())
+          .filter(Boolean)
+      )
+      const hasSellercloud = integrationTypes.has('sellercloud')
+      const hasExtensiv = integrationTypes.has('extensiv')
+      const hasMagaya = integrationTypes.has('magaya')
+      setAvailableSources(Array.from(integrationTypes))
+
+      const override = sourceOverride
+      const useExtensiv =
+        override === 'extensiv'
+          ? true
+          : override === 'auto'
+            ? isExtensiv
+            : false
+      const useMagaya =
+        override === 'magaya'
+          ? true
+          : override === 'auto'
+            ? isMagaya
+            : false
+      const useSellercloud =
+        override === 'sellercloud'
+          ? true
+          : override === 'auto'
+            ? !isExtensiv && !isMagaya && hasSellercloud
+            : false
+
+      setIsExtensivView(useExtensiv)
+      setIsMagayaView(useMagaya)
+      setIsSellercloudView(useSellercloud)
 
       if (
         !hasDateRangeInQuery &&
@@ -624,42 +746,61 @@ export default function OrdersClient({
         }
       }
 
-      const sourceMode: 'standard' | 'extensiv' | 'magaya' = isExtensiv
+      const sourceMode: 'standard' | 'extensiv' | 'magaya' | 'sellercloud' = isExtensivView
         ? 'extensiv'
-        : isMagaya
+        : isMagayaView
           ? 'magaya'
-          : 'standard'
+          : isSellercloudView
+            ? 'sellercloud'
+            : 'standard'
 
       const magayaScopedAccountIds =
         sourceMode === 'magaya'
           ? await resolveMagayaScopedAccountIds(userAccountId, accountRecord?.parent_account_id)
           : [userAccountId]
 
-      const ordersTable = sourceMode === 'extensiv' ? 'extensiv_orders' : 'ai_orders_unified_6'
+      const ordersTable =
+        sourceMode === 'extensiv'
+          ? 'extensiv_orders'
+          : sourceMode === 'magaya'
+            ? 'ai_orders_unified_6'
+            : sourceMode === 'sellercloud'
+              ? 'sellercloud_orders'
+              : 'ai_orders_unified_6'
       const orderDateField =
         sourceMode === 'extensiv'
           ? 'creation_date'
           : sourceMode === 'magaya'
             ? 'order_date'
-            : 'order_date'
+            : sourceMode === 'sellercloud'
+              ? 'order_date'
+              : 'order_date'
       const warehouseField =
         sourceMode === 'extensiv'
           ? 'facility_name'
           : sourceMode === 'magaya'
             ? 'customer_name'
-            : 'marketplace_name'
+            : sourceMode === 'sellercloud'
+              ? null
+              : 'marketplace_name'
 
       const statusField =
         sourceMode === 'extensiv'
           ? 'last_event_name'
           : sourceMode === 'magaya'
             ? 'status'
-            : 'order_status'
+            : sourceMode === 'sellercloud'
+              ? 'shipping_status'
+              : 'order_status'
       const statusSelect =
-        sourceMode === 'extensiv' ? 'last_event_name,status_closed,status_fully_allocated' : statusField
+        sourceMode === 'extensiv'
+          ? 'last_event_name,status_closed,status_fully_allocated'
+          : statusField
       const statusFilterField =
         sourceMode === 'magaya'
           ? 'account_id'
+          : sourceMode === 'sellercloud'
+            ? 'account_id'
           : userRole === 'client' || userRole === 'staff-client'
             ? sourceMode === 'extensiv'
               ? 'account_id_channel'
@@ -747,40 +888,46 @@ export default function OrdersClient({
         }
       }
 
-      const warehouseBaseQuery =
-        sourceMode === 'magaya'
-          ? (supabase as any).from('v_magaya_orders')
-          : (supabase as any).from(ordersTable)
+      if (warehouseField) {
+        const warehouseBaseQuery =
+          sourceMode === 'magaya'
+            ? (supabase as any).from('v_magaya_orders')
+            : (supabase as any).from(ordersTable)
 
-      let warehouseQuery: any = warehouseBaseQuery.select(warehouseField)
-      warehouseQuery =
-        sourceMode === 'magaya'
-          ? applyMagayaAccountScope(warehouseQuery, magayaScopedAccountIds)
-          : warehouseQuery.eq(statusFilterField, userAccountId)
+        let warehouseQuery: any = warehouseBaseQuery.select(warehouseField)
+        warehouseQuery =
+          sourceMode === 'magaya'
+            ? applyMagayaAccountScope(warehouseQuery, magayaScopedAccountIds)
+            : warehouseQuery.eq(statusFilterField, userAccountId)
 
-      const { data: warehouseRows, error: warehouseError } = await warehouseQuery
+        const { data: warehouseRows, error: warehouseError } = await warehouseQuery
 
-      if (warehouseError) {
-        console.error('❌ Error fetching warehouse options:', warehouseError.message)
+        if (warehouseError) {
+          console.error('❌ Error fetching warehouse options:', warehouseError.message)
+        } else {
+          const warehouses = Array.from(
+            new Set<string>(
+              (warehouseRows || [])
+                .map((row: any) => row?.[warehouseField])
+                .filter((value: any) => value !== null && value !== undefined && String(value).trim())
+                .map((value: any) => String(value))
+            )
+          ).sort((a, b) => a.localeCompare(b))
+
+          setAllWarehouseOptions(warehouses)
+        }
       } else {
-        const warehouses = Array.from(
-          new Set<string>(
-            (warehouseRows || [])
-              .map((row: any) => row?.[warehouseField])
-              .filter((value: any) => value !== null && value !== undefined && String(value).trim())
-              .map((value: any) => String(value))
-          )
-        ).sort((a, b) => a.localeCompare(b))
-
-        setAllWarehouseOptions(warehouses)
+        setAllWarehouseOptions([])
       }
   
       const orderSelectColumns =
         sourceMode === 'extensiv'
-          ? 'id, account_id, account_id_channel, external_id, order_number, customer_name, facility_name, status, status_closed, status_fully_allocated, last_event_name, source, creation_date, process_date, tracking_number'
+          ? 'id, account_id, account_id_channel, external_id, order_number, customer_name, facility_name, status, status_closed, status_fully_allocated, last_event_name, source, creation_date, process_date, tracking_number, raw_data'
           : sourceMode === 'magaya'
             ? 'id, account_id, channel_id, external_id, order_number, customer_external_id, customer_name, status, order_date, process_date, ship_date, currency_code, grand_total, tracking_number'
-            : 'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id'
+            : sourceMode === 'sellercloud'
+              ? 'id, account_id, order_id, order_source_order_id, client_name, grand_total, order_date, shipping_status, channel_account_id'
+              : 'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id'
 
       let query: any = (
         sourceMode === 'magaya'
@@ -792,13 +939,15 @@ export default function OrdersClient({
 // ✅ Filtrar corretamente dependendo da role
 if (sourceMode === 'magaya') {
   query = applyMagayaAccountScope(query, magayaScopedAccountIds)
+} else if (sourceMode === 'sellercloud') {
+  query = query.eq('account_id', userAccountId)
 } else if (userRole === 'client' || userRole === 'staff-client') {
   query = query.eq(sourceMode === 'extensiv' ? 'account_id_channel' : 'channel_account_id', userAccountId)
 } else {
   query = query.eq('account_id', userAccountId)
 }
 
-if (warehouseFilter !== 'all') {
+if (warehouseField && warehouseFilter !== 'all') {
   query = query.eq(warehouseField, warehouseFilter)
 }
 
@@ -806,6 +955,8 @@ if (statusFilter) {
   if (sourceMode === 'extensiv') {
     query = applyExtensivStatusFilter(query, statusFilter, extensivStatusFilterMap)
   } else if (sourceMode === 'magaya') {
+    query = query.eq('status', statusFilter)
+  } else if (sourceMode === 'sellercloud') {
     query = query.eq('status', statusFilter)
   } else {
     query = query.eq('order_status', statusFilter)
@@ -815,14 +966,16 @@ if (statusFilter) {
 if (startDate) {
   query = query.gte(
     orderDateField,
-    sourceMode === 'extensiv' || sourceMode === 'magaya' ? `${startDate}T00:00:00Z` : startDate
+    sourceMode === 'extensiv' || sourceMode === 'magaya' || sourceMode === 'sellercloud'
+      ? `${startDate}T00:00:00Z`
+      : startDate
   )
 }
 
 if (endDate) {
-  query = query[sourceMode === 'extensiv' || sourceMode === 'magaya' ? 'lte' : 'lt'](
+  query = query[sourceMode === 'extensiv' || sourceMode === 'magaya' || sourceMode === 'sellercloud' ? 'lte' : 'lt'](
     orderDateField,
-    sourceMode === 'extensiv' || sourceMode === 'magaya'
+    sourceMode === 'extensiv' || sourceMode === 'magaya' || sourceMode === 'sellercloud'
       ? `${endDate}T23:59:59.999Z`
       : addDaysToISODate(endDate, 1)
   )
@@ -885,6 +1038,8 @@ const { data, count, error } = await query.range(start, end)
     hasDateRangeInQuery,
     isExtensivView,
     isMagayaView,
+    isSellercloudView,
+    sourceOverride,
   ])
 
   useEffect(() => {
@@ -894,33 +1049,50 @@ const { data, count, error } = await query.range(start, end)
   const exportAllOrdersToCSV = async (filename = 'orders.csv') => {
     setIsExporting(true)
     try {
-      const sourceMode: 'standard' | 'extensiv' | 'magaya' = isExtensivView
+      const sourceMode: 'standard' | 'extensiv' | 'magaya' | 'sellercloud' = isExtensivView
         ? 'extensiv'
         : isMagayaView
           ? 'magaya'
-          : 'standard'
+          : isSellercloudView
+            ? 'sellercloud'
+            : 'standard'
 
-      const ordersTable = sourceMode === 'extensiv' ? 'extensiv_orders' : 'ai_orders_unified_6'
+      const ordersTable =
+        sourceMode === 'extensiv'
+          ? 'extensiv_orders'
+          : sourceMode === 'magaya'
+            ? 'ai_orders_unified_6'
+            : sourceMode === 'sellercloud'
+              ? 'sellercloud_orders'
+              : 'ai_orders_unified_6'
       const orderDateField =
         sourceMode === 'extensiv'
           ? 'creation_date'
           : sourceMode === 'magaya'
             ? 'order_date'
-            : 'order_date'
+            : sourceMode === 'sellercloud'
+              ? 'order_date'
+              : 'order_date'
       const warehouseField =
         sourceMode === 'extensiv'
           ? 'facility_name'
           : sourceMode === 'magaya'
             ? 'customer_name'
-            : 'marketplace_name'
+            : sourceMode === 'sellercloud'
+              ? null
+              : 'marketplace_name'
       const statusField =
         sourceMode === 'extensiv'
           ? 'last_event_name'
           : sourceMode === 'magaya'
             ? 'status'
-            : 'order_status'
+            : sourceMode === 'sellercloud'
+              ? 'status'
+              : 'order_status'
       const statusSelect =
-        sourceMode === 'extensiv' ? 'last_event_name,status_closed,status_fully_allocated' : statusField
+        sourceMode === 'extensiv'
+          ? 'last_event_name,status_closed,status_fully_allocated'
+          : statusField
       const statusFilterField =
         sourceMode === 'magaya'
           ? 'account_id'
@@ -985,10 +1157,12 @@ const { data, count, error } = await query.range(start, end)
 
       const orderSelectColumns =
         sourceMode === 'extensiv'
-          ? 'id, account_id, account_id_channel, external_id, order_number, customer_name, facility_name, status, status_closed, status_fully_allocated, last_event_name, source, creation_date, process_date, tracking_number'
+          ? 'id, account_id, account_id_channel, external_id, order_number, customer_name, facility_name, status, status_closed, status_fully_allocated, last_event_name, source, creation_date, process_date, tracking_number, raw_data'
           : sourceMode === 'magaya'
             ? 'id, account_id, channel_id, external_id, order_number, customer_external_id, customer_name, status, order_date, process_date, ship_date, currency_code, grand_total, tracking_number'
-            : 'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id'
+            : sourceMode === 'sellercloud'
+              ? 'id, account_id, order_id, order_source_order_id, client_name, grand_total, order_date, shipping_status, channel_account_id'
+              : 'order_uuid, order_id, order_source_order_id, client_name, grand_total, order_date, status_code, shipping_status, payment_status, order_status, source, marketplace_name, channel_account_id'
 
       let query: any = (
         sourceMode === 'magaya'
@@ -998,6 +1172,8 @@ const { data, count, error } = await query.range(start, end)
 
       if (sourceMode === 'magaya') {
         query = applyMagayaAccountScope(query, [accountId || ''])
+      } else if (sourceMode === 'sellercloud') {
+        query = query.eq('account_id', accountId)
       } else if (userRole === 'client' || userRole === 'staff-client') {
         query = query.eq(sourceMode === 'extensiv' ? 'account_id_channel' : 'channel_account_id', accountId)
       } else {
@@ -1013,6 +1189,8 @@ const { data, count, error } = await query.range(start, end)
           query = applyExtensivStatusFilter(query, statusFilter, extensivStatusFilterMap)
         } else if (sourceMode === 'magaya') {
           query = query.eq('status', statusFilter)
+        } else if (sourceMode === 'sellercloud') {
+          query = query.eq('status', statusFilter)
         } else {
           query = query.eq('order_status', statusFilter)
         }
@@ -1021,14 +1199,16 @@ const { data, count, error } = await query.range(start, end)
       if (startDate) {
         query = query.gte(
           orderDateField,
-          sourceMode === 'extensiv' || sourceMode === 'magaya' ? `${startDate}T00:00:00Z` : startDate
+          sourceMode === 'extensiv' || sourceMode === 'magaya' || sourceMode === 'sellercloud'
+            ? `${startDate}T00:00:00Z`
+            : startDate
         )
       }
 
       if (endDate) {
-        query = query[sourceMode === 'extensiv' || sourceMode === 'magaya' ? 'lte' : 'lt'](
+        query = query[sourceMode === 'extensiv' || sourceMode === 'magaya' || sourceMode === 'sellercloud' ? 'lte' : 'lt'](
           orderDateField,
-          sourceMode === 'extensiv' || sourceMode === 'magaya'
+          sourceMode === 'extensiv' || sourceMode === 'magaya' || sourceMode === 'sellercloud'
             ? `${endDate}T23:59:59.999Z`
             : addDaysToISODate(endDate, 1)
         )
@@ -1077,6 +1257,22 @@ const { data, count, error } = await query.range(start, end)
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-primary">Orders</h1>
         <div className="flex gap-4 items-center">
+          {availableSources.length > 1 && (
+            <select
+              className="border rounded-md px-2 py-1 text-sm"
+              value={sourceOverride}
+              onChange={(e) => {
+                const val = e.target.value as typeof sourceOverride
+                setSourceOverride(val)
+                setCurrentPage(1)
+              }}
+            >
+              <option value="auto">All sources</option>
+              {availableSources.includes('sellercloud') && <option value="sellercloud">Sellercloud</option>}
+              {availableSources.includes('extensiv') && <option value="extensiv">Extensiv</option>}
+              {availableSources.includes('magaya') && <option value="magaya">Magaya</option>}
+            </select>
+          )}
           <DateRangePicker
             date={selectedRange}
             setDate={(range) => {
