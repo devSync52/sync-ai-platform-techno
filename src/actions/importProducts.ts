@@ -2,7 +2,7 @@
 
 export async function importProductsByAccountAction(
   accountId: string,
-  source: 'sellercloud' | 'extensiv'
+  source: 'sellercloud' | 'extensiv' | 'magaya'
 ) {
   try {
     // 🔁 Define qual função chamar com base na origem
@@ -10,8 +10,10 @@ export async function importProductsByAccountAction(
       source === 'sellercloud'
         ? 'import_sellercloud_products'
         : source === 'extensiv'
-        ? 'sync_extensiv_products'
-        : null
+          ? 'sync_extensiv_products'
+          : source === 'magaya'
+            ? 'sync_magaya_products'
+            : null
 
     if (!functionPath) {
       throw new Error('Invalid source selected')

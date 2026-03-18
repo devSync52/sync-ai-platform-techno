@@ -9,6 +9,7 @@ export default function IntegrationTypeLogo({ type, size = 80 }: Props) {
   const logos: Record<string, string> = {
     sellercloud: '/logos/sellercloud.png',
     extensiv: '/logos/extensiv.png',
+    magaya: '/logos/unknown.png',
     project44: '/logos/project44.png',
     ups: '/logos/ups.png',
     fedex: '/logos/fedex.png',

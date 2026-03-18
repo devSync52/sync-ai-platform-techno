@@ -19,7 +19,7 @@ export default function ImportOrdersModal({
   onClose,
   onImported,
 }: Props) {
-  const [source, setSource] = useState<'sellercloud' | 'extensiv' | 'project44'>('sellercloud')
+  const [source, setSource] = useState<'sellercloud' | 'extensiv' | 'magaya' | 'project44'>('sellercloud')
   const [step, setStep] = useState<'select' | 'loading'>('select')
   const [isPending, startTransition] = useTransition()
 
@@ -88,7 +88,7 @@ export default function ImportOrdersModal({
             </h2>
             <p className="text-sm text-center text-gray-900 mb-6">Select the import channel</p>
             <div className="flex items-center justify-center gap-6 mb-6">
-              {(['sellercloud', 'extensiv', 'project44'] as const).map((option) => (
+              {(['sellercloud', 'extensiv', 'magaya', 'project44'] as const).map((option) => (
                 <label
                   key={option}
                   className={`flex flex-col items-center gap-2 cursor-pointer border rounded-lg p-2 ${
@@ -104,7 +104,7 @@ export default function ImportOrdersModal({
                     className="hidden"
                   />
                   <Image
-                    src={`/logos/${option}.png`}
+                    src={option === 'magaya' ? '/logos/unknown.png' : `/logos/${option}.png`}
                     alt={option}
                     width={90}
                     height={90}

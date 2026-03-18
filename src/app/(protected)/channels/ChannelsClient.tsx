@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Table from '@/components/ui/table'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { SyncChannelsButton } from '@/components/buttons/SyncChannelsButton'
 
 type AuthType = 'local' | 'wms_extensiv'
 type CustomerRole = 'client'
@@ -280,13 +281,16 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
           <h1 className="text-2xl font-semibold text-primary">Customers</h1>
           <p className="text-sm text-gray-500">Manage customer users and authentication type.</p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
-        >
-          <Plus size={16} />
-          Add Customer
-        </button>
+        <div className="flex items-center gap-3">
+          <SyncChannelsButton accountId={accountId} onSynced={loadCustomers} />
+          <button
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+          >
+            <Plus size={16} />
+            Add Customer
+          </button>
+        </div>
       </div>
 
       {error && !modalOpen && (

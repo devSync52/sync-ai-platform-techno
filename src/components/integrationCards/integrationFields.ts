@@ -9,6 +9,12 @@ export const integrationFields = {
       { name: 'client_secret', label: 'Client Secret', type: 'text' },
       { name: 'extensiv_id', label: 'User login e-mail', type: 'text' },
     ],
+    magaya: [
+      { name: 'api_url', label: 'API URL', type: 'text' },
+      { name: 'username', label: 'Username', type: 'text' },
+      { name: 'password', label: 'Password', type: 'password' },
+      { name: 'company_id', label: 'Company ID', type: 'text' },
+    ],
     ups: [
       { name: 'client_id', label: 'Client ID', type: 'text' },
       { name: 'client_secret', label: 'Client Secret', type: 'text' },
