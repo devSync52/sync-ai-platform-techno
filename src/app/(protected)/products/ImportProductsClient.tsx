@@ -13,6 +13,7 @@ interface Props {
 
 export default function ImportProductsClient({ accountId, companyName, userRole }: Props) {
   const [products, setProducts] = useState<ProductList[]>([])
+  const [sources, setSources] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [companyFilter, setCompanyFilter] = useState<string | null>(null)
@@ -25,22 +26,26 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true)
-  
+
       const queryParams = new URLSearchParams()
       queryParams.set('role', userRole)
-  
+
       if (accountId) {
         queryParams.set('account_id', accountId)
       }
-  
+      if (typeFilter) {
+        queryParams.set('source', typeFilter)
+      }
+
       const res = await fetch(`/api/products?${queryParams.toString()}`)
       const data = await res.json()
       setProducts(data.products || [])
+      setSources(data.sources || [])
       setLoading(false)
     }
-  
+
     fetchProducts()
-  }, [accountId, userRole])
+  }, [accountId, userRole, typeFilter])
 
   const deduplicated =
     userRole === 'client' || userRole === 'staff-client'
@@ -92,6 +97,8 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
     currentPage * itemsPerPage
   )
 
+  const sourceOptions = ['All sources', ...Array.from(new Set((sources.length ? sources : products.map(p => p.product_source)).filter((v): v is string => !!v)))]
+
   const totalPages = Math.ceil(filtered.length / itemsPerPage)
 
   const exportToCSV = (data: any[], filename = 'products.csv') => {
@@ -138,8 +145,11 @@ export default function ImportProductsClient({ accountId, companyName, userRole 
           {
             label: 'Source',
             value: typeFilter ?? '',
-            options: ['All sources', ...Array.from(new Set(products.map(p => p.product_source).filter((v): v is string => !!v)))],
-            onChange: (v) => setTypeFilter(v !== 'All sources' ? v : null)
+            options: sourceOptions,
+            onChange: (v) => {
+              setTypeFilter(v !== 'All sources' ? v : null)
+              setCurrentPage(1)
+            }
           }
         ]}
       />
