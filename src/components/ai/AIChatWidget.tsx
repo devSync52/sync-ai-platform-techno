@@ -17,7 +17,7 @@ export default function AIChatWidget() {
   const [hasMessages, setHasMessages] = useState(false)
   const supabase = useSupabase()
   const session = useSession()
-  const user = session?.user  
+  const user = session?.user
 
   // Carrega os dados do usuário (conta e role)
   useEffect(() => {
@@ -58,10 +58,7 @@ export default function AIChatWidget() {
   useEffect(() => {
     if (sessionId) {
       const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-      fetch(`${api}/chat/history?session_id=${sessionId}`)
-        .then(res => res.json())
-        .then(data => setHasMessages(Array.isArray(data) && data.length > 0))
-        .catch(() => setHasMessages(false))
+      fetch(`${api}/chat/history?session_id=${sessionId}`).then(res => res.json()).then(data => setHasMessages(Array.isArray(data) && data.length > 0)).catch(() => setHasMessages(false))
     } else {
       setHasMessages(false)
     }
@@ -103,27 +100,27 @@ export default function AIChatWidget() {
             <div className="flex items-center justify-between p-4 border-b bg-white sticky top-0 z-10">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold ml-2">SynC AI Expert</h2>
-                
-                
+
+
               </div>
               <div className="flex items-center gap-1">
-              <button
+                <button
                   onClick={openHistory}
                   className="text-gray-500 hover:text-primary transition p-1"
                   title="Chat history"
                 >
                   <HistoryIcon className="w-5 h-5" />
                 </button>
-                
-                  <button
-                    onClick={handleNewSession}
-                    className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90"
-                    title="Start new conversation"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span className="hidden sm:inline">New Chat</span>
-                  </button>
-                
+
+                <button
+                  onClick={handleNewSession}
+                  className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90"
+                  title="Start new conversation"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">New Chat</span>
+                </button>
+
                 <button
                   onClick={() => setOpen(false)}
                   className="text-gray-500 hover:text-gray-800 text-xl font-extrabold ml-2"
@@ -144,12 +141,12 @@ export default function AIChatWidget() {
                 />
               ) : (
                 <AIExpertChat
-              apiUrl={process.env.NEXT_PUBLIC_API_URL || ''}
-  user_id={user.id}
-  account_id={accountId}
-  user_type={userType}
-  session_id={sessionId || ''}
-/>
+                  apiUrl={process.env.NEXT_PUBLIC_API_URL || ''}
+                  user_id={user.id}
+                  account_id={accountId}
+                  user_type={userType}
+                  session_id={sessionId || ''}
+                />
               )}
             </div>
           </div>
