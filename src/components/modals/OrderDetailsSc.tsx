@@ -17,6 +17,187 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
   const [loading, setLoading] = useState(false)
   const [fullOrder, setFullOrder] = useState<any>(null)
 
+  const getExtensivGrandTotal = (row: any): number | null => {
+    const toNumber = (value: any): number | null => {
+      const num = Number(value)
+      return Number.isFinite(num) ? num : null
+    }
+
+    const direct = toNumber(row?.grand_total ?? row?.total_amount ?? row?.total)
+    if (direct !== null) return direct
+
+    let raw = row?.raw_data as any
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw)
+      } catch (error) {
+        raw = null
+      }
+    }
+
+    const pickChargesArray = (): any[] | null => {
+      if (Array.isArray(raw?.billing?.billingCharges)) return raw.billing.billingCharges
+      if (Array.isArray(raw?.billingCharges)) return raw.billingCharges
+      if (Array.isArray(raw?.charges)) return raw.charges
+      return null
+    }
+
+    const charges = pickChargesArray()
+    if (!charges) return null
+
+    const total = charges.reduce((acc: number, charge: any) => {
+      const subtotal = toNumber(charge?.subtotal)
+      if (subtotal !== null) return acc + subtotal
+
+      const detailsTotal = Array.isArray(charge?.details)
+        ? charge.details.reduce((innerAcc: number, detail: any) => {
+            const detailSubtotal = toNumber(detail?.subtotal)
+            if (detailSubtotal !== null) return innerAcc + detailSubtotal
+
+            const perUnit = toNumber(detail?.chargePerUnit)
+            const units = toNumber(detail?.numUnits) ?? 1
+            if (perUnit !== null && units > 0) return innerAcc + perUnit * units
+            return innerAcc
+          }, 0)
+        : 0
+
+      return acc + detailsTotal
+    }, 0)
+
+    return Number.isFinite(total) ? total : null
+  }
+
+  const parseSellercloudPayload = (rawOrder: any) => {
+    let meta = rawOrder?.metadata
+    if (typeof meta === 'string') {
+      try {
+        meta = JSON.parse(meta)
+      } catch (error) {
+        meta = null
+      }
+    }
+
+    if (!meta || typeof meta !== 'object') {
+      return { metadata: null, items: [] as any[] }
+    }
+
+    const billing = meta.BillingAddress || meta.billing || {}
+    const shipping = meta.ShippingAddress || meta.shipping || {}
+    const itemsMeta = Array.isArray(meta.Items) ? meta.Items : []
+
+    const mappedItems = itemsMeta.map((item: any, index: number) => {
+      const qty = Number(item?.Qty ?? item?.Quantity ?? item?.quantity ?? 0)
+      const unit = Number(item?.UnitPrice ?? item?.SitePrice ?? item?.PricePerCase ?? item?.Price ?? 0)
+      const total = Number(item?.LineTotal ?? item?.TotalPrice ?? item?.LineTotalPrice ?? unit * qty)
+      return {
+        id: item?.Id ?? item?.SKU ?? `sc-${index}`,
+        sku: item?.SKU ?? item?.ProductID ?? item?.ProductName ?? '—',
+        quantity: qty,
+        unit_price: unit,
+        total_price: total,
+        metadata: item,
+      }
+    })
+
+    const metadata = {
+      BillingAddress: {
+        RecipientName: billing?.RecipientName ?? billing?.Name ?? '',
+        FirstName: billing?.FirstName ?? '',
+        LastName: billing?.LastName ?? '',
+        StreetLine1: billing?.StreetLine1 ?? billing?.Address1 ?? '',
+        City: billing?.City ?? '',
+        StateName: billing?.StateName ?? billing?.State ?? '',
+        CountryName: billing?.CountryName ?? billing?.Country ?? '',
+        Zip: billing?.Zip ?? billing?.ZipCode ?? '',
+      },
+      ShippingAddress: {
+        RecipientName: shipping?.RecipientName ?? shipping?.Name ?? '',
+        FirstName: shipping?.FirstName ?? '',
+        LastName: shipping?.LastName ?? '',
+        StreetLine1: shipping?.StreetLine1 ?? shipping?.Address1 ?? '',
+        City: shipping?.City ?? '',
+        StateName: shipping?.StateName ?? shipping?.State ?? '',
+        CountryName: shipping?.CountryName ?? shipping?.Country ?? '',
+        Zip: shipping?.Zip ?? shipping?.ZipCode ?? '',
+      },
+      ShippingCarrier: meta.ShippingCarrier ?? meta.Carrier ?? '',
+      ShippingService: meta.ShippingService ?? meta.Service ?? '',
+      TrackingNumber: meta.TrackingNumber ?? '',
+      ShipDate: meta.ShipDate ?? rawOrder?.order_date ?? '',
+      Items: mappedItems,
+    }
+
+    return { metadata, items: mappedItems }
+  }
+
+  const parseExtensivPayload = (rawOrder: any) => {
+    let raw = rawOrder?.raw_data
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw)
+      } catch (error) {
+        raw = null
+      }
+    }
+
+    if (!raw || typeof raw !== 'object') {
+      return { metadata: null, items: [] as any[] }
+    }
+
+    const billTo = raw.billTo || raw.BillTo || {}
+    const shipTo = raw.shipTo || raw.ShipTo || {}
+    const routing = raw.routingInfo || {}
+    const readOnly = raw.readOnly || {}
+    const embeddedItems = raw._embedded?.['http://api.3plcentral.com/rels/orders/item'] || []
+
+    const mappedItems = Array.isArray(embeddedItems)
+      ? embeddedItems.map((item: any, index: number) => {
+          const qty = Number(item?.qty ?? item?.readOnly?.originalPrimaryQty ?? 0)
+          return {
+            id: item?.readOnly?.orderItemId ?? item?.itemIdentifier?.id ?? `ext-${index}`,
+            sku: item?.itemIdentifier?.sku ?? item?.itemIdentifier?.name ?? '—',
+            quantity: qty,
+            unit_price: null,
+            total_price: null,
+            metadata: {
+              ProductName: item?.itemIdentifier?.name ?? item?.itemIdentifier?.sku ?? '—',
+              Qty: qty,
+            },
+          }
+        })
+      : []
+
+    const metadata = {
+      BillingAddress: {
+        RecipientName: billTo?.name ?? '',
+        FirstName: billTo?.name ?? '',
+        LastName: '',
+        StreetLine1: billTo?.address1 ?? '',
+        City: billTo?.city ?? '',
+        StateName: billTo?.state ?? '',
+        CountryName: billTo?.country ?? '',
+        Zip: billTo?.zip ?? '',
+      },
+      ShippingAddress: {
+        RecipientName: shipTo?.name ?? shipTo?.companyName ?? '',
+        FirstName: shipTo?.name ?? '',
+        LastName: '',
+        StreetLine1: shipTo?.address1 ?? '',
+        City: shipTo?.city ?? '',
+        StateName: shipTo?.state ?? '',
+        CountryName: shipTo?.country ?? '',
+        Zip: shipTo?.zip ?? '',
+      },
+      ShippingCarrier: routing?.carrier ?? '',
+      ShippingService: routing?.mode ?? '',
+      TrackingNumber: rawOrder?.tracking_number ?? readOnly?.trackingNumber ?? raw?.trackingNumber ?? '',
+      ShipDate: readOnly?.processDate ?? rawOrder?.process_date ?? rawOrder?.order_date ?? '',
+      Items: mappedItems,
+    }
+
+    return { metadata, items: mappedItems }
+  }
+
   const getPreferredCustomerName = () => {
     const first = String(
       fullOrder?.metadata?.FirstName ||
@@ -57,45 +238,102 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
     if (!open || (!order?.order_id && !order?.order_uuid && !order?.id)) return;
 
     async function fetchOrderAndItems() {
-      console.log('[🧪 Debug] order confirmado:', order);
       setLoading(true);
       setItems([]);
 
-      const orderUuid = order?.order_uuid || order?.id || null
+      const orderUuid = order?.order_uuid || order?.id || order?.order_id || null
+      const orderSource = String(order?.source || '').toLowerCase()
 
       let full: any = null
       let fullErr: any = null
 
-      if (orderUuid) {
-        const result = await supabase
-          .from('orders')
-          .select('*')
-          .eq('id', orderUuid)
-          .maybeSingle()
-        full = result.data
-        fullErr = result.error
-      } else if (order?.order_id) {
-        const result = await supabase
-          .from('orders')
-          .select('*')
-          .eq('order_number', order.order_id)
-          .maybeSingle()
-        full = result.data
-        fullErr = result.error
+      if (orderSource === 'sellercloud') {
+        if (orderUuid) {
+          const result = await supabase
+            .from('sellercloud_orders')
+            .select('*')
+            .eq('id', orderUuid)
+            .maybeSingle()
+          full = result.data
+          fullErr = result.error
+        } else if (order?.order_id) {
+          const result = await supabase
+            .from('sellercloud_orders')
+            .select('*')
+            .eq('order_id', order.order_id)
+            .maybeSingle()
+          full = result.data
+          fullErr = result.error
+        }
+      } else if (orderSource === 'extensiv') {
+        const extensivId = (() => {
+          if (order?.extensiv_order_id) return Number(order.extensiv_order_id)
+          if (order?.id && /^\d+$/.test(String(order.id))) return Number(order.id)
+          if (order?.order_id && /^\d+$/.test(String(order.order_id))) return Number(order.order_id)
+          return null
+        })()
+
+        if (extensivId !== null) {
+          const result = await supabase
+            .from('extensiv_orders')
+            .select('*')
+            .eq('id', extensivId)
+            .maybeSingle()
+          full = result.data
+          fullErr = result.error
+        }
+      } else {
+        if (orderUuid) {
+          const result = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderUuid)
+            .maybeSingle()
+          full = result.data
+          fullErr = result.error
+        } else if (order?.order_id) {
+          const result = await supabase
+            .from('orders')
+            .select('*')
+            .eq('order_number', order.order_id)
+            .maybeSingle()
+          full = result.data
+          fullErr = result.error
+        }
       }
 
       if (fullErr) {
         console.error('❌ Erro ao buscar order completo:', fullErr.message);
-      } else {
-        setFullOrder(full);
       }
 
       let itemsData: any[] = []
-      if (orderUuid) {
-        const { data: savedItems, error: savedItemsErr } = await supabase
-          .from('order_items')
-          .select('*')
-          .eq('order_id', orderUuid)
+      if (orderSource === 'extensiv') {
+        const extensivId = (() => {
+          if (order?.extensiv_order_id) return Number(order.extensiv_order_id)
+          if (order?.id && /^\d+$/.test(String(order.id))) return Number(order.id)
+          if (order?.order_id && /^\d+$/.test(String(order.order_id))) return Number(order.order_id)
+          return null
+        })()
+
+        if (extensivId !== null) {
+          const { data: savedItems, error: savedItemsErr } = await supabase
+            .from('extensiv_order_items')
+            .select('*')
+            .eq('order_id', extensivId)
+
+          if (savedItemsErr) {
+            console.error('❌ Erro ao buscar itens do pedido (extensiv_order_items):', savedItemsErr.message);
+          } else if (Array.isArray(savedItems) && savedItems.length > 0) {
+            itemsData = savedItems
+            setItems(savedItems)
+          }
+        }
+      } else if (orderUuid) {
+        const itemsQuery = orderSource === 'sellercloud'
+          ? supabase.from('sellercloud_order_items').select('*').eq('order_uuid', orderUuid)
+          : supabase.from('order_items').select('*').eq('order_id', orderUuid)
+
+        const { data: savedItems, error: savedItemsErr } = await itemsQuery
 
         if (savedItemsErr) {
           console.error('❌ Erro ao buscar itens do pedido (order_items):', savedItemsErr.message);
@@ -105,11 +343,57 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
         }
       }
 
+      // If still no items, try raw items from passed order (e.g., extensiv payload)
+      if (!itemsData.length && Array.isArray(order?.items)) {
+        itemsData = order.items as any[]
+        setItems(itemsData)
+      }
+
+      // Fallback: if not found in orders table, use the passed order data
+      let resolvedOrder = full ?? order ?? null
+
+      if (resolvedOrder && orderSource === 'extensiv') {
+        const parsed = parseExtensivPayload(resolvedOrder)
+        resolvedOrder = {
+          ...resolvedOrder,
+          metadata: {
+            ...(resolvedOrder.metadata || {}),
+            ...(parsed.metadata || {}),
+          },
+          grand_total: resolvedOrder.grand_total ?? getExtensivGrandTotal(resolvedOrder) ?? null,
+        }
+
+        if (!itemsData.length && parsed.items.length) {
+          itemsData = parsed.items
+          setItems(parsed.items)
+        }
+      }
+
+      if (resolvedOrder && orderSource === 'sellercloud') {
+        const parsed = parseSellercloudPayload(resolvedOrder)
+        resolvedOrder = {
+          ...resolvedOrder,
+          metadata: {
+            ...(resolvedOrder.metadata || {}),
+            ...(parsed.metadata || {}),
+          },
+        }
+
+        if (!itemsData.length && parsed.items.length) {
+          itemsData = parsed.items
+          setItems(parsed.items)
+        }
+      }
+
+      if (resolvedOrder) {
+        setFullOrder(resolvedOrder)
+      }
+
       // Fallback: render line items directly from orders.metadata.Items
       // when order_items is empty for this order.
       const hasDbItems = Array.isArray(itemsData) && itemsData.length > 0
-      const rawItems = Array.isArray((full || fullOrder)?.metadata?.Items)
-        ? (full || fullOrder).metadata.Items
+      const rawItems = Array.isArray(resolvedOrder?.metadata?.Items)
+        ? resolvedOrder.metadata.Items
         : []
       if (!hasDbItems && rawItems.length > 0) {
         const mapped = rawItems.map((item: any, index: number) => {
@@ -135,6 +419,12 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
 
     fetchOrderAndItems();
   }, [open, order?.id, order?.order_id, order?.order_uuid, order?.source, supabase])
+
+  const subtotalFromItems = items.reduce((sum, i) => sum + Number(i.total_price ?? 0), 0)
+  const fallbackGrandTotal = fullOrder?.grand_total ?? order?.grand_total ?? null
+  const effectiveSubtotal = subtotalFromItems > 0
+    ? subtotalFromItems
+    : fallbackGrandTotal ?? 0
 
   return (
     <Dialog open={open} onOpenChange={onCloseAction}>
@@ -270,10 +560,12 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
           {/* Totals */}
           <div className="bg-primary text-white text-right font-bold p-2 rounded space-y-1 print:bg-white print:text-black print:border print:border-black/10 print:break-inside-avoid">
             <p>
-              Subtotal: $ {items.reduce((sum, i) => sum + (i.total_price || 0), 0).toFixed(2)}
+              Subtotal: $ {effectiveSubtotal.toFixed(2)}
             </p>
             <p>
-              Grand Total: $ {order?.grand_total ? order.grand_total.toFixed(2) : '—'}
+              Grand Total: $ {fallbackGrandTotal !== null && fallbackGrandTotal !== undefined
+                ? Number(fallbackGrandTotal).toFixed(2)
+                : '—'}
             </p>
           </div>
 

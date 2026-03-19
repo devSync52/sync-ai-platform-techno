@@ -6,10 +6,12 @@ import ImportCustomersModal from '@/components/modals/ImportCustomersModal'
 
 export function SyncChannelsButton({
   accountId,
-  companyName = ''
+  companyName = '',
+  onSynced,
 }: {
   accountId: string
   companyName?: string
+  onSynced?: () => void
 }) {
   const [showModal, setShowModal] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -19,6 +21,7 @@ export function SyncChannelsButton({
     setShowModal(false)
     setMessage('✅ Sync finished!') // ou personalize se quiser
     // Pode refetchar a tabela de channels aqui se necessário
+    onSynced?.()
   }
 
   return (

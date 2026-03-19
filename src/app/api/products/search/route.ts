@@ -227,6 +227,23 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Invalid warehouse for tenant' }, { status: 400 })
     }
 
+    const { data: integrations, error: integrationsErr } = await (supabase as any)
+      .from('account_integrations')
+      .select('type,status')
+      .eq('account_id', callerAccountId)
+
+    if (integrationsErr) {
+      return NextResponse.json({ error: integrationsErr.message }, { status: 500 })
+    }
+
+    const integrationTypes = new Set(
+      (integrations ?? [])
+        .filter((row: any) => String(row?.status ?? '').trim().toLowerCase() === 'active')
+        .map((row: any) => String(row?.type ?? '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+    const hasSellercloud = integrationTypes.has('sellercloud')
+
     const candidateWarehouseIds = [billingWarehouseId]
 
     let query = (supabase as any)
@@ -255,6 +272,61 @@ export async function GET(req: Request) {
     // If enriched view has no rows for this context, search in products table.
     let products = data ?? []
     let totalCount = count ?? products.length
+    if (products.length === 0 && hasSellercloud) {
+      let scQuery = (supabase as any)
+        .from('sellercloud_products')
+        .select(
+          'id, sku, description, warehouse_name, quantity_available, quantity_physical, site_price, price, weight, shipping_weight, package_weight_lbs, account_id',
+          { count: 'exact' }
+        )
+        .eq('account_id', callerAccountId)
+        .range(from, to)
+
+      if (term.length > 0) {
+        scQuery = scQuery.or(`sku.ilike.%${term}%,description.ilike.%${term}%`)
+      }
+
+      if (warehouseName) {
+        scQuery = scQuery.ilike('warehouse_name', `%${warehouseName}%`)
+      }
+
+      const { data: scData, error: scErr, count: scCount } = await scQuery
+      if (scErr) {
+        return NextResponse.json({ error: scErr.message }, { status: 500 })
+      }
+
+      if ((scData ?? []).length > 0) {
+        totalCount = scCount ?? (scData ?? []).length
+        products = (scData ?? []).map((row: any) => {
+          const weight =
+            toNum(row?.package_weight_lbs) ??
+            toNum(row?.shipping_weight) ??
+            toNum(row?.weight)
+
+          return {
+            id: row.id,
+            sku: row.sku,
+            description: row.description ?? null,
+            price: toNum(row?.site_price) ?? toNum(row?.price) ?? 0,
+            pkg_weight_lb: weight,
+            pkg_length_in: null,
+            pkg_width_in: null,
+            pkg_height_in: null,
+            available: toNum(row?.quantity_available) ?? 0,
+            on_hand: toNum(row?.quantity_physical),
+            allocated: null,
+            warehouse_id: billingWarehouseId,
+            inventory_warehouse_id: billingWarehouseId,
+            parent_account_id: callerAccountId,
+            account_id: effectiveClientId,
+            client_account_id: effectiveClientId,
+            source: 'sellercloud',
+            warehouse_name: row.warehouse_name ?? warehouseName ?? null,
+          }
+        })
+      }
+    }
+
     if (products.length === 0) {
       let pQuery = (supabase as any)
         .from('products')

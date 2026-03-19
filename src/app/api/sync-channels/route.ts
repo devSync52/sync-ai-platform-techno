@@ -19,6 +19,8 @@ export async function POST(request: Request) {
       functionUrl = 'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync_sellercloud_channels'
     } else if (source === 'extensiv') {
       functionUrl = 'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync-customers-extensiv'
+    } else if (source === 'magaya') {
+      functionUrl = 'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync-customers-magaya'
     } else {
       return new Response(JSON.stringify({ success: false, error: 'Invalid source' }), {
         status: 400,

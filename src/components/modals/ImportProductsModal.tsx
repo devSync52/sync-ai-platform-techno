@@ -18,7 +18,7 @@ export default function ImportProductsModal({
   companyName,
   onClose
 }: Props) {
-  const [source, setSource] = useState<'sellercloud' | 'extensiv'>('sellercloud')
+  const [source, setSource] = useState<'sellercloud' | 'extensiv' | 'magaya'>('sellercloud')
   const [step, setStep] = useState<'select' | 'loading'>('select')
   const [isPending, startTransition] = useTransition()
 
@@ -82,6 +82,24 @@ export default function ImportProductsModal({
                 />
                 <Image src="/logos/extensiv.png" alt="Extensiv" width={90} height={90} />
                 <span className="text-xs">Extensiv</span>
+              </label>
+
+              {/* ✅ Magaya */}
+              <label
+                className={`flex flex-col items-center gap-2 cursor-pointer border rounded-md p-2 transition ${
+                  source === 'magaya' ? 'ring-2 ring-primary bg-gray-50' : 'opacity-60'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="source"
+                  value="magaya"
+                  checked={source === 'magaya'}
+                  onChange={() => setSource('magaya')}
+                  className="hidden"
+                />
+                <Image src="/logos/unknown.png" alt="Magaya" width={90} height={90} />
+                <span className="text-xs">Magaya</span>
               </label>
 
               {/* ❌ Project44 desativado */}
