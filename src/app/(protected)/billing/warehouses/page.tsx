@@ -34,6 +34,7 @@ export default function WarehousesPage() {
   const [openAdd, setOpenAdd] = useState(false)
   const [saving, setSaving] = useState(false)
   const [syncingSellercloud, setSyncingSellercloud] = useState(false)
+  const [syncingExtensiv, setSyncingExtensiv] = useState(false)
   const [draft, setDraft] = useState<WarehouseRow>({ id: '', name: '', city: '', state: '', is_default: false })
   const supabase = useSupabase()
 
@@ -165,6 +166,24 @@ export default function WarehousesPage() {
     }
   }
 
+  const syncExtensivWarehouses = async () => {
+    setSyncingExtensiv(true)
+    setError(null)
+    try {
+      const res = await authFetch('/api/billing/warehouses', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'syncExtensiv' }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to sync Extensiv warehouses')
+      setRows(Array.isArray(json.data) ? (json.data as WarehouseRow[]) : [])
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setSyncingExtensiv(false)
+    }
+  }
+
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
@@ -178,6 +197,9 @@ export default function WarehousesPage() {
           <Button variant="outline" onClick={() => location.reload()}>Refresh</Button>
           <Button variant="outline" onClick={syncSellercloudWarehouses} disabled={syncingSellercloud}>
             {syncingSellercloud ? 'Syncing…' : 'Sync Sellercloud'}
+          </Button>
+          <Button variant="outline" onClick={syncExtensivWarehouses} disabled={syncingExtensiv}>
+            {syncingExtensiv ? 'Syncing…' : 'Sync Extensiv'}
           </Button>
           <Button onClick={() => setOpenAdd(true)} disabled={saving}>{saving ? 'Saving…' : 'Add warehouse'}</Button>
         </div>

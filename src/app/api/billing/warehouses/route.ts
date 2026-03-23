@@ -40,6 +40,12 @@ type SellercloudCredentials = {
   password: string;
 };
 
+type ExtensivCredentials = {
+  client_id: string;
+  client_secret: string;
+  extensiv_id: string;
+};
+
 const ENCRYPTION_KEY =
   process.env.NEXT_PUBLIC_CREDENTIAL_SECRET || "SYNC_SECRET";
 
@@ -75,6 +81,34 @@ function parseCredentials(raw: unknown): SellercloudCredentials | null {
   return creds;
 }
 
+function parseExtensivCredentials(raw: unknown): ExtensivCredentials | null {
+  if (!raw) return null;
+
+  let parsed: any = raw;
+  if (typeof raw === "string") {
+    try {
+      const decrypted = AES.decrypt(raw, ENCRYPTION_KEY).toString(Utf8);
+      parsed = JSON.parse(decrypted);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const creds: ExtensivCredentials = {
+    client_id: String((parsed as any).client_id ?? "").trim(),
+    client_secret: String((parsed as any).client_secret ?? "").trim(),
+    extensiv_id: String((parsed as any).extensiv_id ?? "").trim(),
+  };
+
+  if (!creds.client_id || !creds.client_secret || !creds.extensiv_id) {
+    return null;
+  }
+
+  return creds;
+}
+
 async function getSellercloudToken(
   credentials: SellercloudCredentials,
 ): Promise<string> {
@@ -104,6 +138,168 @@ async function getSellercloudToken(
   }
 
   return String(data.access_token);
+}
+
+async function getExtensivToken(creds: ExtensivCredentials): Promise<string> {
+  const basicAuth = Buffer.from(
+    `${creds.client_id}:${creds.client_secret}`,
+  ).toString("base64");
+
+  const res = await fetch("https://secure-wms.com/AuthServer/api/Token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Basic ${basicAuth}`,
+    },
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      user_login: creds.extensiv_id,
+    }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.access_token) {
+    throw new Error(
+      json?.error_description ||
+        json?.message ||
+        `Extensiv token failed (${res.status})`,
+    );
+  }
+  return String(json.access_token);
+}
+
+async function collectFacilitiesFromRates(
+  customerId: string,
+  token: string,
+  maxItems = 50,
+): Promise<Array<{ id: string; name: string | null }>> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/hal+json",
+    "Content-Type": "application/hal+json; charset=utf-8",
+  };
+
+  const url = `https://secure-wms.com/customers/${customerId}/items?pgsiz=${maxItems}&pgnum=1&kitinclusion=Either`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) return [];
+  const json = await res.json().catch(() => ({}));
+  const items =
+    json._embedded?.["http://api.3plCentral.com/rels/customers/item"] || [];
+  const seen = new Map<string, { id: string; name: string | null }>();
+
+  for (const item of items) {
+    const itemId = item?.itemId ?? item?.readOnly?.itemId;
+    if (!itemId) continue;
+    const ratesRes = await fetch(
+      `https://secure-wms.com/customers/${customerId}/items/${itemId}/rates`,
+      { headers },
+    );
+    if (!ratesRes.ok) continue;
+    const ratesJson = await ratesRes.json().catch(() => ({}));
+    const rates = Array.isArray(ratesJson.facilityRates)
+      ? ratesJson.facilityRates
+      : ratesJson._embedded?.[
+          "http://api.3plcentral.com/rels/customers/itemrate"
+        ] || [];
+    for (const r of rates) {
+      const fid = r?.facilityIdentifier?.id;
+      const fname = r?.facilityIdentifier?.name ?? null;
+      if (!fid) continue;
+      const key = String(fid);
+      if (!seen.has(key)) {
+        seen.set(key, { id: key, name: fname ? String(fname) : null });
+      }
+    }
+  }
+
+  return Array.from(seen.values());
+}
+
+async function fetchExtensivFacilities(
+  token: string,
+  customerIds: Array<string | number>,
+): Promise<{
+  facilities: Array<Record<string, any>>;
+  tried: string[];
+  lastError: string | null;
+}> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/hal+json",
+    "Content-Type": "application/hal+json; charset=utf-8",
+  };
+
+  const facilities: any[] = [];
+  let lastError: string | null = null;
+  const tried: string[] = [];
+
+  const fetchPage = async (baseUrl: string) => {
+    let page = 1;
+    let keepGoing = true;
+    while (keepGoing && page <= 10) {
+      const url = `${baseUrl}?pgsiz=100&pgnum=${page}`;
+      tried.push(url);
+      const res = await fetch(url, { headers });
+      const text = await res.text();
+      let json: any = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        json = {};
+      }
+
+      if (!res.ok) {
+        const msg =
+          json?.message ||
+          json?.error ||
+          json?.error_description ||
+          text ||
+          `Extensiv facilities ${res.status}`;
+        lastError = msg;
+        return;
+      }
+
+      const pageFacilities =
+        json._embedded?.[
+          "http://api.3plcentral.com/rels/inventory/facility"
+        ] || json._embedded?.["facilities"] || json.items || [];
+
+      facilities.push(...(Array.isArray(pageFacilities) ? pageFacilities : []));
+
+      const hasMore =
+        Array.isArray(pageFacilities) && pageFacilities.length === 100;
+      keepGoing = hasMore;
+      page += 1;
+    }
+  };
+
+  // Prefer scoping by customer IDs (Extensiv customer = account's channel external_id)
+  if (Array.isArray(customerIds) && customerIds.length > 0) {
+    for (const cid of customerIds) {
+      const trimmed = String(cid || "").trim();
+      if (!trimmed) continue;
+      // Try both documented and observed paths
+      await fetchPage(
+        `https://secure-wms.com/customers/${trimmed}/inventory/facilities`,
+      );
+      await fetchPage(
+        `https://secure-wms.com/customer/${trimmed}/inventory/facilities`,
+      );
+      await fetchPage(
+        `https://secure-wms.com/customers/${trimmed}/facilities`,
+      );
+    }
+  } else {
+    // Fallback: global facilities endpoint
+    await fetchPage("https://secure-wms.com/inventory/facilities");
+  }
+
+  // If nothing came back, try global as a fallback once
+  if (facilities.length === 0) {
+    await fetchPage("https://secure-wms.com/inventory/facilities");
+  }
+
+  return { facilities, tried, lastError };
 }
 
 type UserContext =
@@ -540,6 +736,204 @@ export async function POST(request: Request) {
       },
       failures,
     });
+  }
+
+  if (action === "syncExtensiv") {
+    try {
+      const { data: integration, error: integrationErr } = await sr
+        .from("account_integrations")
+        .select("credentials")
+        .eq("account_id", accountId)
+        .eq("type", "extensiv")
+        .maybeSingle();
+
+      if (integrationErr) {
+        return NextResponse.json(
+          { error: integrationErr.message },
+          { status: 400 },
+        );
+      }
+
+      const creds = parseExtensivCredentials(integration?.credentials);
+      if (!creds) {
+        return NextResponse.json(
+          { error: "Extensiv credentials not configured for this account" },
+          { status: 400 },
+        );
+      }
+
+      // collect Extensiv customer IDs from channels for scoping facilities
+      const { data: channels, error: channelsErr } = await sr
+        .from("channels")
+        .select("external_id")
+        .eq("account_id", accountId)
+        .eq("source", "extensiv");
+
+      if (channelsErr) {
+        return NextResponse.json(
+          { error: channelsErr.message },
+          { status: 400 },
+        );
+      }
+
+      const customerIds = (channels || [])
+        .map((c: any) => String(c?.external_id ?? "").trim())
+        .filter((v: string) => v.length > 0);
+
+      const channelByExternalId = new Map<
+        string,
+        {
+          city: string | null;
+          state: string | null;
+          country: string | null;
+          name: string | null;
+        }
+      >(
+        (channels || []).map((c: any) => [
+          String(c?.external_id ?? "").trim(),
+          {
+            city: c?.city ? String(c.city).trim() : null,
+            state: c?.state ? String(c.state).trim() : null,
+            country: c?.country ? String(c.country).trim() : null,
+            name: c?.company_name ? String(c.company_name).trim() : null,
+          },
+        ]),
+      );
+
+      const token = await getExtensivToken(creds);
+      const { facilities, tried, lastError } = await fetchExtensivFacilities(
+        token,
+        customerIds,
+      );
+
+      let effectiveFacilities = facilities;
+
+      // Fallback: derive facilities from item rates if none returned
+      if (!effectiveFacilities || effectiveFacilities.length === 0) {
+        const derived: any[] = [];
+        for (const cid of customerIds) {
+          const derivedForCustomer = await collectFacilitiesFromRates(
+            String(cid),
+            token,
+          );
+          derived.push(
+            ...derivedForCustomer.map((f) => ({
+              id: f.id,
+              name: f.name,
+              source: "extensiv_rates",
+            })),
+          );
+        }
+        effectiveFacilities = derived;
+      }
+
+      if (!effectiveFacilities || effectiveFacilities.length === 0) {
+        return NextResponse.json(
+          {
+            data: [],
+            message:
+              "No Extensiv facilities found (see tried URLs for debugging)",
+            tried,
+            lastError,
+          },
+          { status: 400 },
+        );
+      }
+
+      // Final fallback: synthesize one row per Extensiv customer if still empty
+      if (!effectiveFacilities || effectiveFacilities.length === 0) {
+        effectiveFacilities = customerIds.map((cid) => ({
+          id: String(cid),
+          name:
+            channelByExternalId.get(String(cid))?.name ?? `Extensiv ${cid}`,
+          city: channelByExternalId.get(String(cid))?.city ?? null,
+          state: channelByExternalId.get(String(cid))?.state ?? null,
+          source: "extensiv_placeholder",
+        }));
+      }
+
+      const rows = effectiveFacilities.map((f: any) => {
+        const addr = f.address || f.Address || {};
+        const idVal =
+          f.id ??
+          f.facilityId ??
+          f.facilityID ??
+          f.FacilityId ??
+          f.FacilityID ??
+          f.identifier?.id ??
+          f.identifier?.facilityId ??
+          f.identifier?.facilityID;
+        const channelGeo =
+          channelByExternalId.get(
+            String(f.customerId || f.customer_id || f.clientId || "").trim(),
+          ) || null;
+        return {
+          parent_account_id: accountId,
+          name:
+            String(
+              f.name ??
+                f.facilityName ??
+                f.identifier?.name ??
+                f.identifier?.facilityName ??
+                "",
+            ).trim() || "Extensiv Facility",
+          city:
+            String(addr.city ?? addr.City ?? "").trim() ||
+            channelGeo?.city ||
+            null,
+          state:
+            String(addr.state ?? addr.State ?? "").trim() ||
+            channelGeo?.state ||
+            null,
+          is_active: true,
+          is_default: Boolean(f.isDefault ?? f.defaultFacility ?? false),
+          source: "extensiv",
+          // keep minimal columns present in billing.warehouses
+        };
+      });
+
+      // Remove existing Extensiv warehouses to avoid duplicates on repeated syncs
+      await sr
+        .schema("billing")
+        .from("warehouses")
+        .delete()
+        .eq("parent_account_id", accountId)
+        .eq("source", "extensiv");
+
+      const { error: upsertErr } = await sr
+        .schema("billing")
+        .from("warehouses")
+        .insert(rows);
+
+      if (upsertErr) {
+        return NextResponse.json({ error: upsertErr.message }, { status: 400 });
+      }
+
+      const { data: refreshed, error: refreshErr } = await sr
+        .from("v_billing_warehouses")
+        .select("*")
+        .eq("parent_account_id", accountId)
+        .eq("is_active", true)
+        .order("is_default", { ascending: false })
+        .order("name", { ascending: true });
+
+      if (refreshErr) {
+        return NextResponse.json(
+          { error: refreshErr.message },
+          { status: 400 },
+        );
+      }
+
+      return NextResponse.json({
+        data: (refreshed ?? []).map(shapeWarehouse),
+        summary: { received: effectiveFacilities.length },
+      });
+    } catch (err: any) {
+      return NextResponse.json(
+        { error: err?.message || "Failed to sync Extensiv warehouses" },
+        { status: 400 },
+      );
+    }
   }
 
   return NextResponse.json(
