@@ -740,6 +740,46 @@ export default function OrderWizard() {
               console.warn('[order-wizard] auto-sync after OMS push error', err)
             })
         }
+      } else if (externalService === 'extensiv') {
+        const createOrderRes = await fetch('/api/orders/extensiv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ draftId: quoteData.id }),
+        })
+
+        const createOrderJson = await createOrderRes.json().catch(() => ({}))
+        if (!createOrderRes.ok || !createOrderJson?.success) {
+          const message =
+            createOrderJson?.error ||
+            createOrderJson?.message ||
+            'Failed to create order in Extensiv'
+          throw new Error(String(message))
+        }
+
+        const extensivOrderId =
+          createOrderJson?.extensivOrderId ?? createOrderJson?.response?.id ?? null
+
+        const { error: persistExtensiv } = await supabase
+          .from('saip_quote_drafts')
+          .update({ extensiv_status: 'success', extensiv_order_id: extensivOrderId } as any)
+          .eq('id', quoteData.id)
+
+        if (persistExtensiv) {
+          console.error('❌ Failed to persist Extensiv status after create:', persistExtensiv)
+        }
+
+        if (quoteData?.account_id) {
+          fetch('/api/sync-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              account_id: quoteData.account_id,
+              source: 'extensiv',
+            }),
+          }).catch((err) => console.warn('[order-wizard] auto-sync after Extensiv push error', err))
+        }
       }
   
       router.push('/orders/create-order')

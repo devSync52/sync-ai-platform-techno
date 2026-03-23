@@ -203,7 +203,8 @@ export async function syncExtensivProductsAction(params: {
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const credentialSecret = process.env.CREDENTIAL_SECRET || "SYNC_SECRET";
+  const credentialSecret =
+    process.env.NEXT_PUBLIC_CREDENTIAL_SECRET || "SYNC_SECRET";
 
   if (!supabaseUrl || !serviceRoleKey) {
     return {

@@ -178,6 +178,49 @@ export async function GET() {
   const seenKeys = new Set<string>()
   const discoveredRows: any[] = []
 
+  // Also surface customers that were synced into the `channels` table (e.g.,
+  // Sellercloud/Extensiv) even if login users have not been provisioned yet.
+  const { data: channelRows, error: channelError } = await supabaseAdmin
+    .from('channels')
+    .select('id, company_name, contact_name, email, external_id, source, created_at')
+    .eq('account_id', context.accountId)
+    .order('created_at', { ascending: false })
+
+  if (channelError) {
+    console.error('[customers][channels] failed to load channels:', channelError)
+  }
+
+  for (const channel of channelRows || []) {
+    const email = String(channel.email || '').trim().toLowerCase()
+    const wmsId = String(channel.external_id || '').trim()
+    const name =
+      String(channel.contact_name || '').trim() ||
+      String(channel.company_name || '').trim() ||
+      'Channel Customer'
+    const source = String(channel.source || 'channel').toLowerCase()
+    const dedupeKey = wmsId || email || `channel:${channel.id}`
+
+    if (!dedupeKey || seenKeys.has(dedupeKey)) continue
+    seenKeys.add(dedupeKey)
+    if (email) existingEmails.add(email)
+
+    discoveredRows.push({
+      id: `chn-${channel.id}`,
+      name,
+      email: email || '-',
+      role: 'client',
+      created_at: channel.created_at ?? null,
+      last_login_at: null,
+      has_logged_in: null,
+      account_id: context.accountId,
+      auth_type: 'wms_extensiv',
+      wms_user_identifier: wmsId || null,
+      status: 'active',
+      source,
+      origin: source,
+    })
+  }
+
   for (const row of orderRows || []) {
     const metadata = (row as any)?.metadata || {}
     const customerName = deriveCustomerName((row as any)?.client_name, metadata)
