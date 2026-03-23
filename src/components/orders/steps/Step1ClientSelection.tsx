@@ -33,6 +33,7 @@ export function Step1ClientSelection({
   onClientChange?: (clientId: string | null) => void
   onClientSaved?: (clientAccountId: string, clientUserId?: string) => void
 }) {
+  const [allClients, setAllClients] = useState<ClientOption[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [selectedClientId, setSelectedClientId] = useState('')
   const [draftClientAccountId, setDraftClientAccountId] = useState<string | null>(null)
@@ -40,6 +41,37 @@ export function Step1ClientSelection({
   const [draftShipToEmail, setDraftShipToEmail] = useState<string | null>(null)
   const [draftShipToName, setDraftShipToName] = useState<string | null>(null)
   const [isLoadingDraft, setIsLoadingDraft] = useState(true)
+  const [serviceFilter, setServiceFilter] = useState<string | null>(null)
+
+  useEffect(() => {
+    const filtered = applyFilterAndSort(allClients, serviceFilter)
+    setClients(filtered)
+  }, [allClients, serviceFilter])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const svc = params.get('service')
+    if (svc) setServiceFilter(svc.toLowerCase())
+  }, [])
+
+  const applyFilterAndSort = (rows: ClientOption[], filter: string | null) => {
+    const filtered =
+      filter === 'extensiv'
+        ? rows.filter((c) => (c.source || '').toLowerCase() === 'extensiv')
+        : filter === 'sellercloud'
+          ? rows.filter((c) => (c.source || '').toLowerCase() === 'sellercloud')
+          : rows
+
+    return filtered.sort((a, b) => {
+      const srcA = (a.source || '').toLowerCase()
+      const srcB = (b.source || '').toLowerCase()
+      if (srcA === srcB) return 0
+      if (srcA === 'extensiv') return -1
+      if (srcB === 'extensiv') return 1
+      return 0
+    })
+  }
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -59,8 +91,16 @@ export function Step1ClientSelection({
               external_id: row?.wms_user_identifier ?? null,
             }))
             .filter((row: ClientOption) => row.id.length > 0 && row.account_id.length > 0)
+            .sort((a, b) => {
+              const srcA = (a.source || '').toLowerCase()
+              const srcB = (b.source || '').toLowerCase()
+              if (srcA === srcB) return 0
+              if (srcA === 'extensiv') return -1
+              if (srcB === 'extensiv') return 1
+              return 0
+            })
 
-          setClients(mapped)
+          setAllClients(mapped)
           return
         }
 
@@ -82,7 +122,7 @@ export function Step1ClientSelection({
           external_id: client.external_id ?? null,
         }))
 
-        setClients(fallbackRows)
+        setAllClients(fallbackRows)
       } catch (err) {
         console.error('❌ Error loading clients via API:', err)
       }
@@ -116,6 +156,18 @@ export function Step1ClientSelection({
         } else if (json?.draft?.client) {
           setDraftClientAccountId(String(json.draft.client))
           if (json?.draft?.client_user_id) setDraftClientUserId(String(json.draft.client_user_id))
+          const prefs = json?.draft?.preferences
+          const preferred =
+            typeof prefs === 'string'
+              ? (() => {
+                  try {
+                    return JSON.parse(prefs)?.external_service
+                  } catch {
+                    return undefined
+                  }
+                })()
+              : prefs?.external_service
+          if (preferred) setServiceFilter(String(preferred).toLowerCase())
           const shipToRaw = json?.draft?.ship_to
           if (shipToRaw) {
             const shipToObj =
@@ -224,6 +276,8 @@ export function Step1ClientSelection({
                 <SelectItem key={client.id} value={client.id}>
                   {client.name || 'Unnamed'}
                   {client.email ? ` • ${client.email}` : ''}
+                  {client.source ? ` • ${client.source}` : ''}
+                  {client.external_id ? ` • ${client.external_id}` : ''}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -130,7 +130,7 @@ export default function QuotesPage() {
 
     if (data?.id) {
       setServiceDialogOpen(false)
-      router.push(`/orders/create-order/${data.id}`)
+      router.push(`/orders/create-order/${data.id}?service=${service}`)
     } else {
       console.error('❌ Failed to create draft:', error)
       toast.error('Failed to create order draft')
