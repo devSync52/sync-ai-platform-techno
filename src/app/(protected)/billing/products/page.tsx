@@ -61,6 +61,8 @@ export default function BillingProductsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [syncingSellercloud, setSyncingSellercloud] = useState(false)
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [sources, setSources] = useState<string[]>([])
   const supabase = useSupabase()
 
   const authFetch = useCallback(async (input: RequestInfo, init?: RequestInit) => {
@@ -90,17 +92,22 @@ export default function BillingProductsPage() {
     setError(null)
 
     try {
-      const res = await authFetch('/api/billing/products', { cache: 'no-store' })
+      const url = sourceFilter && sourceFilter !== 'all'
+        ? `/api/billing/products?source=${encodeURIComponent(sourceFilter)}`
+        : '/api/billing/products'
+
+      const res = await authFetch(url, { cache: 'no-store' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to load products')
       setRows(Array.isArray(json.data) ? (json.data as ProductRow[]) : [])
+      setSources(Array.isArray(json.sources) ? json.sources : [])
     } catch (e: any) {
       setRows([])
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [authFetch])
+  }, [authFetch, sourceFilter])
 
   useEffect(() => {
     void load()
@@ -150,6 +157,16 @@ export default function BillingProductsPage() {
           <p className="text-sm text-muted-foreground">Items available for inventory and billing operations.</p>
         </div>
         <div className="flex gap-2">
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="border rounded px-3 py-2 text-sm"
+          >
+            <option value="all">All sources</option>
+            {sources.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
           <Input
             placeholder="Search products..."
             value={search}

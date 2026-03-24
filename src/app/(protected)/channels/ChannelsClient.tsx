@@ -7,6 +7,7 @@ import { Eye, EyeOff, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { SyncChannelsButton } from '@/components/buttons/SyncChannelsButton'
 
 type AuthType = 'local' | 'wms_extensiv'
+type SourceType = 'local' | 'sellercloud' | 'extensiv'
 type CustomerRole = 'client'
 type CustomerStatus = 'active' | 'disabled'
 
@@ -33,6 +34,20 @@ type FormState = {
   temporaryPassword: string
   wmsUserIdentifier: string
   status: CustomerStatus
+  source: SourceType
+  companyId: string
+  companyName: string
+  firstName: string
+  lastName: string
+  phone: string
+  address1: string
+  address2: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+  customerType: 'wholesale' | 'retail'
+  contactPassword: string
 }
 
 type FormErrors = Partial<Record<keyof FormState, string>>
@@ -49,6 +64,20 @@ const defaultForm: FormState = {
   temporaryPassword: '',
   wmsUserIdentifier: '',
   status: 'active',
+  source: 'local',
+  companyId: '',
+  companyName: '',
+  firstName: '',
+  lastName: '',
+  phone: '',
+  address1: '',
+  address2: '',
+  city: '',
+  state: '',
+  postalCode: '',
+  country: 'US',
+  customerType: 'wholesale',
+  contactPassword: '',
 }
 
 function formatDate(value: string | null) {
@@ -64,6 +93,7 @@ function getAuthTypeLabel(authType: AuthType) {
 function getOriginLabel(origin?: string) {
   if (origin === 'sellercloud') return 'Sellercloud'
   if (origin === 'manual') return 'Manual'
+  if (origin === 'extensiv') return 'Extensiv'
   return origin || '-'
 }
 
@@ -142,6 +172,20 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
       temporaryPassword: '',
       wmsUserIdentifier: customer.wms_user_identifier ?? '',
       status: customer.status ?? 'active',
+      source: (customer.origin as SourceType) ?? 'local',
+      companyId: customer.wms_user_identifier ?? '',
+      companyName: customer.name ?? '',
+      firstName: customer.name?.split(' ')?.[0] ?? '',
+      lastName: customer.name?.split(' ')?.slice(1).join(' ') ?? '',
+      phone: '',
+      address1: '',
+      address2: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      country: 'US',
+      customerType: 'wholesale',
+      contactPassword: '',
     })
     setFormErrors({})
     setModalError(null)
@@ -161,6 +205,8 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
   const validateForm = () => {
     const nextErrors: FormErrors = {}
 
+    const isPlatform = form.source === 'sellercloud' || form.source === 'extensiv'
+
     if (!form.name.trim()) {
       nextErrors.name = 'Name is required.'
     } else if (form.name.trim().length < 2) {
@@ -173,7 +219,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
       nextErrors.email = 'Enter a valid email address.'
     }
 
-    if (form.authType === 'local') {
+    if (form.authType === 'local' && !isPlatform) {
       if (!editingCustomer && !form.temporaryPassword.trim()) {
         nextErrors.temporaryPassword = 'Temporary Password is required for Local auth.'
       } else if (form.temporaryPassword.trim() && form.temporaryPassword.trim().length < 8) {
@@ -181,11 +227,27 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
       }
     }
 
-    if (form.authType === 'wms_extensiv') {
+    if (form.authType === 'wms_extensiv' || isPlatform) {
       if (!form.wmsUserIdentifier.trim()) {
         nextErrors.wmsUserIdentifier = 'WMS User Identifier is required for WMS auth.'
       } else if (form.wmsUserIdentifier.trim().length < 3) {
         nextErrors.wmsUserIdentifier = 'WMS User Identifier must be at least 3 characters.'
+      }
+    }
+
+    if (isPlatform) {
+      if (!form.companyName.trim()) nextErrors.companyName = 'Company name is required.'
+      if (form.source === 'extensiv' && !form.companyId.trim()) nextErrors.companyId = 'Customer ID is required.'
+      if (!form.firstName.trim()) nextErrors.firstName = 'First name is required.'
+      if (!form.phone.trim()) nextErrors.phone = 'Phone is required.'
+      if (!form.address1.trim()) nextErrors.address1 = 'Address line 1 is required.'
+      if (!form.city.trim()) nextErrors.city = 'City is required.'
+      if (!form.state.trim()) nextErrors.state = 'State/Province is required.'
+      if (!form.postalCode.trim()) nextErrors.postalCode = 'Postal code is required.'
+      if (!form.country.trim()) nextErrors.country = 'Country is required.'
+      if (form.source === 'sellercloud' && !form.customerType) nextErrors.customerType = 'Customer type is required.'
+      if (form.source === 'extensiv' && !form.contactPassword.trim()) {
+        nextErrors.contactPassword = 'Temp password for contact is required for Extensiv.'
       }
     }
 
@@ -201,9 +263,9 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
     setModalError(null)
 
     try {
-      const isEdit = Boolean(editingCustomer)
-      const endpoint = isEdit ? `/api/customers/${editingCustomer?.id}` : '/api/customers'
-      const method = isEdit ? 'PATCH' : 'POST'
+    const isEdit = Boolean(editingCustomer)
+    const endpoint = isEdit ? `/api/customers/${editingCustomer?.id}` : '/api/customers'
+    const method = isEdit ? 'PATCH' : 'POST'
 
       const res = await fetch(endpoint, {
         method,
@@ -216,6 +278,20 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
           temporaryPassword: form.authType === 'local' ? form.temporaryPassword : undefined,
           wmsUserIdentifier: form.authType === 'wms_extensiv' ? form.wmsUserIdentifier : undefined,
           status: form.status,
+          source: form.source,
+          companyId: form.companyId,
+          companyName: form.companyName,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          phone: form.phone,
+          address1: form.address1,
+          address2: form.address2,
+          city: form.city,
+          state: form.state,
+          postalCode: form.postalCode,
+          country: form.country,
+          customerType: form.customerType,
+          contactPassword: form.contactPassword,
         }),
       })
 
@@ -390,7 +466,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" aria-modal="true" role="dialog">
-          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] flex flex-col">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">
                 {editingCustomer ? 'Edit Customer User' : 'Create Customer User'}
@@ -410,7 +486,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-4 flex-1 overflow-y-auto pr-1">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Customer User Name</label>
                 <input
@@ -434,27 +510,50 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                 )}
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    setForm((prev) => ({ ...prev, email: value }))
-                    if (modalError) setModalError(null)
-                    if (formErrors.email) {
-                      setFormErrors((prev) => ({ ...prev, email: undefined }))
-                    }
-                  }}
-                  className={`w-full rounded-md border px-3 py-2 text-sm ${
-                    formErrors.email ? 'border-red-500' : ''
-                  }`}
-                  placeholder="customer@example.com"
-                />
-                {formErrors.email && (
-                  <p className="mt-1 text-xs text-red-600">{formErrors.email}</p>
-                )}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setForm((prev) => ({ ...prev, email: value }))
+                      if (modalError) setModalError(null)
+                      if (formErrors.email) {
+                        setFormErrors((prev) => ({ ...prev, email: undefined }))
+                      }
+                    }}
+                    className={`w-full rounded-md border px-3 py-2 text-sm ${
+                      formErrors.email ? 'border-red-500' : ''
+                    }`}
+                    placeholder="customer@example.com"
+                  />
+                  {formErrors.email && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.email}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Source</label>
+                  <select
+                    value={form.source}
+                    onChange={(e) => {
+                      const value = e.target.value as SourceType
+                      setForm((prev) => ({
+                        ...prev,
+                        source: value,
+                        // enforce WMS auth for platform customers
+                        authType: value === 'local' ? prev.authType : 'wms_extensiv',
+                      }))
+                    }}
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                  >
+                    <option value="local">Manual / Local</option>
+                    <option value="sellercloud">Sellercloud</option>
+                    <option value="extensiv">Extensiv</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -483,13 +582,14 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                     setShowTemporaryPassword(false)
                   }}
                   className="w-full rounded-md border px-3 py-2 text-sm"
+                  disabled={form.source !== 'local'}
                 >
                   <option value="local">Local (Platform-managed credentials)</option>
                   <option value="wms_extensiv">Extensive WMS-based (Authenticate via WMS)</option>
                 </select>
               </div>
 
-              {form.authType === 'local' && (
+              {form.authType === 'local' && form.source === 'local' && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Temporary Password</label>
                   <div className="relative">
@@ -529,7 +629,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                 </div>
               )}
 
-              {form.authType === 'wms_extensiv' && (
+              {(form.authType === 'wms_extensiv' || form.source !== 'local') && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">WMS User Identifier</label>
                   <input
@@ -554,6 +654,187 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
                 </div>
               )}
 
+              {form.source !== 'local' && (
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-sm font-semibold text-gray-800">
+                    Platform Customer Details ({form.source === 'sellercloud' ? 'Sellercloud' : 'Extensiv'})
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Customer ID</label>
+                  <input
+                    type="text"
+                    value={form.companyId}
+                    onChange={(e) => setForm((prev) => ({ ...prev, companyId: e.target.value }))}
+                    className={`w-full rounded-md border px-3 py-2 text-sm ${
+                      formErrors.companyId ? 'border-red-500' : ''
+                    }`}
+                    placeholder={
+                      form.source === 'sellercloud'
+                        ? 'Optional: leave blank to auto-use first Sellercloud company'
+                        : 'Unique code in WMS'
+                    }
+                  />
+                      {formErrors.companyId && <p className="mt-1 text-xs text-red-600">{formErrors.companyId}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Company Name</label>
+                      <input
+                        type="text"
+                        value={form.companyName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
+                        className={`w-full rounded-md border px-3 py-2 text-sm ${
+                          formErrors.companyName ? 'border-red-500' : ''
+                        }`}
+                        placeholder="Business name"
+                      />
+                      {formErrors.companyName && (
+                        <p className="mt-1 text-xs text-red-600">{formErrors.companyName}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">First Name</label>
+                      <input
+                        type="text"
+                        value={form.firstName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                        className={`w-full rounded-md border px-3 py-2 text-sm ${
+                          formErrors.firstName ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {formErrors.firstName && <p className="mt-1 text-xs text-red-600">{formErrors.firstName}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Last Name</label>
+                      <input
+                        type="text"
+                        value={form.lastName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                        className="w-full rounded-md border px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
+                      <input
+                        type="text"
+                        value={form.phone}
+                        onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                        className={`w-full rounded-md border px-3 py-2 text-sm ${
+                          formErrors.phone ? 'border-red-500' : ''
+                        }`}
+                        placeholder="+1 555 555 5555"
+                      />
+                      {formErrors.phone && <p className="mt-1 text-xs text-red-600">{formErrors.phone}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Address 1</label>
+                      <input
+                        type="text"
+                        value={form.address1}
+                        onChange={(e) => setForm((prev) => ({ ...prev, address1: e.target.value }))}
+                        className={`w-full rounded-md border px-3 py-2 text-sm ${
+                          formErrors.address1 ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {formErrors.address1 && <p className="mt-1 text-xs text-red-600">{formErrors.address1}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Address 2</label>
+                      <input
+                        type="text"
+                        value={form.address2}
+                        onChange={(e) => setForm((prev) => ({ ...prev, address2: e.target.value }))}
+                        className="w-full rounded-md border px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">City</label>
+                      <input
+                        type="text"
+                        value={form.city}
+                        onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
+                        className={`w-full rounded-md border px-3 py-2 text-sm ${
+                          formErrors.city ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {formErrors.city && <p className="mt-1 text-xs text-red-600">{formErrors.city}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">State / Province</label>
+                      <input
+                        type="text"
+                        value={form.state}
+                        onChange={(e) => setForm((prev) => ({ ...prev, state: e.target.value }))}
+                        className={`w-full rounded-md border px-3 py-2 text-sm ${
+                          formErrors.state ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {formErrors.state && <p className="mt-1 text-xs text-red-600">{formErrors.state}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Postal Code</label>
+                      <input
+                        type="text"
+                        value={form.postalCode}
+                        onChange={(e) => setForm((prev) => ({ ...prev, postalCode: e.target.value }))}
+                        className={`w-full rounded-md border px-3 py-2 text-sm ${
+                          formErrors.postalCode ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {formErrors.postalCode && <p className="mt-1 text-xs text-red-600">{formErrors.postalCode}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Country</label>
+                      <input
+                        type="text"
+                        value={form.country}
+                        onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
+                        className={`w-full rounded-md border px-3 py-2 text-sm ${
+                          formErrors.country ? 'border-red-500' : ''
+                        }`}
+                        placeholder="US"
+                      />
+                      {formErrors.country && <p className="mt-1 text-xs text-red-600">{formErrors.country}</p>}
+                    </div>
+                    {form.source === 'sellercloud' && (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">Customer Type</label>
+                        <select
+                          value={form.customerType}
+                          onChange={(e) => setForm((prev) => ({ ...prev, customerType: e.target.value as 'wholesale' | 'retail' }))}
+                          className={`w-full rounded-md border px-3 py-2 text-sm ${
+                            formErrors.customerType ? 'border-red-500' : ''
+                          }`}
+                        >
+                          <option value="wholesale">Wholesale</option>
+                          <option value="retail">Retail</option>
+                        </select>
+                        {formErrors.customerType && (
+                          <p className="mt-1 text-xs text-red-600">{formErrors.customerType}</p>
+                        )}
+                      </div>
+                    )}
+                    {form.source === 'extensiv' && (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">Contact Temp Password</label>
+                        <input
+                          type="text"
+                          value={form.contactPassword}
+                          onChange={(e) => setForm((prev) => ({ ...prev, contactPassword: e.target.value }))}
+                          className={`w-full rounded-md border px-3 py-2 text-sm ${
+                            formErrors.contactPassword ? 'border-red-500' : ''
+                          }`}
+                          placeholder="Required by Extensiv"
+                        />
+                        {formErrors.contactPassword && (
+                          <p className="mt-1 text-xs text-red-600">{formErrors.contactPassword}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {editingCustomer && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
@@ -569,7 +850,7 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
               )}
             </div>
 
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-6 flex justify-end gap-2 shrink-0">
               <button
                 onClick={closeModal}
                 className="rounded-md bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300"

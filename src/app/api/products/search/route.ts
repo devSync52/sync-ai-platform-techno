@@ -243,6 +243,41 @@ export async function GET(req: Request) {
         .filter(Boolean)
     )
     const hasSellercloud = integrationTypes.has('sellercloud')
+    const hasExtensiv = integrationTypes.has('extensiv')
+
+    // If Extensiv is active, prefer ext. products table directly
+    if (hasExtensiv) {
+      let extQuery = (supabase as any)
+        .from('extensiv_products_n')
+        .select(
+          'id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, quantity_available, available, on_hold, warehouse_name, parent_account_id, client_account_id',
+          { count: 'exact' }
+        )
+        .or(`parent_account_id.eq.${callerAccountId},client_account_id.eq.${effectiveClientId}`)
+        .range(from, to)
+
+      if (term.length > 0) {
+        extQuery = extQuery.or(`sku.ilike.%${term}%,description.ilike.%${term}%`)
+      }
+
+      const { data: extData, error: extErr, count: extCount } = await extQuery
+      if (extErr) {
+        return NextResponse.json({ error: extErr.message }, { status: 500 })
+      }
+
+      const products = extData ?? []
+      const totalCount = extCount ?? (extData ?? []).length
+
+      return NextResponse.json({
+        products,
+        pagination: {
+          page,
+          pageSize,
+          total: totalCount,
+          totalPages: Math.max(1, Math.ceil((totalCount || 0) / pageSize)),
+        },
+      })
+    }
 
     const candidateWarehouseIds = [billingWarehouseId]
 
@@ -268,10 +303,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Fallback: Billing products synced from Sellercloud now live in public.products.
-    // If enriched view has no rows for this context, search in products table.
+    // Primary result set
     let products = data ?? []
     let totalCount = count ?? products.length
+
+    // Fallback: Billing products synced from Sellercloud now live in public.products.
+    // If enriched view has no rows for this context, search in products table.
     if (products.length === 0 && hasSellercloud) {
       let scQuery = (supabase as any)
         .from('sellercloud_products')
