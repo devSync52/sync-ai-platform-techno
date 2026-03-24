@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import ImportProductsModal from "@/components/modals/ImportProductsModal";
+import CreateProductModal from "@/components/modals/CreateProductModal";
 import ImportProductsClient from "./ImportProductsClient";
 
 interface Props {
@@ -17,6 +18,7 @@ export default function ProductsPage({
   userRole,
 }: Props) {
   const [showModal, setShowModal] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {}, [accountId, companyName, userRole]);
 
@@ -25,7 +27,12 @@ export default function ProductsPage({
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-primary">Inventory list</h1>
         {userRole !== "client" && (
-          <Button onClick={() => setShowModal(true)}>Import Product</Button>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setShowCreate(true)}>
+              Create Product
+            </Button>
+            <Button onClick={() => setShowModal(true)}>Import Product</Button>
+          </div>
         )}
       </div>
 
@@ -40,6 +47,13 @@ export default function ProductsPage({
           accountId={accountId}
           companyName={companyName}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {showCreate && (
+        <CreateProductModal
+          open={showCreate}
+          onClose={() => setShowCreate(false)}
         />
       )}
     </div>
