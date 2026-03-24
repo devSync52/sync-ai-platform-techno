@@ -492,7 +492,12 @@ async function resolveAccountContext(request: Request): Promise<UserContext> {
   return { ok: true, accountId: effectiveAccountId, rawAccountId };
 }
 
-async function loadProducts(accountId: string): Promise<ProductRow[]> {
+async function loadProducts(
+  accountId: string,
+  source?: string | null,
+  rawAccountId?: string | null,
+): Promise<{ rows: ProductRow[]; sources: string[] }> {
+  const sourceFilter = source ? String(source).trim().toLowerCase() : null;
   const sr = getServiceRoleClient();
   const { data: accountRow } = await sr
     .from("accounts")
@@ -501,30 +506,53 @@ async function loadProducts(accountId: string): Promise<ProductRow[]> {
     .maybeSingle();
   const accountName = String((accountRow as any)?.name ?? "").trim() || null;
 
-  const { data, error } = await sr
+  const rawId = rawAccountId ? String(rawAccountId) : null;
+  const scopedIds = Array.from(
+    new Set([accountId, rawId].filter((v): v is string => Boolean(v))),
+  );
+
+  let productQuery = sr
     .from("products")
     .select(
-      "id, sku, description, available, physical_qty, on_hold, warehouse_name, source, raw, updated_at",
+      "id, sku, description, available, physical_qty, on_hold, warehouse_name, source, raw, updated_at, parent_account_id",
     )
-    .eq("parent_account_id", accountId)
+    .in("parent_account_id", scopedIds);
+
+  if (sourceFilter && sourceFilter !== "all") {
+    productQuery = productQuery.ilike("source", sourceFilter);
+  }
+
+  const { data, error } = await productQuery
     .order("updated_at", { ascending: false })
     .limit(2000);
 
   if (error) {
     if (!isMissingProductsTableError(error)) throw error;
 
-    const { data: fallbackData, error: fallbackError } = await sr
+    let fallbackQuery = sr
       .from("vw_products_master_enriched")
       .select(
         "id, sku, description, available, on_hold, warehouse_name, product_source, account_name, updated_at, parent_account_id, account_id",
       )
-      .or(`parent_account_id.eq.${accountId},account_id.eq.${accountId}`)
+      .or(
+        scopedIds
+          .map(
+            (id) => `parent_account_id.eq.${id},account_id.eq.${id},client_account_id.eq.${id}`,
+          )
+          .join(","),
+      );
+
+    if (sourceFilter && sourceFilter !== "all") {
+      fallbackQuery = fallbackQuery.ilike("product_source", sourceFilter);
+    }
+
+    const { data: fallbackData, error: fallbackError } = await fallbackQuery
       .order("updated_at", { ascending: false })
       .limit(2000);
 
     if (fallbackError) throw fallbackError;
 
-    return (fallbackData ?? []).map((row: any) => ({
+    const rows = (fallbackData ?? []).map((row: any) => ({
       id: String(row.id),
       sku: row.sku ?? null,
       description: row.description ?? null,
@@ -535,9 +563,19 @@ async function loadProducts(accountId: string): Promise<ProductRow[]> {
       account_name: row.account_name ?? null,
       updated_at: row.updated_at ?? null,
     }));
+
+    const sources = Array.from(
+      new Set(
+        rows
+          .map((row) => row.product_source)
+          .filter((v): v is string => Boolean(v)),
+      ),
+    );
+
+    return { rows, sources };
   }
 
-  return (data ?? []).map((row: any) => {
+  const rows = (data ?? []).map((row: any) => {
     const raw = row?.raw && typeof row.raw === "object" ? row.raw : {};
     const available = pickNumber(
       row.available,
@@ -569,6 +607,256 @@ async function loadProducts(accountId: string): Promise<ProductRow[]> {
       updated_at: row.updated_at ?? null,
     };
   });
+
+  // If nothing was found in products table for a specific source, attempt
+  // to read directly from integration-specific tables so the UI can still
+  // display data even before a sync has been upserted into products.
+  if (rows.length === 0 && sourceFilter === "sellercloud") {
+    const { data: scRows, error: scError } = await sr
+      .from("sellercloud_products")
+      .select(
+        "id, account_id, sku, name, description, quantity_available, quantity_physical, warehouse_name, company_name, updated_at, created_at",
+      )
+      .or(`account_id.eq.${accountId},account_id.eq.${rawId}`)
+      .order("updated_at", { ascending: false })
+      .limit(2000);
+
+    if (!scError && Array.isArray(scRows)) {
+      scRows.forEach((row: any) => {
+        rows.push({
+          id: String(row.id),
+          sku: row.sku ?? null,
+          description: row.description ?? row.name ?? null,
+          available: row.quantity_available ?? row.quantity_physical ?? null,
+          on_hold: null,
+          warehouse_name: row.warehouse_name ?? null,
+          product_source: "sellercloud",
+          account_name: row.company_name ?? null,
+          updated_at: row.updated_at ?? row.created_at ?? null,
+        });
+      });
+    }
+  }
+
+  if (rows.length === 0 && sourceFilter === "extensiv") {
+    // Match the same scoping used by /api/products for extensiv
+    const orFilters = Array.from(
+      new Set(
+        scopedIds
+          .map(
+            (id) =>
+              `parent_account_id.eq.${id},client_account_id.eq.${id}`,
+          )
+          .flatMap((s) => s.split(",")),
+      ),
+    ).join(",");
+
+    const { data: exRows, error: exError } = await sr
+      .from("extensiv_products_n")
+      .select("*")
+      .or(orFilters)
+      .order("updated_at", { ascending: false })
+      .limit(2000);
+
+    if (!exError && Array.isArray(exRows)) {
+      exRows.forEach((row: any) => {
+        const available = pickNumber(
+          row.available,
+          row.quantity_available,
+          row.qty_available,
+          row.quantity_available_to_allocate,
+          row.qty_on_hand,
+          row.quantity_on_hand,
+          row.physical_qty,
+        );
+        const onHold = pickNumber(
+          row.on_hold,
+          row.quantity_on_hold,
+          row.qty_on_hold,
+          row.quantity_hold,
+        );
+        rows.push({
+          id: String(row.id ?? row.sku ?? crypto.randomUUID()),
+          sku: row.sku ?? null,
+          description: row.description ?? row.name ?? null,
+          available,
+          on_hold: onHold,
+          warehouse_name:
+            row.warehouse_name ??
+            row.warehouse ??
+            row.facility_name ??
+            row.facility ??
+            null,
+          product_source: "extensiv",
+          account_name:
+            row.account_name ??
+            row.company_name ??
+            row.client_name ??
+            row.customer_name ??
+            null,
+          updated_at: row.updated_at ?? row.created_at ?? null,
+        });
+      });
+    } else if (exError) {
+      console.error("[billing/products] extensiv fallback error", exError);
+    }
+  }
+
+  // Last-resort fallback: pull from vw_products_master_enriched (same view used
+  // by inventory page) scoped to both parent and raw account ids.
+  if (rows.length === 0) {
+    let viewQuery = sr
+      .from("vw_products_master_enriched")
+      .select(
+        "id, sku, description, available, on_hold, warehouse_name, product_source, account_name, updated_at, parent_account_id, account_id, client_account_id",
+      )
+      .or(
+        scopedIds
+          .map(
+            (id) =>
+              `parent_account_id.eq.${id},account_id.eq.${id},client_account_id.eq.${id}`,
+          )
+          .join(","),
+      )
+      .order("updated_at", { ascending: false })
+      .limit(2000);
+
+    if (sourceFilter && sourceFilter !== "all") {
+      viewQuery = viewQuery.ilike("product_source", sourceFilter);
+    }
+
+    const { data: viewData, error: viewError } = await viewQuery;
+    if (!viewError && Array.isArray(viewData)) {
+      const maybeFiltered =
+        sourceFilter && sourceFilter !== "all"
+          ? viewData.filter(
+              (row) =>
+                String(row.product_source || "")
+                  .toLowerCase()
+                  .trim() === sourceFilter,
+            )
+          : viewData;
+
+      maybeFiltered.forEach((row: any) => {
+        rows.push({
+          id: String(row.id),
+          sku: row.sku ?? null,
+          description: row.description ?? null,
+          available: row.available ?? null,
+          on_hold: row.on_hold ?? null,
+          warehouse_name: row.warehouse_name ?? null,
+          product_source: row.product_source ?? null,
+          account_name: row.account_name ?? null,
+          updated_at: row.updated_at ?? null,
+        });
+      });
+    }
+  }
+
+  // If still empty and a source filter is set, fetch without source filter then
+  // filter in memory (covers inconsistent casing/spacing in DB values).
+  if (rows.length === 0 && sourceFilter && sourceFilter !== "all") {
+    const { data: viewData2, error: viewError2 } = await sr
+      .from("vw_products_master_enriched")
+      .select(
+        "id, sku, description, available, on_hold, warehouse_name, product_source, account_name, updated_at, parent_account_id, account_id, client_account_id",
+      )
+      .or(
+        scopedIds
+          .map(
+            (id) =>
+              `parent_account_id.eq.${id},account_id.eq.${id},client_account_id.eq.${id}`,
+          )
+          .join(","),
+      )
+      .order("updated_at", { ascending: false })
+      .limit(2000);
+
+    if (!viewError2 && Array.isArray(viewData2)) {
+      viewData2
+        .filter(
+          (row) =>
+            String(row.product_source || "").toLowerCase().trim() ===
+            sourceFilter,
+        )
+        .forEach((row: any) =>
+          rows.push({
+            id: String(row.id),
+            sku: row.sku ?? null,
+            description: row.description ?? null,
+            available: row.available ?? null,
+            on_hold: row.on_hold ?? null,
+            warehouse_name: row.warehouse_name ?? null,
+            product_source: row.product_source ?? null,
+            account_name: row.account_name ?? null,
+            updated_at: row.updated_at ?? null,
+          }),
+        );
+    }
+  }
+
+  // Absolute last resort: if still empty, return unfiltered view rows for the
+  // account scope so the UI at least shows something (mirrors inventory page).
+  if (rows.length === 0) {
+    const { data: viewData3, error: viewError3 } = await sr
+      .from("vw_products_master_enriched")
+      .select(
+        "id, sku, description, available, on_hold, warehouse_name, product_source, account_name, updated_at, parent_account_id, account_id, client_account_id",
+      )
+      .or(
+        [
+          `parent_account_id.eq.${accountId}`,
+          `account_id.eq.${accountId}`,
+          rawId ? `parent_account_id.eq.${rawId}` : null,
+          rawId ? `account_id.eq.${rawId}` : null,
+          rawId ? `client_account_id.eq.${rawId}` : null,
+        ]
+          .filter(Boolean)
+          .join(","),
+      )
+      .order("updated_at", { ascending: false })
+      .limit(2000);
+
+    if (!viewError3 && Array.isArray(viewData3)) {
+      viewData3.forEach((row: any) =>
+        rows.push({
+          id: String(row.id),
+          sku: row.sku ?? null,
+          description: row.description ?? null,
+          available: row.available ?? null,
+          on_hold: row.on_hold ?? null,
+          warehouse_name: row.warehouse_name ?? null,
+          product_source: row.product_source ?? null,
+          account_name: row.account_name ?? null,
+          updated_at: row.updated_at ?? null,
+        }),
+      );
+    }
+  }
+
+  const { data: integrations } = await sr
+    .from("account_integrations")
+    .select("type, status")
+    .eq("account_id", accountId);
+
+  const sources = Array.from(
+    new Set(
+      [
+        ...(rows
+          .map((row) => row.product_source || (row as any).source)
+          .filter((v): v is string => Boolean(v)) as string[]),
+        ...((integrations || [])
+          .filter(
+            (row) =>
+              String(row?.status || "").toLowerCase() === "active" &&
+              Boolean(row?.type),
+          )
+          .map((row) => String(row.type).toLowerCase()) as string[]),
+      ].filter(Boolean),
+    ),
+  );
+
+  return { rows, sources };
 }
 
 export async function GET(request: Request) {
@@ -581,8 +869,27 @@ export async function GET(request: Request) {
   }
 
   try {
-    const data = await loadProducts(context.accountId);
-    return NextResponse.json({ data });
+    const { searchParams } = new URL(request.url);
+    const source = searchParams.get("source");
+
+    const { rows, sources } = await loadProducts(
+      context.accountId,
+      source,
+      context.rawAccountId,
+    );
+    console.log("[billing/products] debug", {
+      accountId: context.accountId,
+      rawAccountId: context.rawAccountId,
+      source,
+      rows: rows.length,
+      sources,
+      sample: rows.slice(0, 3).map((r) => ({
+        sku: r.sku,
+        src: r.product_source,
+        acc: r.account_name,
+      })),
+    });
+    return NextResponse.json({ data: rows, sources });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message ?? "Failed to load products" },
@@ -683,7 +990,7 @@ export async function POST(request: Request) {
       upserted += chunk.length;
     }
 
-    const data = await loadProducts(accountId);
+    const { rows: data } = await loadProducts(accountId);
     return NextResponse.json({
       data,
       summary: {

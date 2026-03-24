@@ -130,7 +130,7 @@ export default function QuotesPage() {
 
     if (data?.id) {
       setServiceDialogOpen(false)
-      router.push(`/orders/create-order/${data.id}`)
+      router.push(`/orders/create-order/${data.id}?service=${service}`)
     } else {
       console.error('❌ Failed to create draft:', error)
       toast.error('Failed to create order draft')
@@ -183,9 +183,9 @@ export default function QuotesPage() {
                   >
                     <p className="font-medium">{SERVICE_LABELS[service]}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {service === 'sellercloud'
+              {service === 'sellercloud'
                         ? 'Create order in Sellercloud after you complete the form.'
-                        : 'Extensiv flow will be added next.'}
+                        : 'Create order in Extensiv (3PL) after you complete the form.'}
                     </p>
                   </button>
                 )
@@ -200,10 +200,6 @@ export default function QuotesPage() {
             <Button
               onClick={() => {
                 if (!selectedService) return
-                if (selectedService !== 'sellercloud') {
-                  toast.info('Only Sellercloud order creation is enabled for now.')
-                  return
-                }
                 handleCreateQuote(selectedService)
               }}
               disabled={creating || !selectedService}

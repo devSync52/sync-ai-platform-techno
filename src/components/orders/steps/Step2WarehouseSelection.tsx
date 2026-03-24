@@ -160,8 +160,8 @@ export function Step2WarehouseSelection({
         : []
 
       const filtered =
-        externalService === 'sellercloud'
-          ? allRows.filter((w) => String(w.source || '').toLowerCase() === 'sellercloud')
+        externalService === 'sellercloud' || externalService === 'extensiv'
+          ? allRows.filter((w) => String(w.source || '').toLowerCase() === externalService)
           : allRows
       setWarehouses(filtered.filter((w) => w.id))
 

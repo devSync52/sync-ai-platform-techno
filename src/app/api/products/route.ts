@@ -17,7 +17,27 @@ export async function GET(req: Request) {
     });
   }
 
-  // base query on the view
+  // Resolve parent account so admin/owner scoping matches billing endpoints
+  let effectiveAccountId = accountId;
+  try {
+    const { data: accountRow } = await supabase
+      .from("accounts")
+      .select("parent_account_id")
+      .eq("id", accountId)
+      .maybeSingle();
+
+    if (accountRow?.parent_account_id) {
+      effectiveAccountId = String(accountRow.parent_account_id);
+    }
+  } catch (err) {
+    console.warn("[api/products] ⚠️ failed to resolve parent_account_id", err);
+  }
+
+  const scopedIds = Array.from(
+    new Set([accountId, effectiveAccountId].filter(Boolean)),
+  );
+
+  // base query on the source-specific table/view
   let baseQuery =
     sourceParam === "sellercloud"
       ? supabase.from("sellercloud_products").select("*")
@@ -25,25 +45,39 @@ export async function GET(req: Request) {
         ? supabase.from("extensiv_products_n").select("*")
         : supabase.from("vw_products_master_enriched").select("*");
 
+  const extensivFilters = Array.from(
+    new Set(
+      scopedIds.flatMap((id) => [
+        `parent_account_id.eq.${id}`,
+        `client_account_id.eq.${id}`,
+      ]),
+    ),
+  ).join(",");
+
+  const defaultFilters = Array.from(
+    new Set(
+      scopedIds.flatMap((id) => [
+        `parent_account_id.eq.${id}`,
+        `account_id.eq.${id}`,
+        `client_account_id.eq.${id}`,
+      ]),
+    ),
+  ).join(",");
+
   if (role === "client" || role === "staff-client") {
-    // client vê apenas os produtos da própria conta (account_id da view)
+    // client only sees its own tenant scope (raw or parent id)
     baseQuery =
       sourceParam === "extensiv"
-        ? baseQuery.eq("client_account_id", accountId)
-        : baseQuery.eq("account_id", accountId);
+        ? baseQuery.or(extensivFilters)
+        : baseQuery.or(defaultFilters);
   } else {
-    // admin/owner vê todos os produtos relacionados a esse tenant:
-    // tanto os que batem no parent_account_id quanto os que batem no account_id
+    // admin/owner/staff-admin see data scoped to both parent and raw ids
     baseQuery =
       sourceParam === "sellercloud"
-        ? baseQuery.eq("account_id", accountId)
+        ? baseQuery.in("account_id", scopedIds)
         : sourceParam === "extensiv"
-          ? baseQuery.or(
-              `parent_account_id.eq.${accountId},client_account_id.eq.${accountId}`,
-            ) // restringe ao tenant para extensiv também
-          : baseQuery.or(
-              `parent_account_id.eq.${accountId},account_id.eq.${accountId}`,
-            );
+          ? baseQuery.or(extensivFilters)
+          : baseQuery.or(defaultFilters);
   }
 
   const PAGE_SIZE = 1000;
