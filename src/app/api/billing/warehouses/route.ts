@@ -888,6 +888,7 @@ export async function POST(request: Request) {
           is_active: true,
           is_default: Boolean(f.isDefault ?? f.defaultFacility ?? false),
           source: "extensiv",
+          wms_facility_id: idVal ? String(idVal) : null,
           // keep minimal columns present in billing.warehouses
         };
       });

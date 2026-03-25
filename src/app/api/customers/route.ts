@@ -692,6 +692,8 @@ export async function POST(req: NextRequest) {
       }
 
       const token = await getExtensivToken(creds);
+      console.log("token", token);
+
       const headers = {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
@@ -740,7 +742,9 @@ export async function POST(req: NextRequest) {
         const txt = await res.text();
         // If duplicate customer description, treat as success (idempotent create)
         if (txt && txt.toLowerCase().includes("duplicate")) {
-          console.warn("Extensiv customer appears to already exist; proceeding with channel upsert");
+          console.warn(
+            "Extensiv customer appears to already exist; proceeding with channel upsert",
+          );
         } else {
           return NextResponse.json(
             { error: `Extensiv create failed: ${txt || res.status}` },

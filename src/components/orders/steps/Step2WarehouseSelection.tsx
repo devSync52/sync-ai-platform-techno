@@ -6,6 +6,7 @@ import { useSupabase } from '@/components/supabase-provider'
 import type { Database } from '@/types/supabase'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useSearchParams } from 'next/navigation'
 
 type Warehouse = {
   id: string
@@ -39,6 +40,7 @@ export function Step2WarehouseSelection({
   onBack,
 }: Props) {
   const supabase = useSupabase()
+  const searchParams = useSearchParams()
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null)
   const [loadingDraft, setLoadingDraft] = useState(true)
@@ -101,7 +103,9 @@ export function Step2WarehouseSelection({
                 }
               })()
             : {}
-      const externalService = String((prefsObj as any)?.external_service ?? '').toLowerCase()
+      const externalServiceParam = String(searchParams.get('service') ?? '').toLowerCase()
+      const externalService =
+        String((prefsObj as any)?.external_service ?? '').toLowerCase() || externalServiceParam
 
       if (!accountId) {
         toast.error('Missing account ID')
@@ -197,22 +201,26 @@ export function Step2WarehouseSelection({
         : {}
     const externalService = String(prefObj?.external_service ?? '').toLowerCase()
 
-    const updatedShipFrom = {
-      warehouse_id: selectedWarehouseData?.id ?? null,
-      sellercloud_warehouse_id:
-        externalService === 'sellercloud'
-          ? String(
-              selectedWarehouseData?.wms_facility_id ||
-                selectedWarehouseData?.sellercloud_id ||
-                selectedWarehouseData?.id ||
-                ''
-            )
-          : null,
-      name: selectedWarehouseData?.name,
-      address: {
-        line1: selectedWarehouseData?.address_line1,
-        line2: selectedWarehouseData?.address_line2,
-        city: selectedWarehouseData?.city,
+      const updatedShipFrom = {
+        warehouse_id: selectedWarehouseData?.id ?? null,
+        sellercloud_warehouse_id:
+          externalService === 'sellercloud'
+            ? String(
+                selectedWarehouseData?.wms_facility_id ||
+                  selectedWarehouseData?.sellercloud_id ||
+                  selectedWarehouseData?.id ||
+                  ''
+              )
+            : null,
+        wms_facility_id:
+          externalService === 'extensiv'
+            ? String(selectedWarehouseData?.wms_facility_id || '')
+            : null,
+        name: selectedWarehouseData?.name,
+        address: {
+          line1: selectedWarehouseData?.address_line1,
+          line2: selectedWarehouseData?.address_line2,
+          city: selectedWarehouseData?.city,
         state: selectedWarehouseData?.state,
         zip_code: selectedWarehouseData?.zip_code,
         country: selectedWarehouseData?.country,

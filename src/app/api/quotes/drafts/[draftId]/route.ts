@@ -188,6 +188,21 @@ export async function PATCH(
     return NextResponse.json({ error: 'Missing account context' }, { status: 403 })
   }
 
+  const { data: currentDraft, error: currentErr } = await supabase
+    .from('saip_quote_drafts')
+    .select('preferences')
+    .eq('id', draftId)
+    .in('account_id', allowedAccountIds)
+    .maybeSingle()
+
+  if (currentErr) {
+    return NextResponse.json({ error: currentErr.message }, { status: 500 })
+  }
+
+  if (!currentDraft) {
+    return NextResponse.json({ error: 'Quote not found or access denied (RLS).' }, { status: 404 })
+  }
+
   const body = await req.json()
 
   // Permitir apenas campos esperados do draft (evita updates arbitrários)
@@ -196,7 +211,27 @@ export async function PATCH(
   if (typeof body.client === 'string') patch.client = body.client
 
   // JSON-ish fields
-  if (body.preferences !== undefined) patch.preferences = body.preferences
+  if (body.preferences !== undefined) {
+    const parsePrefs = (val: any): Record<string, any> => {
+      if (val && typeof val === 'object' && !Array.isArray(val)) return val as Record<string, any>
+      if (typeof val === 'string') {
+        try {
+          const parsed = JSON.parse(val)
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, any>
+        } catch {
+          return {}
+        }
+      }
+      return {}
+    }
+
+    const existingPrefs = parsePrefs(currentDraft.preferences)
+    const incomingPrefs = parsePrefs(body.preferences)
+    patch.preferences = {
+      ...existingPrefs,
+      ...incomingPrefs,
+    }
+  }
   if (body.ship_from !== undefined) patch.ship_from = body.ship_from
   if (body.ship_to !== undefined) patch.ship_to = body.ship_to
   if (body.items !== undefined) patch.items = body.items
