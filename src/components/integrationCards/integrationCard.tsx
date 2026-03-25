@@ -13,6 +13,8 @@ interface Props {
   title: string
   accountId?: string
   onTested?: () => void
+  isDefault?: boolean
+  onSetDefault?: () => Promise<void> | void
 }
 
 export default function IntegrationCard({
@@ -22,10 +24,13 @@ export default function IntegrationCard({
   onClick,
   title,
   accountId,
-  onTested
+  onTested,
+  isDefault = false,
+  onSetDefault
 }: Props) {
   const supabase = useSupabase()
   const [testing, setTesting] = useState(false)
+  const [settingDefault, setSettingDefault] = useState(false)
 
   const runSellercloudAction = async (action: 'disconnect') => {
     const response = await fetch('/api/integrations/sellercloud', {
@@ -41,6 +46,16 @@ export default function IntegrationCard({
     return { ok: response.ok && Boolean(result?.success), result }
   }
 
+  const handleMarkDefault = async () => {
+    if (!accountId || !onSetDefault || status !== 'active') return
+    setSettingDefault(true)
+    try {
+      await onSetDefault()
+    } finally {
+      setSettingDefault(false)
+    }
+  }
+
   return (
     <div className="border rounded-xl p-4 shadow-sm bg-white w-[320px]">
       <div className="flex items-center justify-between gap-4 flex-col">
@@ -49,7 +64,14 @@ export default function IntegrationCard({
         </div>
 
         <div className="flex-1 min-w-[120px] text-center">
-          <h2 className="text-2xl font-medium">{title}</h2>
+          <div className="flex items-center justify-center gap-2">
+            <h2 className="text-2xl font-medium">{title}</h2>
+            {isDefault && (
+              <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                Default
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="text-center">
@@ -60,7 +82,7 @@ export default function IntegrationCard({
           {lastSynced ? new Date(lastSynced).toLocaleString() : '—'}
         </div>
 
-        <div className="flex gap-4 text-center">
+        <div className="flex gap-3 text-center flex-wrap justify-center">
           <button
             onClick={onClick}
             className="text-white px-4 py-2 rounded-md text-sm bg-[#3f2d90] hover:bg-[#3f2d90]/90 transition"
@@ -116,9 +138,17 @@ export default function IntegrationCard({
               {testing ? 'Disconnecting...' : 'Disconnect'}
             </button>
           )}
+
+          <button
+            onClick={handleMarkDefault}
+            disabled={!accountId || status !== 'active' || isDefault || testing || settingDefault}
+            className="px-4 py-2 rounded-md text-sm border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isDefault ? 'Default' : settingDefault ? 'Saving...' : 'Set default'}
+          </button>
         </div>
 
-        
+
       </div>
     </div>
   )

@@ -33,6 +33,7 @@ export default function QuotesPage() {
   const [loadingServices, setLoadingServices] = useState(false)
   const [availableServices, setAvailableServices] = useState<ExternalService[]>([])
   const [selectedService, setSelectedService] = useState<ExternalService | null>(null)
+  const [defaultService, setDefaultService] = useState<ExternalService | null>(null)
 
   useEffect(() => {
     const fetchAvailableServices = async () => {
@@ -41,13 +42,14 @@ export default function QuotesPage() {
 
       const { data, error } = await supabase
         .from('account_integrations')
-        .select('type, status')
+        .select('type, status, metadata')
         .eq('account_id', user.account_id)
         .in('type', ['sellercloud', 'extensiv'])
 
       if (error) {
         console.error('❌ Failed to load integrations for order creation:', error)
         setAvailableServices([])
+        setDefaultService(null)
         setLoadingServices(false)
         return
       }
@@ -57,8 +59,20 @@ export default function QuotesPage() {
         .map((row: any) => String(row?.type || '').toLowerCase())
         .filter((type: string): type is ExternalService => type === 'sellercloud' || type === 'extensiv')
 
+      const defaultRow = (data || []).find((row: any) => {
+        const type = String(row?.type || '').toLowerCase()
+        const isActive = String(row?.status || '').toLowerCase() === 'active'
+        const isDefault = Boolean((row?.metadata as Record<string, unknown> | null)?.['is_default'])
+        return isActive && isDefault && (type === 'sellercloud' || type === 'extensiv')
+      })
+
+      const resolvedDefault = defaultRow
+        ? (String(defaultRow.type).toLowerCase() as ExternalService)
+        : null
+
       setAvailableServices(active)
-      setSelectedService(active[0] ?? null)
+      setDefaultService(resolvedDefault)
+      setSelectedService(resolvedDefault ?? active[0] ?? null)
       setLoadingServices(false)
     }
 
@@ -141,7 +155,16 @@ export default function QuotesPage() {
     <div className="p-6 space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-right justify-between">
-          <Button onClick={() => setServiceDialogOpen(true)} disabled={creating || loadingServices}>
+          <Button
+            onClick={() => {
+              if (defaultService) {
+                void handleCreateQuote(defaultService)
+                return
+              }
+              setServiceDialogOpen(true)
+            }}
+            disabled={creating || loadingServices}
+          >
             {creating ? 'Creating...' : 'Create Order'}
           </Button>
         </CardHeader>

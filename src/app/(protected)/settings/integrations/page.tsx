@@ -6,12 +6,15 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 import IntegrationCard from '@/components/integrationCards/integrationCard'
 import IntegrationModal from '@/components/integrationCards/IntegrationModal'
 import { IntegrationType } from '@/components/integrationCards/integrationFields'
+import { toast } from 'sonner'
 
 interface IntegrationData {
   type: IntegrationType
   status: string | null
   last_synced_at: string | null
   credentials?: string
+  metadata?: Record<string, unknown> | null
+  isDefault?: boolean
 }
 
 const availableIntegrations: { name: string; type: IntegrationType }[] = [
@@ -39,7 +42,7 @@ export default function IntegrationsPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('account_integrations')
-      .select('type, status, last_synced_at, credentials')
+      .select('type, status, last_synced_at, credentials, metadata')
       .eq('account_id', user.account_id)
 
     if (error) {
@@ -50,7 +53,12 @@ export default function IntegrationsPage() {
 
     const map: Record<string, IntegrationData> = {}
     data?.forEach((item) => {
-      map[item.type] = item
+      const metadata = (item as { metadata?: Record<string, unknown> | null })?.metadata || null
+      map[item.type] = {
+        ...item,
+        metadata,
+        isDefault: Boolean((metadata as Record<string, unknown> | null)?.['is_default'])
+      }
     })
 
     setIntegrations(map)
@@ -62,6 +70,46 @@ export default function IntegrationsPage() {
       fetchIntegrations()
     }
   }, [user?.account_id, fetchIntegrations])
+
+  const handleSetDefault = useCallback(
+    async (type: IntegrationType) => {
+      if (!user?.account_id) return
+
+      const toastId = toast.loading('Updating default integration...')
+
+      try {
+        for (const [integrationType, data] of Object.entries(integrations)) {
+          const existingMetadata = (data?.metadata as Record<string, unknown> | null) || {}
+          const metadataWithoutFlag = { ...existingMetadata }
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          delete metadataWithoutFlag.is_default
+
+          const { error } = await supabase
+            .from('account_integrations')
+            .update({
+              metadata: {
+                ...metadataWithoutFlag,
+                is_default: integrationType === type
+              }
+            })
+            .eq('account_id', user.account_id)
+            .eq('type', integrationType)
+
+          if (error) {
+            throw error
+          }
+        }
+
+        toast.success('Default integration updated', { id: toastId })
+        await fetchIntegrations()
+      } catch (error) {
+        console.error('Error setting default integration:', error)
+        toast.error('Failed to update default', { id: toastId })
+      }
+    },
+    [integrations, supabase, user?.account_id, fetchIntegrations]
+  )
 
   return (
     <div className="p-6">
@@ -91,6 +139,8 @@ export default function IntegrationsPage() {
                   setModalOpen(true)
                 }}
                 onTested={fetchIntegrations}
+                isDefault={Boolean(data?.isDefault)}
+                onSetDefault={() => handleSetDefault(type)}
               />
             )
           })}
