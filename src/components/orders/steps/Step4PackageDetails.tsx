@@ -14,6 +14,11 @@ import { toast } from "sonner";
 
 type PackageItem = {
   sku: string;
+  itemIdentifier?: { id?: string | number | null; sku?: string | null };
+  itemId?: string | number | null;
+  item_id?: string | number | null;
+  source?: string | null;
+  raw?: any;
   product_name?: string;
   quantity: number;
   length: number;
@@ -63,6 +68,7 @@ function ProductSearchModal({
   clientId,
   warehouseId,
   shipFromName,
+  draftId,
 }: {
   show: boolean;
   onClose: () => void;
@@ -70,6 +76,7 @@ function ProductSearchModal({
   clientId: string;
   warehouseId?: string;
   shipFromName?: string;
+  draftId?: string;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState<any[]>([]);
@@ -79,6 +86,11 @@ function ProductSearchModal({
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  const serviceParam =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("service")?.toLowerCase()
+      : null;
 
   const fetchProducts = async (page = 1) => {
     if (!clientId) return;
@@ -91,10 +103,16 @@ function ProductSearchModal({
         clientId,
         warehouseId: warehouseId || "",
         shipFromName: shipFromName || "",
+        draftId: draftId || "",
         term: searchTerm || "",
         page: String(page),
         pageSize: String(pageSize),
       });
+
+      if (typeof window !== "undefined") {
+        const svc = new URLSearchParams(window.location.search).get("service");
+        if (svc) params.set("service", svc);
+      }
 
       const res = await fetch(`/api/products/search?${params.toString()}`, {
         credentials: "include",
@@ -159,11 +177,11 @@ function ProductSearchModal({
     fetchProducts(1);
   }, [show, clientId, warehouseId, shipFromName]);
 
-  const handleAdd = (product: any) => {
-    const length = Number(product.pkg_length_in ?? 0);
-    const width = Number(product.pkg_width_in ?? 0);
-    const height = Number(product.pkg_height_in ?? 0);
-    const weight = Number(product.pkg_weight_lb ?? 0);
+    const handleAdd = (product: any) => {
+      const length = Number(product.pkg_length_in ?? 0);
+      const width = Number(product.pkg_width_in ?? 0);
+      const height = Number(product.pkg_height_in ?? 0);
+      const weight = Number(product.pkg_weight_lb ?? 0);
     const productPrice = Number(
       product.price ??
         product.site_price ??
@@ -173,8 +191,27 @@ function ProductSearchModal({
         0,
     );
 
+    const raw = product?.raw || {};
+    const itemIdRaw =
+      raw?.ItemId ??
+      raw?.ReadOnly?.ItemId ??
+      raw?.ItemID ??
+      raw?.itemId ??
+      raw?.item_id ??
+      product?.id ??
+      null;
+    const itemId =
+      typeof itemIdRaw === "string" && /^\d+$/.test(itemIdRaw)
+        ? Number(itemIdRaw)
+        : itemIdRaw;
+
     const packageItem: PackageItem = {
       sku: product.sku,
+      itemIdentifier: { id: itemId, sku: product.sku ?? null },
+      itemId,
+      item_id: itemId,
+      source: product?.source ?? null,
+      raw,
       product_name: product.description || "",
       quantity: 1,
       length,
@@ -279,7 +316,17 @@ function ProductSearchModal({
                   variant="secondary"
                   className="w-full sm:w-auto"
                   onClick={() => handleAdd(product)}
-                  disabled={Number(product.available ?? 0) <= 0}
+                  disabled={
+                    (() => {
+                      const isExtensiv =
+                        serviceParam === "extensiv" ||
+                        String(product?.source ?? "").toLowerCase() ===
+                          "extensiv";
+                      return isExtensiv
+                        ? false
+                        : Number(product.available ?? 0) <= 0;
+                    })()
+                  }
                 >
                   Add to package
                 </Button>
@@ -449,8 +496,12 @@ export default function Step4PackageDetails({
     const qtyToAdd = Number(product.quantity ?? 1) > 0 ? Number(product.quantity ?? 1) : 1;
     const price = Number.isFinite(product.price) ? Number(product.price) : 0;
 
+    const key = (it: PackageItem) =>
+      (it.itemIdentifier?.id ?? it.itemId ?? it.item_id ?? null) ??
+      (it.sku ? String(it.sku).toLowerCase() : null);
+
     const existingIdx = items.findIndex(
-      (it) => String(it.sku || "").toLowerCase() === String(product.sku || "").toLowerCase(),
+      (it) => key(it) === key(product),
     );
 
     if (existingIdx >= 0) {
@@ -745,6 +796,7 @@ export default function Step4PackageDetails({
         clientId={clientId}
         warehouseId={warehouseId}
         shipFromName={shipFromName}
+        draftId={draftId}
       />
     </div>
   );

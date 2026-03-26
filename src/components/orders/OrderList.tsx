@@ -324,54 +324,79 @@ export function QuotesList() {
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-end gap-2">
-                {quote.sellercloud_status === 'success' ? (
-                  <>
-                    <div className="px-3 py-1 rounded-full bg-green-600 text-white text-xs font-medium shadow-sm">
-                      Sent to SynC
-                    </div>
-                    <Button
-                      variant="outline"
-                      className="bg-white"
-                      size="sm"
-                      title="Export this quote as PDF"
-                      onClick={() => handleOpenQuoteModal(quote.id)}
-                    >
-                      View PDF
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button size="sm" onClick={() => router.push(`/orders/create-order/${quote.id}`)}>
-                      View / Edit Order
-                    </Button>
+                {(() => {
+                  const externalService = String(
+                    (quote?.preferences as any)?.external_service ?? (quote as any)?.external_service ?? ''
+                  ).toLowerCase()
+                  const isExtensiv = externalService === 'extensiv'
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={sendingQuoteId === quote.id}
-                      onClick={() => handleSendToSellercloud(quote.id)}
-                    >
-                      {sendingQuoteId === quote.id ? 'Sending…' : 'Send to SynC (OMS)'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Delete Quote"
-                      onClick={async () => {
-                        const confirmDelete = confirm('Are you sure you want to delete this quote?')
-                        if (!confirmDelete) return
-                        const { error } = await supabase.from('saip_quote_drafts').delete().eq('id', quote.id)
-                        if (error) {
-                          console.error('❌ Error deleting quote:', error)
-                        } else {
-                          setQuotes(prev => prev.filter(q => q.id !== quote.id))
-                        }
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </Button>
-                  </>
-                )}
+                  if (quote.sellercloud_status === 'success' && !isExtensiv) {
+                    return (
+                      <>
+                        <div className="px-3 py-1 rounded-full bg-green-600 text-white text-xs font-medium shadow-sm">
+                          Sent to SynC
+                        </div>
+                        <Button
+                          variant="outline"
+                          className="bg-white"
+                          size="sm"
+                          title="Export this quote as PDF"
+                          onClick={() => handleOpenQuoteModal(quote.id)}
+                        >
+                          View PDF
+                        </Button>
+                      </>
+                    )
+                  }
+
+                  const extensivStatus = String((quote as any)?.extensiv_status || '').toLowerCase()
+
+                  return (
+                    <>
+                      {isExtensiv && (
+                        <div
+                          className="px-3 py-1 rounded-full text-white text-xs font-medium shadow-sm"
+                          style={{ backgroundColor: extensivStatus === 'success' ? '#10B981' : '#6B7280' }}
+                        >
+                          {extensivStatus === 'success' ? 'Sent to Extensiv' : 'Extensiv order'}
+                        </div>
+                      )}
+
+                      <Button size="sm" onClick={() => router.push(`/orders/create-order/${quote.id}`)}>
+                        View / Edit Order
+                      </Button>
+
+                      {!isExtensiv && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={sendingQuoteId === quote.id}
+                          onClick={() => handleSendToSellercloud(quote.id)}
+                        >
+                          {sendingQuoteId === quote.id ? 'Sending…' : 'Send to SynC (OMS)'}
+                        </Button>
+                      )}
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Delete Quote"
+                        onClick={async () => {
+                          const confirmDelete = confirm('Are you sure you want to delete this quote?')
+                          if (!confirmDelete) return
+                          const { error } = await supabase.from('saip_quote_drafts').delete().eq('id', quote.id)
+                          if (error) {
+                            console.error('❌ Error deleting quote:', error)
+                          } else {
+                            setQuotes(prev => prev.filter(q => q.id !== quote.id))
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </>
+                  )
+                })()}
               </div>
             </li>
           ))}

@@ -1,53 +1,267 @@
-import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import type { Database } from '@/types/supabase'
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import type { Database } from "@/types/supabase";
+import AES from "crypto-js/aes";
+import Utf8 from "crypto-js/enc-utf8";
 
-function getAccountContextFromUser(user: any): { accountId: string | null; role: string | null } {
-  const role = (user?.user_metadata as any)?.role ?? (user?.app_metadata as any)?.role ?? null
+function getAccountContextFromUser(user: any): {
+  accountId: string | null;
+  role: string | null;
+} {
+  const role =
+    (user?.user_metadata as any)?.role ??
+    (user?.app_metadata as any)?.role ??
+    null;
 
   const accountId =
     (user?.app_metadata as any)?.parent_account_id ??
     (user?.user_metadata as any)?.parent_account_id ??
     (user?.app_metadata as any)?.account_id ??
     (user?.user_metadata as any)?.account_id ??
-    null
+    null;
 
-  return { accountId: accountId ? String(accountId) : null, role: role ? String(role) : null }
+  return {
+    accountId: accountId ? String(accountId) : null,
+    role: role ? String(role) : null,
+  };
 }
 
 function toNum(value: unknown): number | null {
-  if (value == null || value === '') return null
-  const n = Number(value)
-  return Number.isFinite(n) ? n : null
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+const CREDENTIAL_SECRET =
+  process.env.NEXT_PUBLIC_CREDENTIAL_SECRET ||
+  process.env.CREDENTIAL_SECRET ||
+  "SYNC_SECRET";
+
+const EXT_SERVICE = "extensiv";
+
+function decryptExtensivCredentials(
+  raw: any,
+): { client_id: string; client_secret: string; extensiv_id: string } | null {
+  if (!raw) return null;
+  let parsed: any = raw;
+  if (typeof raw === "string") {
+    try {
+      const decrypted = AES.decrypt(raw, CREDENTIAL_SECRET).toString(Utf8);
+      parsed = JSON.parse(decrypted || "{}");
+    } catch {
+      return null;
+    }
+  }
+  const client_id = String(parsed?.client_id ?? "").trim();
+  const client_secret = String(parsed?.client_secret ?? "").trim();
+  const extensiv_id = String(parsed?.extensiv_id ?? "").trim();
+  if (!client_id || !client_secret || !extensiv_id) return null;
+  return { client_id, client_secret, extensiv_id };
+}
+
+async function getExtensivToken(creds: {
+  client_id: string;
+  client_secret: string;
+  extensiv_id: string;
+}) {
+  const basic = Buffer.from(
+    `${creds.client_id}:${creds.client_secret}`,
+  ).toString("base64");
+  const formBody = new URLSearchParams({
+    grant_type: "client_credentials",
+    user_login: creds.extensiv_id,
+  });
+
+  const res = await fetch("https://secure-wms.com/AuthServer/api/Token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${basic}`,
+    },
+    body: formBody.toString(),
+  });
+
+  const txt = await res.text();
+  let json: any = null;
+  try {
+    json = txt ? JSON.parse(txt) : null;
+  } catch {
+    json = null;
+  }
+
+  if (res.ok && (json?.access_token || json?.token)) {
+    return json.access_token || json.token;
+  }
+
+  throw new Error(
+    json?.error_description || json?.error || txt || "Extensiv token failed",
+  );
+}
+
+async function fetchExtensivItems(params: {
+  token: string;
+  customerId: string;
+  page: number;
+  pageSize: number;
+  term: string;
+}) {
+  const { token, customerId, page, pageSize, term } = params;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+
+  // Extensiv supports pagination via pgsiz / pgnum.
+  console.log("customerIs", customerId);
+
+  const url = new URL(`https://secure-wms.com/customers/${customerId}/items`);
+  // const url = new URL(`https://secure-wms.com/customers/2/items`);
+  url.searchParams.set("pgsiz", String(pageSize));
+  url.searchParams.set("pgnum", String(page));
+
+  const res = await fetch(url.toString(), { headers });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      json?.error || json?.message || json?.Error || text || res.statusText,
+    );
+  }
+
+  let items: any[] = Array.isArray(json?.ResourceList)
+    ? json.ResourceList
+    : Array.isArray(json)
+      ? json
+      : [];
+  // console.log("fetched items", items, items.length);
+
+  // Always filter out deactivated records at the API layer (extensiv does not support deactivated query param)
+  // items = items.filter((it) => {
+  //   const isDeactivated =
+  //     it?.Deactivated === true ||
+  //     it?.ReadOnly?.Deactivated === true ||
+  //     String(it?.ReadOnly?.ItemStatus || "").toLowerCase() === "deactivated";
+  //   return !isDeactivated;
+  // });
+
+  // Client-side term filtering (Extensiv API search filter not documented here)
+  const q = term.trim().toLowerCase();
+  if (q) {
+    items = items.filter((it) => {
+      const sku = String(it?.Sku || "").toLowerCase();
+      const desc = String(it?.Description || "").toLowerCase();
+      return sku.includes(q) || desc.includes(q);
+    });
+  }
+
+  // Since Extensiv does not support deactivated query filtering, we enforce it in-memory.
+  // `total` must reflect the active set shown on UI, not raw extension count.
+  const total = items.length;
+
+  return { items, total };
+}
+
+async function fetchExtensivCustomersList(token: string) {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+  const res = await fetch("https://secure-wms.com/customers", { headers });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  if (!res.ok) {
+    throw new Error(
+      json?.error || json?.message || json?.Error || text || res.statusText,
+    );
+  }
+  const list = Array.isArray(json?.ResourceList)
+    ? json.ResourceList
+    : Array.isArray(json)
+      ? json
+      : [];
+  return list;
+}
+
+async function resolveExtensivCustomerId(opts: {
+  clientIdParam: string;
+  callerAccountId: string;
+  supabase: any;
+}): Promise<string | null> {
+  const { clientIdParam, callerAccountId, supabase } = opts;
+
+  // ext-123 or numeric
+  if (clientIdParam.startsWith("ext-")) {
+    return clientIdParam.slice(4);
+  }
+  if (/^\d+$/.test(clientIdParam)) {
+    return clientIdParam;
+  }
+
+  // Try channels.external_id (Extensiv)
+  const { data: ch } = await supabase
+    .from("channels")
+    .select("external_id")
+    .eq("account_id", callerAccountId)
+    .eq("source", EXT_SERVICE)
+    .or(`id.eq.${clientIdParam},external_id.eq.${clientIdParam}`)
+    .maybeSingle();
+
+  const extId = String(ch?.external_id ?? "").trim();
+  if (extId && /^\d+$/.test(extId)) return extId;
+
+  // Fallback: first Extensiv channel for this account
+  const { data: chAny } = await supabase
+    .from("channels")
+    .select("external_id")
+    .eq("account_id", callerAccountId)
+    .eq("source", EXT_SERVICE)
+    .limit(1);
+
+  const fallback = String(chAny?.[0]?.external_id ?? "").trim();
+  if (fallback && /^\d+$/.test(fallback)) return fallback;
+
+  return null;
 }
 
 async function canAccessClientAccount(
   supabase: any,
   callerAccountId: string,
   callerRole: string | null,
-  clientId: string
+  clientId: string,
 ): Promise<boolean> {
-  if (callerAccountId === clientId) return true
+  if (callerAccountId === clientId) return true;
 
-  const elevated = new Set(['admin', 'superadmin', 'staff-admin'])
-  if (!callerRole || !elevated.has(callerRole)) return false
+  const elevated = new Set(["admin", "superadmin", "staff-admin"]);
+  if (!callerRole || !elevated.has(callerRole)) return false;
 
   const { data, error } = await supabase
-    .from('accounts')
-    .select('id, parent_account_id')
-    .eq('id', clientId)
-    .maybeSingle()
+    .from("accounts")
+    .select("id, parent_account_id")
+    .eq("id", clientId)
+    .maybeSingle();
 
-  if (error) return false
-  if (!data) return false
+  if (error) return false;
+  if (!data) return false;
 
-  return String((data as any).parent_account_id ?? '') === callerAccountId
+  return String((data as any).parent_account_id ?? "") === callerAccountId;
 }
 
 export async function GET(req: Request) {
   try {
-    const cookieStore = (await cookies()) as any
+    const cookieStore = (await cookies()) as any;
 
     const supabase = createServerClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -55,218 +269,520 @@ export async function GET(req: Request) {
       {
         cookies: {
           get(name: string) {
-            return cookieStore.get(name)?.value
+            return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: any) {
-            cookieStore.set({ name, value, ...options })
+            cookieStore.set({ name, value, ...options });
           },
           remove(name: string, options: any) {
             try {
-              ;(cookieStore as any).delete(name)
+              (cookieStore as any).delete(name);
             } catch {
-              cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+              cookieStore.set({ name, value: "", ...options, maxAge: 0 });
             }
           },
         },
-      }
-    )
+      },
+    );
 
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Prefer DB account context (users -> accounts.parent_account_id) for consistency
     // with billing routes. Metadata can be stale or child-scoped.
     const { data: meRow, error: meErr } = await (supabase as any)
-      .from('users')
-      .select('account_id, role')
-      .eq('id', user.id)
-      .maybeSingle()
+      .from("users")
+      .select("account_id, role")
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (meErr || !meRow?.account_id) {
-      return NextResponse.json({ error: meErr?.message || 'Missing account context' }, { status: 403 })
+      return NextResponse.json(
+        { error: meErr?.message || "Missing account context" },
+        { status: 403 },
+      );
     }
 
     const { data: accountRow } = await (supabase as any)
-      .from('accounts')
-      .select('parent_account_id')
-      .eq('id', String(meRow.account_id))
-      .maybeSingle()
+      .from("accounts")
+      .select("parent_account_id")
+      .eq("id", String(meRow.account_id))
+      .maybeSingle();
 
-    const callerAccountId = String((accountRow as any)?.parent_account_id ?? meRow.account_id)
-    const callerRole = String((meRow as any)?.role ?? (getAccountContextFromUser(user).role ?? '')).trim() || null
+    const callerAccountId = String(
+      (accountRow as any)?.parent_account_id ?? meRow.account_id,
+    );
+    const callerRole =
+      String(
+        (meRow as any)?.role ?? getAccountContextFromUser(user).role ?? "",
+      ).trim() || null;
 
-    const url = new URL(req.url)
-    const clientIdParam = String(url.searchParams.get('clientId') ?? '').trim()
-    const warehousePublicId = String(url.searchParams.get('warehouseId') ?? '').trim()
-    const shipFromName = String(url.searchParams.get('shipFromName') ?? '').trim()
-    const term = String(url.searchParams.get('term') ?? '').trim()
-    const page = Math.max(1, Number(url.searchParams.get('page') ?? 1) || 1)
-    const pageSizeRaw = Math.max(1, Number(url.searchParams.get('pageSize') ?? 10) || 10)
-    const pageSize = Math.min(pageSizeRaw, 50)
-    const from = (page - 1) * pageSize
-    const to = from + pageSize - 1
+    // Define allowed account IDs for draft access
+    const allowedAccountIds = [callerAccountId];
+    if (meRow.account_id !== callerAccountId) {
+      allowedAccountIds.push(String(meRow.account_id));
+    }
 
-    if (!clientIdParam) {
-      return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+    const url = new URL(req.url);
+    const clientIdParam = String(url.searchParams.get("clientId") ?? "").trim();
+    const extCustomerIdParam = String(
+      url.searchParams.get("extCustomerId") ?? url.searchParams.get("customerId") ?? "",
+    ).trim();
+    const warehousePublicIdRaw = String(
+      url.searchParams.get("warehouseId") ?? "",
+    ).trim();
+    const warehousePublicId = warehousePublicIdRaw;
+    const shipFromName = String(
+      url.searchParams.get("shipFromName") ?? "",
+    ).trim();
+    const term = String(url.searchParams.get("term") ?? "").trim();
+    const draftId = String(url.searchParams.get("draftId") ?? "").trim();
+    const serviceParam = url.searchParams.get("service")?.toLowerCase().trim();
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
+    const pageSizeRaw = Math.max(
+      1,
+      Number(url.searchParams.get("pageSize") ?? 10) || 10,
+    );
+
+    // Use warehouseId as Extensiv customer selector when clientId is app UUID
+    let extensivClientIdParam = clientIdParam;
+    if (!extensivClientIdParam && warehousePublicIdRaw.startsWith("ext-")) {
+      extensivClientIdParam = warehousePublicIdRaw;
+    }
+    if (extCustomerIdParam) {
+      extensivClientIdParam = extCustomerIdParam;
+    }
+
+    // If draftId is provided, fetch draft and extract client extensiv_customer_id
+    if (draftId) {
+      const { data: draft, error: draftError } = await supabase
+        .from("saip_quote_drafts")
+        .select("*")
+        .eq("id", draftId)
+        // .in("account_id", allowedAccountIds)
+        .maybeSingle();
+      console.log("draft", draft);
+
+      if (draftError) {
+        console.error("[products/search] Draft fetch error:", draftError);
+      } else if (draft?.preferences) {
+        const clientData = draft.preferences as any;
+        if (clientData?.extensiv_customer_id) {
+          extensivClientIdParam = String(clientData.extensiv_customer_id);
+          console.log(
+            "[products/search] Using extensiv_customer_id from draft:",
+            extensivClientIdParam,
+          );
+        }
+      }
+    }
+
+    const pageSize = Math.min(pageSizeRaw, 50);
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    // Extensiv live branch: bypass UUID/warehouse lookups if service=extensiv OR warehouseId starts with ext-
+    const isExtensivService =
+      serviceParam === EXT_SERVICE || warehousePublicIdRaw.startsWith("ext-");
+
+    if (isExtensivService) {
+      // We'll try multiple strategies to obtain an Extensiv customer id.
+
+      const { data: integration } = await (supabase as any)
+        .from("account_integrations")
+        .select("credentials")
+        .eq("account_id", callerAccountId)
+        .eq("type", "extensiv")
+        .maybeSingle();
+
+      const creds = decryptExtensivCredentials(integration?.credentials);
+      if (!creds) {
+        return NextResponse.json(
+          { error: "Extensiv credentials not configured" },
+          { status: 400 },
+        );
+      }
+
+      try {
+        const token = await getExtensivToken(creds);
+        console.log("extensivClientIdParam", extensivClientIdParam);
+
+        // 1) explicit param (already set)
+        let maybeExtId: string | null = null;
+        if (extensivClientIdParam) {
+          maybeExtId = extensivClientIdParam.startsWith("ext-")
+            ? extensivClientIdParam.slice(4)
+            : extensivClientIdParam;
+        }
+
+        // 2) channel lookup
+        if (!maybeExtId || !/^\d+$/.test(maybeExtId)) {
+          maybeExtId = await resolveExtensivCustomerId({
+            clientIdParam: extensivClientIdParam || clientIdParam,
+            callerAccountId,
+            supabase,
+          });
+        }
+
+        if (
+          (!maybeExtId || !/^\d+$/.test(maybeExtId)) &&
+          warehousePublicIdRaw.startsWith("ext-")
+        ) {
+          maybeExtId = await resolveExtensivCustomerId({
+            clientIdParam: warehousePublicIdRaw,
+            callerAccountId,
+            supabase,
+          });
+        }
+
+        // 3) Last resort: fetch customer list and pick first active
+        if (!maybeExtId || !/^\d+$/.test(maybeExtId)) {
+          try {
+            const customerList = await fetchExtensivCustomersList(token);
+            const first = customerList.find(
+              (c: any) =>
+                /^\d+$/.test(String(c?.CustomerId ?? c?.customerId ?? "")) &&
+                c?.Deactivated !== true,
+            );
+            if (first) {
+              maybeExtId = String(
+                first.CustomerId ?? first.customerId ?? "",
+              ).trim();
+              console.log(
+                "[products/search] fallback using first Extensiv customer id",
+                maybeExtId,
+              );
+            }
+          } catch (err) {
+            console.warn(
+              "[products/search] fetchExtensivCustomersList failed",
+              err,
+            );
+          }
+        }
+
+        if (!maybeExtId || !/^\d+$/.test(maybeExtId)) {
+          return NextResponse.json(
+            {
+              error:
+                "Unable to resolve Extensiv customer id (expected numeric). Re-select an Extensiv customer or pass ext-<id>.",
+            },
+            { status: 400 },
+          );
+        }
+        console.log("token", token);
+
+        const { items, total } = await fetchExtensivItems({
+          token,
+          customerId: maybeExtId,
+          page,
+          pageSize,
+          term,
+        });
+        console.log("389", items);
+
+        const products = items.map((it: any) => {
+          const pkg = it?.Options?.PackageUnit?.Imperial || {};
+          const qtyAvail =
+            it?.QuantityAvailable ??
+            it?.AvailableQuantity ??
+            it?.AvailableQty ??
+            it?.Available ??
+            it?.OnHand ??
+            it?.QuantityOnHand ??
+            it?.Quantity ??
+            it?.QtyAvailable ??
+            null;
+          return {
+            id: `ext-item-${
+              it?.ItemId ?? it?.ReadOnly?.ItemId ?? it?.Sku ?? Math.random()
+            }`,
+            sku: it?.Sku || "",
+            description: it?.Description || "Extensiv Item",
+            pkg_weight_lb: Number(pkg.Weight ?? pkg.weight ?? 0) || null,
+            pkg_length_in: Number(pkg.Length ?? pkg.length ?? 0) || null,
+            pkg_width_in: Number(pkg.Width ?? pkg.width ?? 0) || null,
+            pkg_height_in: Number(pkg.Height ?? pkg.height ?? 0) || null,
+            quantity_available:
+              qtyAvail === null ? null : Number(qtyAvail) || 0,
+            available: qtyAvail === null ? null : Number(qtyAvail) || 0,
+            on_hold: null,
+            warehouse_name: null,
+            parent_account_id: callerAccountId,
+            client_account_id: callerAccountId,
+            source: "extensiv",
+            raw: it,
+          };
+        });
+
+        return NextResponse.json({
+          products,
+          draftId: draftId || null,
+          pagination: {
+            page,
+            pageSize,
+            total,
+            totalPages: Math.max(
+              1,
+              Math.ceil((total || products.length || 1) / pageSize),
+            ),
+          },
+        });
+      } catch (err: any) {
+        return NextResponse.json(
+          { error: err?.message || "Extensiv items fetch failed" },
+          { status: 400 },
+        );
+      }
     }
 
     if (!warehousePublicId) {
-      return NextResponse.json({ error: 'Missing warehouseId' }, { status: 400 })
+      return NextResponse.json(
+        { error: "Missing warehouseId" },
+        { status: 400 },
+      );
     }
 
     // Kept only for debugging/UI context
-    const shipFromKey = String(shipFromName || '').trim().split(' ')[0] // e.g. "Miami"
+    const shipFromKey = String(shipFromName || "")
+      .trim()
+      .split(" ")[0]; // e.g. "Miami"
 
     // Resolve to an effective client_account_id (scoped to this caller's parent account)
-    let effectiveClientId = clientIdParam
-    let clientIdResolvedFrom: 'client_account_id' | 'account_id' | 'user_id' | 'unknown' = 'unknown'
+    let effectiveClientId = clientIdParam || callerAccountId;
+    let clientIdResolvedFrom:
+      | "client_account_id"
+      | "account_id"
+      | "user_id"
+      | "unknown" = "unknown";
 
-    const { data: directClient, error: directClientErr } = await (supabase as any)
-      .from('vw_products_master_enriched')
-      .select('client_account_id, parent_account_id')
-      .eq('client_account_id', clientIdParam)
-      .eq('parent_account_id', callerAccountId)
-      .limit(1)
+    if (clientIdParam) {
+      const { data: directClient, error: directClientErr } = await (
+        supabase as any
+      )
+        .from("vw_products_master_enriched")
+        .select("client_account_id, parent_account_id")
+        .eq("client_account_id", clientIdParam)
+        .eq("parent_account_id", callerAccountId)
+        .limit(1);
 
-    if (directClientErr) {
-      return NextResponse.json({ error: directClientErr.message }, { status: 500 })
-    }
+      if (directClientErr) {
+        return NextResponse.json(
+          { error: directClientErr.message },
+          { status: 500 },
+        );
+      }
 
-    if (directClient && directClient.length > 0) {
-      effectiveClientId = String((directClient[0] as any).client_account_id)
-      clientIdResolvedFrom = 'client_account_id'
+      if (directClient && directClient.length > 0) {
+        effectiveClientId = String((directClient[0] as any).client_account_id);
+        clientIdResolvedFrom = "client_account_id";
+      } else {
+        const { data: fromAccount, error: fromAccountErr } = await (
+          supabase as any
+        )
+          .from("vw_products_master_enriched")
+          .select("client_account_id, parent_account_id")
+          .eq("account_id", clientIdParam)
+          .eq("parent_account_id", callerAccountId)
+          .limit(1);
+
+        if (fromAccountErr) {
+          return NextResponse.json(
+            { error: fromAccountErr.message },
+            { status: 500 },
+          );
+        }
+
+        if (fromAccount && fromAccount.length > 0) {
+          effectiveClientId = String((fromAccount[0] as any).client_account_id);
+          clientIdResolvedFrom = "account_id";
+        }
+      }
+
+      if (clientIdResolvedFrom === "unknown") {
+        // As a fallback, treat clientId as a user/customer id and resolve account_id.
+        const { data: userRow, error: userErr } = await (supabase as any)
+          .from("users")
+          .select("account_id")
+          .eq("id", clientIdParam)
+          .maybeSingle();
+
+        if (userErr) {
+          return NextResponse.json({ error: userErr.message }, { status: 500 });
+        }
+
+        if (userRow?.account_id) {
+          effectiveClientId = String((userRow as any).account_id);
+          clientIdResolvedFrom = "user_id";
+        }
+      }
     } else {
-      const { data: fromAccount, error: fromAccountErr } = await (supabase as any)
-        .from('vw_products_master_enriched')
-        .select('client_account_id, parent_account_id')
-        .eq('account_id', clientIdParam)
-        .eq('parent_account_id', callerAccountId)
-        .limit(1)
-
-      if (fromAccountErr) {
-        return NextResponse.json({ error: fromAccountErr.message }, { status: 500 })
-      }
-
-      if (fromAccount && fromAccount.length > 0) {
-        effectiveClientId = String((fromAccount[0] as any).client_account_id)
-        clientIdResolvedFrom = 'account_id'
-      }
-    }
-
-    if (clientIdResolvedFrom === 'unknown') {
-      // As a fallback, treat clientId as a user/customer id and resolve account_id.
-      const { data: userRow, error: userErr } = await (supabase as any)
-        .from('users')
-        .select('account_id')
-        .eq('id', clientIdParam)
-        .maybeSingle()
-
-      if (userErr) {
-        return NextResponse.json({ error: userErr.message }, { status: 500 })
-      }
-
-      if (userRow?.account_id) {
-        effectiveClientId = String((userRow as any).account_id)
-        clientIdResolvedFrom = 'user_id'
-      }
+      clientIdResolvedFrom = "account_id";
     }
 
     if (!effectiveClientId) {
-      return NextResponse.json({ error: 'Unable to resolve client context' }, { status: 400 })
+      effectiveClientId = callerAccountId;
+      clientIdResolvedFrom = "account_id";
     }
 
-    const ok = await canAccessClientAccount(supabase, callerAccountId, callerRole, effectiveClientId)
+    const ok =
+      effectiveClientId === callerAccountId ||
+      (await canAccessClientAccount(
+        supabase,
+        callerAccountId,
+        callerRole,
+        effectiveClientId,
+      ));
     if (!ok) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Map public warehouse id (draft) -> billing warehouse id (used by vw_products_master_enriched).
     // Some flows already pass the billing warehouse id directly, so we support both.
     const { data: whMap, error: whMapErr } = await (supabase as any)
-      .from('v_warehouses')
-      .select('public_warehouse_id, billing_warehouse_id, account_id, name')
-      .eq('public_warehouse_id', warehousePublicId)
-      .maybeSingle()
+      .from("v_warehouses")
+      .select("public_warehouse_id, billing_warehouse_id, account_id, name")
+      .eq("public_warehouse_id", warehousePublicId)
+      .maybeSingle();
 
     if (whMapErr) {
-      return NextResponse.json({ error: whMapErr.message }, { status: 500 })
+      return NextResponse.json({ error: whMapErr.message }, { status: 500 });
     }
 
-    let billingWarehouseId = String((whMap as any)?.billing_warehouse_id ?? '').trim()
-    let warehouseName = String((whMap as any)?.name ?? '').trim()
-    let whOwnerAccountId = String((whMap as any)?.account_id ?? '').trim()
+    let billingWarehouseId = String(
+      (whMap as any)?.billing_warehouse_id ?? "",
+    ).trim();
+    let warehouseName = String((whMap as any)?.name ?? "").trim();
+    let whOwnerAccountId = String((whMap as any)?.account_id ?? "").trim();
 
     if (!billingWarehouseId) {
       // Fallback: request may already contain billing warehouse id.
-      const { data: whBillingRow, error: whBillingErr } = await (supabase as any)
-        .from('v_billing_warehouses')
-        .select('id, name, parent_account_id')
-        .eq('id', warehousePublicId)
-        .maybeSingle()
+      const { data: whBillingRow, error: whBillingErr } = await (
+        supabase as any
+      )
+        .from("v_billing_warehouses")
+        .select("id, name, parent_account_id")
+        .eq("id", warehousePublicId)
+        .maybeSingle();
 
       if (whBillingErr) {
-        return NextResponse.json({ error: whBillingErr.message }, { status: 500 })
+        return NextResponse.json(
+          { error: whBillingErr.message },
+          { status: 500 },
+        );
       }
 
-      billingWarehouseId = String((whBillingRow as any)?.id ?? '').trim()
-      warehouseName = String((whBillingRow as any)?.name ?? '').trim()
-      whOwnerAccountId = String((whBillingRow as any)?.parent_account_id ?? '').trim()
+      billingWarehouseId = String((whBillingRow as any)?.id ?? "").trim();
+      warehouseName = String((whBillingRow as any)?.name ?? "").trim();
+      whOwnerAccountId = String(
+        (whBillingRow as any)?.parent_account_id ?? "",
+      ).trim();
+    }
+
+    if (!billingWarehouseId && shipFromName) {
+      // Final fallback: resolve by warehouse display name (helps when drafts carry external ids)
+      const { data: byName, error: byNameErr } = await (supabase as any)
+        .from("v_warehouses")
+        .select("public_warehouse_id, billing_warehouse_id, account_id, name")
+        .ilike("name", `%${shipFromName.trim()}%`)
+        .limit(5);
+
+      if (byNameErr) {
+        return NextResponse.json({ error: byNameErr.message }, { status: 500 });
+      }
+
+      const first =
+        Array.isArray(byName) && byName.length > 0 ? byName[0] : null;
+      if (first) {
+        billingWarehouseId = String(
+          (first as any)?.billing_warehouse_id ?? "",
+        ).trim();
+        warehouseName = String((first as any)?.name ?? "").trim();
+        whOwnerAccountId = String((first as any)?.account_id ?? "").trim();
+      }
     }
 
     if (!billingWarehouseId) {
-      return NextResponse.json({ error: 'Warehouse mapping not found', warehousePublicId }, { status: 400 })
+      return NextResponse.json(
+        { error: "Warehouse mapping not found", warehousePublicId },
+        { status: 400 },
+      );
     }
 
-    if (whOwnerAccountId && whOwnerAccountId !== callerAccountId && whOwnerAccountId !== effectiveClientId) {
-      return NextResponse.json({ error: 'Invalid warehouse for tenant' }, { status: 400 })
+    if (
+      whOwnerAccountId &&
+      whOwnerAccountId !== callerAccountId &&
+      whOwnerAccountId !== effectiveClientId
+    ) {
+      return NextResponse.json(
+        { error: "Invalid warehouse for tenant" },
+        { status: 400 },
+      );
     }
 
-    const { data: integrations, error: integrationsErr } = await (supabase as any)
-      .from('account_integrations')
-      .select('type,status')
-      .eq('account_id', callerAccountId)
+    const { data: integrations, error: integrationsErr } = await (
+      supabase as any
+    )
+      .from("account_integrations")
+      .select("type,status")
+      .eq("account_id", callerAccountId);
 
     if (integrationsErr) {
-      return NextResponse.json({ error: integrationsErr.message }, { status: 500 })
+      return NextResponse.json(
+        { error: integrationsErr.message },
+        { status: 500 },
+      );
     }
 
     const integrationTypes = new Set(
       (integrations ?? [])
-        .filter((row: any) => String(row?.status ?? '').trim().toLowerCase() === 'active')
-        .map((row: any) => String(row?.type ?? '').trim().toLowerCase())
-        .filter(Boolean)
-    )
-    const hasSellercloud = integrationTypes.has('sellercloud')
-    const hasExtensiv = integrationTypes.has('extensiv')
+        .filter((row: any) => row?.is_default == true)
+        .map((row: any) =>
+          String(row?.type ?? "")
+            .trim()
+            .toLowerCase(),
+        )
+        .filter(Boolean),
+    );
+    const hasSellercloud = integrationTypes.has("sellercloud");
+    const hasExtensiv = integrationTypes.has("extensiv");
 
     // If Extensiv is active, prefer ext. products table directly
     if (hasExtensiv) {
       let extQuery = (supabase as any)
-        .from('extensiv_products_n')
+        .from("extensiv_products_n")
         .select(
-          'id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, quantity_available, available, on_hold, warehouse_name, parent_account_id, client_account_id',
-          { count: 'exact' }
+          "id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, quantity_available, available, on_hold, warehouse_name, parent_account_id, client_account_id",
+          { count: "exact" },
         )
-        .or(`parent_account_id.eq.${callerAccountId},client_account_id.eq.${effectiveClientId}`)
-        .range(from, to)
+        .or(
+          `parent_account_id.eq.${callerAccountId},client_account_id.eq.${effectiveClientId}`,
+        )
+        .range(from, to);
 
       if (term.length > 0) {
-        extQuery = extQuery.or(`sku.ilike.%${term}%,description.ilike.%${term}%`)
+        extQuery = extQuery.or(
+          `sku.ilike.%${term}%,description.ilike.%${term}%`,
+        );
       }
 
-      const { data: extData, error: extErr, count: extCount } = await extQuery
+      const { data: extData, error: extErr, count: extCount } = await extQuery;
       if (extErr) {
-        return NextResponse.json({ error: extErr.message }, { status: 500 })
+        return NextResponse.json({ error: extErr.message }, { status: 500 });
       }
 
-      const products = extData ?? []
-      const totalCount = extCount ?? (extData ?? []).length
+      const products = (extData ?? []).map((row: any) => ({
+        ...row,
+        // Allow UI to bypass inventory gating for Extensiv sources
+        source: row?.source ?? "extensiv",
+      }));
+      const totalCount = extCount ?? (extData ?? []).length;
 
       return NextResponse.json({
         products,
@@ -276,69 +792,69 @@ export async function GET(req: Request) {
           total: totalCount,
           totalPages: Math.max(1, Math.ceil((totalCount || 0) / pageSize)),
         },
-      })
+      });
     }
 
-    const candidateWarehouseIds = [billingWarehouseId]
+    const candidateWarehouseIds = [billingWarehouseId];
 
     let query = (supabase as any)
-      .from('vw_products_master_enriched')
+      .from("vw_products_master_enriched")
       .select(
-        'id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, available, on_hand, allocated, warehouse_id, inventory_warehouse_id, parent_account_id, account_id, client_account_id',
-        { count: 'exact' }
+        "id, sku, description, pkg_weight_lb, pkg_length_in, pkg_width_in, pkg_height_in, available, on_hand, allocated, warehouse_id, inventory_warehouse_id, parent_account_id, account_id, client_account_id",
+        { count: "exact" },
       )
-      .eq('client_account_id', effectiveClientId)
-      .eq('parent_account_id', callerAccountId)
+      .eq("client_account_id", effectiveClientId)
+      .eq("parent_account_id", callerAccountId)
       .or(
-        `warehouse_id.in.(${candidateWarehouseIds.join(',')}),inventory_warehouse_id.in.(${candidateWarehouseIds.join(',')})`
+        `warehouse_id.in.(${candidateWarehouseIds.join(",")}),inventory_warehouse_id.in.(${candidateWarehouseIds.join(",")})`,
       )
-      .range(from, to)
+      .range(from, to);
 
     if (term.length > 0) {
-      query = query.or(`sku.ilike.%${term}%,description.ilike.%${term}%`)
+      query = query.or(`sku.ilike.%${term}%,description.ilike.%${term}%`);
     }
 
-    const { data, error, count } = await query
+    const { data, error, count } = await query;
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     // Primary result set
-    let products = data ?? []
-    let totalCount = count ?? products.length
+    let products = data ?? [];
+    let totalCount = count ?? products.length;
 
     // Fallback: Billing products synced from Sellercloud now live in public.products.
     // If enriched view has no rows for this context, search in products table.
-    if (products.length === 0 && hasSellercloud) {
+    if (products.length === 0) {
       let scQuery = (supabase as any)
-        .from('sellercloud_products')
+        .from("sellercloud_products")
         .select(
-          'id, sku, description, warehouse_name, quantity_available, quantity_physical, site_price, price, weight, shipping_weight, package_weight_lbs, account_id',
-          { count: 'exact' }
+          "id, sku, description, warehouse_name, quantity_available, quantity_physical, site_price, price, weight, shipping_weight, package_weight_lbs, account_id",
+          { count: "exact" },
         )
-        .eq('account_id', callerAccountId)
-        .range(from, to)
+        .eq("account_id", callerAccountId)
+        .range(from, to);
 
       if (term.length > 0) {
-        scQuery = scQuery.or(`sku.ilike.%${term}%,description.ilike.%${term}%`)
+        scQuery = scQuery.or(`sku.ilike.%${term}%,description.ilike.%${term}%`);
       }
 
       if (warehouseName) {
-        scQuery = scQuery.ilike('warehouse_name', `%${warehouseName}%`)
+        scQuery = scQuery.ilike("warehouse_name", `%${warehouseName}%`);
       }
 
-      const { data: scData, error: scErr, count: scCount } = await scQuery
+      const { data: scData, error: scErr, count: scCount } = await scQuery;
       if (scErr) {
-        return NextResponse.json({ error: scErr.message }, { status: 500 })
+        return NextResponse.json({ error: scErr.message }, { status: 500 });
       }
 
       if ((scData ?? []).length > 0) {
-        totalCount = scCount ?? (scData ?? []).length
+        totalCount = scCount ?? (scData ?? []).length;
         products = (scData ?? []).map((row: any) => {
           const weight =
             toNum(row?.package_weight_lbs) ??
             toNum(row?.shipping_weight) ??
-            toNum(row?.weight)
+            toNum(row?.weight);
 
           return {
             id: row.id,
@@ -357,63 +873,67 @@ export async function GET(req: Request) {
             parent_account_id: callerAccountId,
             account_id: effectiveClientId,
             client_account_id: effectiveClientId,
-            source: 'sellercloud',
+            source: "sellercloud",
             warehouse_name: row.warehouse_name ?? warehouseName ?? null,
-          }
-        })
+          };
+        });
       }
     }
 
     if (products.length === 0) {
       let pQuery = (supabase as any)
-        .from('products')
+        .from("products")
         .select(
-          'id, sku, product_name, description, site_price, available, physical_qty, on_hold, warehouse_name, raw, parent_account_id, source',
-          { count: 'exact' }
+          "id, sku, product_name, description, site_price, available, physical_qty, on_hold, warehouse_name, raw, parent_account_id, source",
+          { count: "exact" },
         )
-        .eq('parent_account_id', callerAccountId)
-        .range(from, to)
+        .eq("parent_account_id", callerAccountId)
+        .range(from, to);
 
       if (term.length > 0) {
-        pQuery = pQuery.or(`sku.ilike.%${term}%,description.ilike.%${term}%,product_name.ilike.%${term}%`)
+        pQuery = pQuery.or(
+          `sku.ilike.%${term}%,description.ilike.%${term}%,product_name.ilike.%${term}%`,
+        );
       }
 
       if (warehouseName) {
-        pQuery = pQuery.ilike('warehouse_name', `%${warehouseName}%`)
+        pQuery = pQuery.ilike("warehouse_name", `%${warehouseName}%`);
       }
 
-      let { data: pData, error: pErr, count: pCount } = await pQuery
+      let { data: pData, error: pErr, count: pCount } = await pQuery;
       if (pErr) {
-        return NextResponse.json({ error: pErr.message }, { status: 500 })
+        return NextResponse.json({ error: pErr.message }, { status: 500 });
       }
 
       // If strict warehouse-name filter yields nothing, retry without it.
       if ((pData ?? []).length === 0) {
         let retryQuery = (supabase as any)
-          .from('products')
+          .from("products")
           .select(
-            'id, sku, product_name, description, site_price, available, physical_qty, on_hold, warehouse_name, raw, parent_account_id, source',
-            { count: 'exact' }
+            "id, sku, product_name, description, site_price, available, physical_qty, on_hold, warehouse_name, raw, parent_account_id, source",
+            { count: "exact" },
           )
-          .eq('parent_account_id', callerAccountId)
-          .range(from, to)
+          .eq("parent_account_id", callerAccountId)
+          .range(from, to);
 
         if (term.length > 0) {
-          retryQuery = retryQuery.or(`sku.ilike.%${term}%,description.ilike.%${term}%,product_name.ilike.%${term}%`)
+          retryQuery = retryQuery.or(
+            `sku.ilike.%${term}%,description.ilike.%${term}%,product_name.ilike.%${term}%`,
+          );
         }
 
-        const retryRes = await retryQuery
-        pData = retryRes.data
-        pErr = retryRes.error
-        pCount = retryRes.count
+        const retryRes = await retryQuery;
+        pData = retryRes.data;
+        pErr = retryRes.error;
+        pCount = retryRes.count;
         if (pErr) {
-          return NextResponse.json({ error: pErr.message }, { status: 500 })
+          return NextResponse.json({ error: pErr.message }, { status: 500 });
         }
       }
 
-      totalCount = pCount ?? (pData ?? []).length
+      totalCount = pCount ?? (pData ?? []).length;
       products = (pData ?? []).map((row: any) => {
-        const raw = row?.raw && typeof row.raw === 'object' ? row.raw : {}
+        const raw = row?.raw && typeof row.raw === "object" ? row.raw : {};
         const available =
           toNum(row?.available) ??
           toNum(row?.physical_qty) ??
@@ -421,19 +941,19 @@ export async function GET(req: Request) {
           toNum((raw as any)?.AggregatedQty) ??
           toNum((raw as any)?.AggregateQty) ??
           toNum((raw as any)?.AggregatePhysicalQty) ??
-          0
+          0;
 
         const onHand =
           toNum(row?.physical_qty) ??
           toNum((raw as any)?.PhysicalQty) ??
           toNum((raw as any)?.WarehousePhysicalQty) ??
-          null
+          null;
 
         const allocated =
           toNum(row?.on_hold) ??
           toNum((raw as any)?.ReservedQty) ??
           toNum((raw as any)?.ReserveQtyTotalValue) ??
-          null
+          null;
 
         return {
           id: row.id,
@@ -446,7 +966,10 @@ export async function GET(req: Request) {
             toNum((raw as any)?.SalePrice) ??
             toNum((raw as any)?.ListPrice) ??
             0,
-          pkg_weight_lb: toNum((raw as any)?.PackageWeightLbs) ?? toNum((raw as any)?.WeightLbs) ?? toNum((raw as any)?.Weight),
+          pkg_weight_lb:
+            toNum((raw as any)?.PackageWeightLbs) ??
+            toNum((raw as any)?.WeightLbs) ??
+            toNum((raw as any)?.Weight),
           pkg_length_in: toNum((raw as any)?.PackageLength) ?? null,
           pkg_width_in: toNum((raw as any)?.PackageWidth) ?? null,
           pkg_height_in: toNum((raw as any)?.PackageHeight) ?? null,
@@ -458,9 +981,9 @@ export async function GET(req: Request) {
           parent_account_id: callerAccountId,
           account_id: effectiveClientId,
           client_account_id: effectiveClientId,
-          source: row.source ?? 'sellercloud',
-        }
-      })
+          source: row.source ?? "sellercloud",
+        };
+      });
     }
 
     return NextResponse.json({
@@ -476,8 +999,11 @@ export async function GET(req: Request) {
       clientIdResolvedFrom,
       warehousePublicId,
       billingWarehouseId,
-    })
+    });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Unexpected error' }, { status: 500 })
+    return NextResponse.json(
+      { error: e?.message || "Unexpected error" },
+      { status: 500 },
+    );
   }
 }

@@ -444,6 +444,7 @@ function normalizeOrderRow(
       last_event_name: row.last_event_name ?? null,
       status_fully_allocated: row.status_fully_allocated ?? null,
       raw_data: row.raw_data ?? null,
+      items: Array.isArray(row.items) ? row.items : [],
       metadata: row.metadata ?? null,
     }
   }
@@ -572,7 +573,7 @@ export default function OrdersClient({
   const [isMagayaView, setIsMagayaView] = useState(isParentOnlyMagaya)
   const [isSellercloudView, setIsSellercloudView] = useState(false)
   const [availableSources, setAvailableSources] = useState<string[]>([])
-  const [sourceOverride, setSourceOverride] = useState<'auto' | 'sellercloud' | 'extensiv' | 'magaya'>('auto')
+  const [sourceOverride, setSourceOverride] = useState<'auto' | 'sellercloud' | 'extensiv' | 'magaya'>('extensiv')
 
   const initialSearchTerm = String(searchParams.get('q') ?? '').trim()
   const initialStatusFilter = (() => {
@@ -600,7 +601,7 @@ export default function OrdersClient({
   const startDate = toISODateFromCalendar(selectedRange?.from)
   const endDate = toISODateFromCalendar(selectedRange?.to)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [itemsPerPage, setItemsPerPage] = useState(50)
 
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -753,6 +754,136 @@ export default function OrdersClient({
           : isSellercloudView
             ? 'sellercloud'
             : 'standard'
+
+      // If Extensiv integration exists, force initial view to Extensiv
+      if (!isExtensivView && availableSources.includes('extensiv') && sourceOverride === 'extensiv') {
+        setIsExtensivView(true)
+      }
+
+      // --- Live Extensiv pull (bypass warehouse tables) ---
+      if (sourceMode === 'extensiv') {
+        // Clear default date constraints for Extensiv so we fetch all orders unless user filters
+        if (!hasUserAdjustedRangeRef.current && !hasDateRangeInQuery) {
+          if (selectedRange !== undefined) {
+            setSelectedRange(undefined)
+            setCurrentPage(1)
+            return
+          }
+        }
+        hasAppliedSourceDefaultRangeRef.current = true
+
+        try {
+          const res = await fetch(
+            `/api/orders/extensiv/list?page=${currentPage}&pageSize=${itemsPerPage}`,
+            { credentials: 'include' }
+          )
+          const json = await res.json().catch(() => ({}))
+
+          if (!res.ok || json?.success === false) {
+            console.error('❌ Error fetching Extensiv orders:', json)
+            return
+          }
+
+          const resourceList: any[] = json?.data?.ResourceList || []
+          const totalResults: number = json?.data?.TotalResults || resourceList.length
+
+          // Map raw Extensiv payload to the shape expected by normalizeOrderRow
+          const mapped = resourceList.map((entry: any) => {
+            const ro = entry?.ReadOnly || {}
+
+            const items = Array.isArray(entry?.OrderItems)
+              ? entry.OrderItems.map((item: any, idx: number) => {
+                  const qty = Number(
+                    item?.Qty ??
+                      item?.Quantity ??
+                      item?.ReadOnly?.OriginalPrimaryQty ??
+                      item?.ReadOnly?.originalPrimaryQty ??
+                      0,
+                  )
+
+                  return {
+                    id:
+                      item?.ReadOnly?.OrderItemId ??
+                      item?.ReadOnly?.orderItemId ??
+                      item?.ItemIdentifier?.Id ??
+                      item?.ItemIdentifier?.id ??
+                      `ext-item-${idx}`,
+                    sku:
+                      item?.ItemIdentifier?.Sku ??
+                      item?.ItemIdentifier?.Name ??
+                      item?.itemIdentifier?.sku ??
+                      item?.itemIdentifier?.name ??
+                      `ext-sku-${idx}`,
+                    quantity: qty,
+                    unit_price: null,
+                    total_price: null,
+                    metadata: item,
+                  }
+                })
+              : []
+
+            return {
+              id: ro.OrderId ?? entry?.OrderId ?? null,
+              external_id: entry?.ReferenceNum ?? null,
+              order_number: entry?.ReferenceNum ?? null,
+              customer_name: ro?.CustomerIdentifier?.Name ?? null,
+              facility_name: ro?.FacilityIdentifier?.Name ?? null,
+              status_closed: ro?.IsClosed ?? false,
+              status_fully_allocated: ro?.FullyAllocated ?? null,
+              last_event_name: ro?.Status ?? null,
+              source: 'extensiv',
+              creation_date: ro?.CreationDate ?? null,
+              process_date: ro?.ProcessDate ?? null,
+              raw_data: entry ?? null,
+              items,
+            }
+          })
+
+          // Filters (status/warehouse/date) client-side for now
+          // Apply light client-side filters but keep data visible even if dropdowns untouched
+          const normalized = mapped.map((row) => normalizeOrderRow(row, 'extensiv'))
+
+          const allStatuses = Array.from(
+            new Set(
+              mapped
+                .map((row) =>
+                  normalizeExtensivStatus(row.last_event_name, {
+                    statusFullyAllocated: row.status_fully_allocated,
+                  })
+                )
+                .filter(Boolean)
+            )
+          )
+          setAllStatusOptions(allStatuses)
+
+          const warehouses = Array.from(
+            new Set(mapped.map((row) => row.facility_name).filter(Boolean) as string[])
+          ).sort((a, b) => a.localeCompare(b))
+          setAllWarehouseOptions(warehouses)
+
+          // Client-side search term filter
+          const searchTermLower = searchTerm.trim().toLowerCase()
+          const searched = searchTermLower
+            ? normalized.filter((row) =>
+                [
+                  row.order_id,
+                  row.order_source_order_id,
+                  row.client_name,
+                  row.warehouse_name,
+                ]
+                  .map((v) => String(v || '').toLowerCase())
+                  .some((val) => val.includes(searchTermLower))
+              )
+            : normalized
+
+          setOrders(searched)
+          setTotalCount(totalResults)
+        } catch (error) {
+          console.error('❌ Unexpected Extensiv fetch error:', error)
+        }
+
+        return
+      }
 
       const magayaScopedAccountIds =
         sourceMode === 'magaya'

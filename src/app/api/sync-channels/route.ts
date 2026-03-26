@@ -33,7 +33,10 @@ function decryptExtensivCredentials(raw: any): ExtensivCredentials | null {
       const decrypted = AES.decrypt(raw, CREDENTIAL_SECRET).toString(Utf8);
       parsed = JSON.parse(decrypted || "{}");
     } catch (err) {
-      console.warn("[sync-channels] Failed to decrypt Extensiv credentials", err);
+      console.warn(
+        "[sync-channels] Failed to decrypt Extensiv credentials",
+        err,
+      );
       return null;
     }
   }
@@ -47,7 +50,9 @@ function decryptExtensivCredentials(raw: any): ExtensivCredentials | null {
 }
 
 async function getExtensivToken(creds: ExtensivCredentials) {
-  const basic = Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString("base64");
+  const basic = Buffer.from(
+    `${creds.client_id}:${creds.client_secret}`,
+  ).toString("base64");
 
   const formBody = new URLSearchParams({
     grant_type: "client_credentials",
@@ -84,7 +89,10 @@ async function getExtensivToken(creds: ExtensivCredentials) {
       "Content-Type": "application/json",
       Authorization: `Basic ${basic}`,
     },
-    body: JSON.stringify({ grant_type: "client_credentials", user_login: creds.extensiv_id }),
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      user_login: creds.extensiv_id,
+    }),
   });
 
   const jsonText = await jsonRes.text();
@@ -131,7 +139,9 @@ function extractEmail(customer: any): string | null {
     customer?.shipToAddress?.email,
     // nested contacts array
     Array.isArray(customer?.contacts) ? customer.contacts[0]?.email : null,
-    Array.isArray(customer?.contacts) ? customer.contacts[0]?.contactEmail : null,
+    Array.isArray(customer?.contacts)
+      ? customer.contacts[0]?.contactEmail
+      : null,
   ];
 
   for (const candidate of candidates) {
@@ -176,7 +186,12 @@ async function backfillExtensivEmails(accountId: string) {
     .from("account_integrations")
     .select("credentials, account_id")
     .eq("type", "extensiv")
-    .in("account_id", [accountId, await lookupParentAccountId(admin, accountId)].filter(Boolean) as string[])
+    .in(
+      "account_id",
+      [accountId, await lookupParentAccountId(admin, accountId)].filter(
+        Boolean,
+      ) as string[],
+    )
     .order("account_id", { ascending: false }) // prefer the exact accountId first
     .limit(1)
     .maybeSingle();
@@ -187,7 +202,12 @@ async function backfillExtensivEmails(accountId: string) {
   }
 
   const token = await getExtensivToken(creds);
-  const headers = { Authorization: `Bearer ${token}`, Accept: "application/hal+json" };
+  console.log("token", token);
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/hal+json",
+  };
 
   const { data: channels, error: channelsError } = await admin
     .from("channels")
@@ -203,14 +223,17 @@ async function backfillExtensivEmails(accountId: string) {
   const updates: any[] = [];
 
   for (const channel of channels || []) {
-    const hasEmail = typeof channel.email === "string" && channel.email.trim().length > 0;
+    const hasEmail =
+      typeof channel.email === "string" && channel.email.trim().length > 0;
     if (hasEmail) continue;
 
     const customerId = channel.external_id;
     if (!customerId) continue;
 
     try {
-      const res = await fetch(`${EXTENSIV_BASE_URL}/customers/${customerId}`, { headers });
+      const res = await fetch(`${EXTENSIV_BASE_URL}/customers/${customerId}`, {
+        headers,
+      });
       if (!res.ok) {
         console.warn(
           "[sync-channels] Extensiv customer fetch failed",
@@ -238,9 +261,11 @@ async function backfillExtensivEmails(accountId: string) {
   }
 
   if (updates.length > 0) {
-    const { error: upsertError } = await admin.from("channels").upsert(updates, {
-      onConflict: "id",
-    });
+    const { error: upsertError } = await admin
+      .from("channels")
+      .upsert(updates, {
+        onConflict: "id",
+      });
     if (upsertError) throw new Error(upsertError.message);
   }
 
@@ -249,121 +274,139 @@ async function backfillExtensivEmails(accountId: string) {
 
 export async function POST(request: Request) {
   try {
-    const { account_id, source } = await request.json()
+    const { account_id, source } = await request.json();
 
     if (!account_id || !source) {
-      return new Response(JSON.stringify({ success: false, error: 'Missing account_id or source' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Missing account_id or source",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Escolhe a função serverless correta
-    let functionUrl: string | null = null
+    let functionUrl: string | null = null;
 
-    if (source === 'sellercloud') {
-      functionUrl = 'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync_sellercloud_channels'
-    } else if (source === 'extensiv') {
-      functionUrl = 'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync-customers-extensiv'
-    } else if (source === 'magaya') {
-      functionUrl = 'https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync-customers-magaya'
+    if (source === "sellercloud") {
+      functionUrl =
+        "https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync_sellercloud_channels";
+    } else if (source === "extensiv") {
+      functionUrl =
+        "https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync-customers-extensiv";
+    } else if (source === "magaya") {
+      functionUrl =
+        "https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/sync-customers-magaya";
     } else {
-      return new Response(JSON.stringify({ success: false, error: 'Invalid source' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid source" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     const response = await fetch(functionUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ account_id }),
-    })
+    });
 
-    const data = await response.json()
-    const isSuccess = response.ok && data?.success !== false
+    const data = await response.json();
+    const isSuccess = response.ok && data?.success !== false;
 
     if (source === "extensiv" && isSuccess) {
       try {
         // Extensiv channels may be stored on the parent tenant; mirror the sellercloud logic.
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-        let effectiveAccountId = account_id
+        let effectiveAccountId = account_id;
         if (supabaseUrl && serviceRole) {
           const admin = createClient(supabaseUrl, serviceRole, {
             auth: { autoRefreshToken: false, persistSession: false },
-          })
+          });
           const { data: accountRow } = await admin
             .from("accounts")
             .select("parent_account_id")
             .eq("id", account_id)
-            .maybeSingle()
+            .maybeSingle();
           if (accountRow?.parent_account_id) {
-            effectiveAccountId = accountRow.parent_account_id
+            effectiveAccountId = accountRow.parent_account_id;
           }
         }
 
-        const backfill = await backfillExtensivEmails(effectiveAccountId)
-        data.patched_emails = backfill.patched
+        const backfill = await backfillExtensivEmails(effectiveAccountId);
+        data.patched_emails = backfill.patched;
       } catch (err: any) {
-        console.warn("[sync-channels] Extensiv email backfill failed:", err?.message || err)
+        console.warn(
+          "[sync-channels] Extensiv email backfill failed:",
+          err?.message || err,
+        );
       }
     }
 
-    if (source === 'sellercloud' && isSuccess) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (source === "sellercloud" && isSuccess) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
       if (!supabaseUrl || !serviceRole) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'Missing Supabase server configuration',
+            error: "Missing Supabase server configuration",
           }),
           {
             status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          }
-        )
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
 
       const admin = createClient(supabaseUrl, serviceRole, {
         auth: { autoRefreshToken: false, persistSession: false },
-      })
+      });
 
-      let effectiveAccountId = account_id
+      let effectiveAccountId = account_id;
       const { data: accountRow } = await admin
-        .from('accounts')
-        .select('parent_account_id')
-        .eq('id', account_id)
-        .maybeSingle()
+        .from("accounts")
+        .select("parent_account_id")
+        .eq("id", account_id)
+        .maybeSingle();
 
       if (accountRow?.parent_account_id) {
-        effectiveAccountId = accountRow.parent_account_id
+        effectiveAccountId = accountRow.parent_account_id;
       }
 
       const customerProvision = await createSellercloudCustomerLogins({
         admin,
         accountId: effectiveAccountId,
         inviteAccountId: account_id,
-      })
+      });
 
-      return new Response(JSON.stringify({ ...data, customer_provision: customerProvision }), {
-        status: response.status,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({ ...data, customer_provision: customerProvision }),
+        {
+          status: response.status,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     return new Response(JSON.stringify(data), {
       status: response.status,
-      headers: { 'Content-Type': 'application/json' },
-    })
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error('[sync-channels] ❌ Error:', error)
+    console.error("[sync-channels] ❌ Error:", error);
     return new Response(
-      JSON.stringify({ success: false, error: 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+      JSON.stringify({ success: false, error: "Internal server error" }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
   }
 }

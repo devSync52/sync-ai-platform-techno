@@ -47,7 +47,9 @@ type ExtensivCredentials = {
 };
 
 const ENCRYPTION_KEY =
-  process.env.NEXT_PUBLIC_CREDENTIAL_SECRET || "SYNC_SECRET";
+  process.env.NEXT_PUBLIC_CREDENTIAL_SECRET ||
+  process.env.CREDENTIAL_SECRET ||
+  "SYNC_SECRET";
 
 function normalizeDomain(domain: string): string {
   const trimmed = String(domain || "").trim();
@@ -225,78 +227,106 @@ async function fetchExtensivFacilities(
 }> {
   const headers = {
     Authorization: `Bearer ${token}`,
-    Accept: "application/hal+json",
-    "Content-Type": "application/hal+json; charset=utf-8",
+    Accept: "application/json",
   };
 
   const facilities: any[] = [];
   let lastError: string | null = null;
   const tried: string[] = [];
 
-  const fetchPage = async (baseUrl: string) => {
-    let page = 1;
-    let keepGoing = true;
-    while (keepGoing && page <= 10) {
-      const url = `${baseUrl}?pgsiz=100&pgnum=${page}`;
-      tried.push(url);
-      const res = await fetch(url, { headers });
-      const text = await res.text();
-      let json: any = {};
-      try {
-        json = text ? JSON.parse(text) : {};
-      } catch {
-        json = {};
-      }
+  // Preferred: unified properties endpoint (returns FacilityId + CustomerOptions)
+  const propertiesUrl = "https://secure-wms.com/properties/facilities";
+  tried.push(propertiesUrl);
+  try {
+    const res = await fetch(propertiesUrl, { headers });
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : {};
 
-      if (!res.ok) {
-        const msg =
-          json?.message ||
-          json?.error ||
-          json?.error_description ||
-          text ||
-          `Extensiv facilities ${res.status}`;
-        lastError = msg;
-        return;
-      }
-
-      const pageFacilities =
-        json._embedded?.[
-          "http://api.3plcentral.com/rels/inventory/facility"
-        ] || json._embedded?.["facilities"] || json.items || [];
-
-      facilities.push(...(Array.isArray(pageFacilities) ? pageFacilities : []));
-
-      const hasMore =
-        Array.isArray(pageFacilities) && pageFacilities.length === 100;
-      keepGoing = hasMore;
-      page += 1;
+    if (res.ok && Array.isArray(json?.ResourceList)) {
+      facilities.push(...json.ResourceList);
+    } else if (!res.ok) {
+      lastError =
+        json?.error ||
+        json?.message ||
+        json?.Error ||
+        text ||
+        `Extensiv facilities ${res.status}`;
     }
-  };
-
-  // Prefer scoping by customer IDs (Extensiv customer = account's channel external_id)
-  if (Array.isArray(customerIds) && customerIds.length > 0) {
-    for (const cid of customerIds) {
-      const trimmed = String(cid || "").trim();
-      if (!trimmed) continue;
-      // Try both documented and observed paths
-      await fetchPage(
-        `https://secure-wms.com/customers/${trimmed}/inventory/facilities`,
-      );
-      await fetchPage(
-        `https://secure-wms.com/customer/${trimmed}/inventory/facilities`,
-      );
-      await fetchPage(
-        `https://secure-wms.com/customers/${trimmed}/facilities`,
-      );
-    }
-  } else {
-    // Fallback: global facilities endpoint
-    await fetchPage("https://secure-wms.com/inventory/facilities");
+  } catch (err: any) {
+    lastError = err?.message || "Failed to fetch Extensiv facilities";
   }
 
-  // If nothing came back, try global as a fallback once
+  // Legacy fallback: per-customer facility listing
   if (facilities.length === 0) {
-    await fetchPage("https://secure-wms.com/inventory/facilities");
+    const legacyHeaders = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/hal+json",
+      "Content-Type": "application/hal+json; charset=utf-8",
+    };
+
+    const fetchPage = async (baseUrl: string) => {
+      let page = 1;
+      let keepGoing = true;
+      while (keepGoing && page <= 10) {
+        const url = `${baseUrl}?pgsiz=100&pgnum=${page}`;
+        tried.push(url);
+        const res = await fetch(url, { headers: legacyHeaders });
+        const text = await res.text();
+        let json: any = {};
+        try {
+          json = text ? JSON.parse(text) : {};
+        } catch {
+          json = {};
+        }
+
+        if (!res.ok) {
+          const msg =
+            json?.message ||
+            json?.error ||
+            json?.error_description ||
+            text ||
+            `Extensiv facilities ${res.status}`;
+          lastError = msg;
+          return;
+        }
+
+        const pageFacilities =
+          json._embedded?.[
+            "http://api.3plcentral.com/rels/inventory/facility"
+          ] || json._embedded?.["facilities"] || json.items || [];
+
+        facilities.push(
+          ...(Array.isArray(pageFacilities) ? pageFacilities : []),
+        );
+
+        const hasMore =
+          Array.isArray(pageFacilities) && pageFacilities.length === 100;
+        keepGoing = hasMore;
+        page += 1;
+      }
+    };
+
+    if (Array.isArray(customerIds) && customerIds.length > 0) {
+      for (const cid of customerIds) {
+        const trimmed = String(cid || "").trim();
+        if (!trimmed) continue;
+        await fetchPage(
+          `https://secure-wms.com/customers/${trimmed}/inventory/facilities`,
+        );
+        await fetchPage(
+          `https://secure-wms.com/customer/${trimmed}/inventory/facilities`,
+        );
+        await fetchPage(
+          `https://secure-wms.com/customers/${trimmed}/facilities`,
+        );
+      }
+    } else {
+      await fetchPage("https://secure-wms.com/inventory/facilities");
+    }
+
+    if (facilities.length === 0) {
+      await fetchPage("https://secure-wms.com/inventory/facilities");
+    }
   }
 
   return { facilities, tried, lastError };
@@ -385,6 +415,10 @@ async function resolveAccountContext(request: Request): Promise<UserContext> {
 }
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const sourceFilter =
+    searchParams.get("source")?.trim().toLowerCase() || null;
+
   const context = await resolveAccountContext(request);
   if (!context.ok) {
     return NextResponse.json(
@@ -407,10 +441,66 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  // 4) Retorne apenas os campos usados pela sua UI (ou tudo)
-  const shaped = (data ?? []).map(shapeWarehouse);
+  let shaped = (data ?? []).map(shapeWarehouse);
+  let filtered = sourceFilter
+    ? shaped.filter(
+        (w) => String(w.source || "").toLowerCase() === sourceFilter,
+      )
+    : shaped;
 
-  return NextResponse.json({ data: shaped });
+  // Fallback: if no warehouses are stored, fetch live from Extensiv API
+  const shouldFetchExtensiv =
+    sourceFilter === "extensiv" ? filtered.length === 0 : shaped.length === 0;
+
+  if (shouldFetchExtensiv) {
+    const { data: integration } = await sr
+      .from("account_integrations")
+      .select("credentials")
+      .eq("account_id", context.accountId)
+      .eq("type", "extensiv")
+      .maybeSingle();
+
+    const creds = parseExtensivCredentials(integration?.credentials);
+    if (creds) {
+      try {
+        const token = await getExtensivToken(creds);
+        const { facilities } = await fetchExtensivFacilities(token, []);
+        shaped = (facilities || []).map((f: any) => {
+          const addr = f.Contact || f.address || f.Address || {};
+          const idVal =
+            f.FacilityId ||
+            f.FacilityID ||
+            f.facilityId ||
+            f.facilityID ||
+            f.id;
+          return shapeWarehouse({
+            id: `ext-${idVal ?? f.Name ?? Math.random().toString(36).slice(2)}`,
+            name: f.Name || f.name || "Extensiv Facility",
+            city: addr.City || addr.city || null,
+            state: addr.State || addr.state || null,
+            is_default: false,
+            parent_account_id: context.accountId,
+            source: "extensiv",
+            wms_facility_id: idVal ? String(idVal) : null,
+            is_active: !f.Deactivated,
+          });
+        });
+      } catch (err) {
+        console.warn("[warehouses][GET][extensiv_fallback]", err);
+      }
+    }
+  }
+
+  // Re-apply source filter after possible fallback enrichment
+  if (sourceFilter) {
+    filtered = (shaped || []).filter(
+      (w) => String(w.source || "").toLowerCase() === sourceFilter,
+    );
+  } else {
+    filtered = shaped;
+  }
+
+  return NextResponse.json({ data: filtered });
 }
 
 export async function POST(request: Request) {
@@ -828,6 +918,11 @@ export async function POST(request: Request) {
       }
 
       if (!effectiveFacilities || effectiveFacilities.length === 0) {
+        console.warn("[warehouses][extensiv] facilities empty", {
+          tried,
+          lastError,
+          customerIds,
+        });
         return NextResponse.json(
           {
             data: [],
@@ -853,7 +948,7 @@ export async function POST(request: Request) {
       }
 
       const rows = effectiveFacilities.map((f: any) => {
-        const addr = f.address || f.Address || {};
+        const addr = f.address || f.Address || f.Contact || {};
         const idVal =
           f.id ??
           f.facilityId ??
@@ -868,6 +963,7 @@ export async function POST(request: Request) {
             String(f.customerId || f.customer_id || f.clientId || "").trim(),
           ) || null;
         return {
+          id: `ext-${idVal ?? f.name ?? f.Name ?? Math.random().toString(36).slice(2)}`,
           parent_account_id: accountId,
           name:
             String(
@@ -888,44 +984,30 @@ export async function POST(request: Request) {
           is_active: true,
           is_default: Boolean(f.isDefault ?? f.defaultFacility ?? false),
           source: "extensiv",
+          wms_facility_id: idVal ? String(idVal) : null,
           // keep minimal columns present in billing.warehouses
         };
       });
 
-      // Remove existing Extensiv warehouses to avoid duplicates on repeated syncs
-      await sr
-        .schema("billing")
-        .from("warehouses")
-        .delete()
-        .eq("parent_account_id", accountId)
-        .eq("source", "extensiv");
+      // Best-effort persistence for other flows; still return live data even if DB fails
+      try {
+        await sr
+          .schema("billing")
+          .from("warehouses")
+          .delete()
+          .eq("parent_account_id", accountId)
+          .eq("source", "extensiv");
 
-      const { error: upsertErr } = await sr
-        .schema("billing")
-        .from("warehouses")
-        .insert(rows);
-
-      if (upsertErr) {
-        return NextResponse.json({ error: upsertErr.message }, { status: 400 });
-      }
-
-      const { data: refreshed, error: refreshErr } = await sr
-        .from("v_billing_warehouses")
-        .select("*")
-        .eq("parent_account_id", accountId)
-        .eq("is_active", true)
-        .order("is_default", { ascending: false })
-        .order("name", { ascending: true });
-
-      if (refreshErr) {
-        return NextResponse.json(
-          { error: refreshErr.message },
-          { status: 400 },
-        );
+        await sr
+          .schema("billing")
+          .from("warehouses")
+          .insert(rows);
+      } catch (persistErr) {
+        console.warn("[warehouses][extensiv][persist]", persistErr);
       }
 
       return NextResponse.json({
-        data: (refreshed ?? []).map(shapeWarehouse),
+        data: rows.map(shapeWarehouse),
         summary: { received: effectiveFacilities.length },
       });
     } catch (err: any) {

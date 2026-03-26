@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button'
 type Warehouse = {
   id: string
   name: string | null
+  source?: string | null
+  is_default?: boolean
+  wms_facility_id?: string | null
   address_line1?: string | null
   address_line2?: string | null
   city?: string | null
@@ -39,6 +42,10 @@ export function Step2WarehouseSelection({
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null)
   const [loadingDraft, setLoadingDraft] = useState(true)
+  const serviceParam =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('service')?.toLowerCase()
+      : null
 
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -81,8 +88,6 @@ export function Step2WarehouseSelection({
         return
       }
 
-      let effectiveAccountId = accountId
-
       // If we have a session role indicating client, resolve parent account.
       // If we don't have a session, also attempt parent resolution as a best-effort.
       if (role === 'client' || role === 'staff-client' || !session) {
@@ -93,7 +98,7 @@ export function Step2WarehouseSelection({
           .single()
 
         if (!parentError && parentData?.parent_account_id) {
-          effectiveAccountId = parentData.parent_account_id
+          // We keep this in case we need it for future scoping; the billing API already scopes by parent.
         }
       }
 
@@ -117,50 +122,57 @@ export function Step2WarehouseSelection({
         setSelectedWarehouse(String(shipFromObj.warehouse_id))
       }
 
-      // Warehouses may live under the client account OR under the parent account.
-      // Try client account first; if empty, fallback to the resolved effectiveAccountId.
-      const selectCols =
-        'id, name, address_line1, address_line2, city, state, zip_code, country, phone, email'
+      // Use Billing Warehouses API so we respect Extensiv live facilities fallback.
+      const params = new URLSearchParams()
+      if (serviceParam) params.set('source', serviceParam)
 
-      const { data: data1, error: error1 } = await supabase
-        .from('warehouses')
-        .select(selectCols)
-        .eq('account_id', accountId)
-        .order('name')
+      const res = await fetch(`/api/billing/warehouses?${params.toString()}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+      const json = await res.json().catch(() => ({}))
 
-      if (error1) {
-        console.error('❌ Error fetching warehouses (account):', error1)
+      if (!res.ok) {
+        console.error('❌ Error fetching billing warehouses:', json)
         toast.error('Failed to load warehouses')
         setLoadingDraft(false)
         return
       }
 
-      let finalData: any[] = data1 ?? []
+      const apiWarehouses: Warehouse[] = Array.isArray(json?.data)
+        ? json.data.map((row: any) => ({
+            id: String(row?.id || ''),
+            name: row?.name ?? null,
+            source: row?.source ?? null,
+            is_default: row?.is_default ?? false,
+            wms_facility_id: row?.wms_facility_id ?? null,
+            address_line1: row?.address_line1 ?? null,
+            address_line2: row?.address_line2 ?? null,
+            city: row?.city ?? null,
+            state: row?.state ?? null,
+            zip_code: row?.zip_code ?? null,
+            country: row?.country ?? null,
+            phone: row?.phone ?? null,
+            email: row?.email ?? null,
+          }))
+        : []
 
-      if (finalData.length === 0 && effectiveAccountId && effectiveAccountId !== accountId) {
-        const { data: data2, error: error2 } = await supabase
-          .from('warehouses')
-          .select(selectCols)
-          .eq('account_id', effectiveAccountId)
-          .order('name')
-
-        if (error2) {
-          console.error('❌ Error fetching warehouses (effective):', error2)
-          toast.error('Failed to load warehouses')
-          setLoadingDraft(false)
-          return
-        }
-
-        finalData = data2 ?? []
+      // If we didn't already have a selection, auto-pick the default or first warehouse.
+      if (!shipFromObj?.warehouse_id && !initialWarehouse && apiWarehouses.length > 0) {
+        const defaultWh =
+          apiWarehouses.find((w) => w.is_default) ??
+          apiWarehouses.find((w) => w.id) ??
+          null
+        if (defaultWh?.id) setSelectedWarehouse(defaultWh.id)
       }
 
-      setWarehouses(finalData as Warehouse[])
+      setWarehouses(apiWarehouses)
 
       setLoadingDraft(false)
     }
 
     fetchWarehouses()
-  }, [supabase, draftId, initialWarehouse])
+  }, [supabase, draftId, initialWarehouse, serviceParam])
   
   const handleNext = async () => {
     if (!selectedWarehouse) {

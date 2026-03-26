@@ -57,6 +57,9 @@ function ProductSearchModal({
   clientId,
   warehouseId,
   shipFromName,
+  draftId,
+  service,
+  extCustomerId,
 }: {
   show: boolean
   onClose: () => void
@@ -64,14 +67,21 @@ function ProductSearchModal({
   clientId: string
   warehouseId?: string
   shipFromName?: string
+  draftId?: string
+  service?: string | null
+  extCustomerId?: string | null
 }) {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const serviceParam =
+    (service || (extCustomerId ? 'extensiv' : '')).toLowerCase() || null
 
   const handleSearch = async () => {
-    if (!clientId || !warehouseId) return
+    if (!clientId && !extCustomerId) return
+    // For Sellercloud flows we still require warehouseId to scope inventory.
+    if (!warehouseId && serviceParam !== 'extensiv') return
   
     console.log('[Step4][ProductSearch] Searching products (SSR)', {
       clientId,
@@ -87,8 +97,19 @@ function ProductSearchModal({
         clientId,
         warehouseId: warehouseId || '',
         shipFromName: shipFromName || '',
+        draftId: draftId || '',
         term: searchTerm || '',
       })
+
+      if (serviceParam) {
+        params.set('service', serviceParam)
+      }
+      if (extCustomerId) {
+        params.set('extCustomerId', extCustomerId)
+      }
+      if (extCustomerId) {
+        params.set('extCustomerId', extCustomerId)
+      }
   
       const res = await fetch(`/api/products/search?${params.toString()}`, {
         credentials: 'include',
@@ -107,6 +128,14 @@ function ProductSearchModal({
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!show) return
+    if (!clientId && !extCustomerId) return
+    if (!warehouseId && serviceParam !== 'extensiv') return
+    handleSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, clientId, warehouseId, shipFromName, serviceParam, extCustomerId])
 
   const handleAdd = (product: any) => {
     const length = Number(product.pkg_length_in ?? 0)
@@ -205,7 +234,17 @@ function ProductSearchModal({
                   variant="secondary"
                   className="w-full sm:w-auto"
                   onClick={() => handleAdd(product)}
-                  disabled={Number(product.available ?? 0) <= 0}
+                  disabled={
+                    (() => {
+                      const isExtensiv =
+                        serviceParam === 'extensiv' ||
+                        String(product?.source ?? '').toLowerCase() ===
+                          'extensiv'
+                      return isExtensiv
+                        ? false
+                        : Number(product.available ?? 0) <= 0
+                    })()
+                  }
                 >
                   Add to package
                 </Button>
@@ -225,17 +264,23 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
   const [warehouseId, setWarehouseId] = useState<string>('')
   const [shipFromName, setShipFromName] = useState<string>('')
   const [isCalculating, setIsCalculating] = useState(false)
+  const [serviceOverride, setServiceOverride] = useState<string | null>(null)
+  const [extCustomerId, setExtCustomerId] = useState<string | null>(null)
 
   const supabase = useSupabase()
   const currentUser = useCurrentUser()
 
+  const urlService =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('service')?.toLowerCase()
+      : null
+  const effectiveService = (serviceOverride || urlService || '').toLowerCase() || null
+
   useEffect(() => {
     async function fetchClientId() {
-      if (!currentUser?.account_id) return
-
       const { data: draft, error: draftError } = await supabase
         .from('saip_quote_drafts')
-        .select('client, ship_from')
+        .select('client, ship_from, preferences')
         .eq('id', draftId)
         .single()
 
@@ -249,6 +294,20 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
       const shipName = (draft as any)?.ship_from?.name ?? ''
       setWarehouseId(String(wh || ''))
       setShipFromName(String(shipName || ''))
+
+      const prefService =
+        (draft as any)?.preferences?.external_service ||
+        (draft as any)?.preferences?.service ||
+        (draft as any)?.preferences?.source ||
+        null
+      if (prefService) setServiceOverride(String(prefService).toLowerCase())
+
+      const prefExtCustomer =
+        (draft as any)?.preferences?.extensiv_customer_id ||
+        (draft as any)?.preferences?.extCustomerId ||
+        (draft as any)?.preferences?.ext_customer_id ||
+        null
+      if (prefExtCustomer) setExtCustomerId(String(prefExtCustomer))
       console.log('[Step4] Draft context loaded', {
         draftId,
         clientId: String(draft.client),
@@ -555,7 +614,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
           variant="secondary"
           className="w-1/3"
           onClick={() => {
-            if (!warehouseId) {
+            if (!warehouseId && effectiveService !== 'extensiv') {
               alert('Please select a Ship From warehouse in Step 2 before searching products.')
               return
             }
@@ -576,6 +635,9 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
         clientId={clientId}
         warehouseId={warehouseId}
         shipFromName={shipFromName}
+        draftId={draftId}
+        service={effectiveService}
+        extCustomerId={extCustomerId}
       />
     </div>
   )

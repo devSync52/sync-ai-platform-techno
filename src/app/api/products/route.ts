@@ -1,9 +1,107 @@
 import { createClient } from "@supabase/supabase-js";
+import AES from "crypto-js/aes";
+import Utf8 from "crypto-js/enc-utf8";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
+
+const EXT_SERVICE = "extensiv";
+const ENCRYPTION_KEY =
+  process.env.NEXT_PUBLIC_CREDENTIAL_SECRET ||
+  process.env.CREDENTIAL_SECRET ||
+  "SYNC_SECRET";
+
+const decryptExtensivCredentials = (raw: unknown) => {
+  if (!raw) return null;
+  let parsed: any = raw;
+  if (typeof raw === "string") {
+    try {
+      const decrypted = AES.decrypt(raw, ENCRYPTION_KEY).toString(Utf8);
+      parsed = JSON.parse(decrypted);
+    } catch {
+      return null;
+    }
+  }
+  const client_id = String(parsed?.client_id ?? "").trim();
+  const client_secret = String(parsed?.client_secret ?? "").trim();
+  const extensiv_id = String(parsed?.extensiv_id ?? "").trim();
+  if (!client_id || !client_secret || !extensiv_id) return null;
+  return { client_id, client_secret, extensiv_id };
+};
+
+const getExtensivToken = async (creds: {
+  client_id: string;
+  client_secret: string;
+  extensiv_id: string;
+}): Promise<string> => {
+  const basicAuth = Buffer.from(
+    `${creds.client_id}:${creds.client_secret}`,
+  ).toString("base64");
+
+  const res = await fetch("https://secure-wms.com/AuthServer/api/Token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Basic ${basicAuth}`,
+    },
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      user_login: creds.extensiv_id,
+    }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.access_token) {
+    throw new Error(
+      json?.error_description ||
+        json?.message ||
+        `Extensiv token failed (${res.status})`,
+    );
+  }
+  return String(json.access_token);
+};
+
+const fetchExtensivItems = async (opts: {
+  token: string;
+  customerId: string;
+  page?: number;
+  pageSize?: number;
+}) => {
+  const { token, customerId } = opts;
+  const page = opts.page ?? 1;
+  const pageSize = opts.pageSize ?? 100;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+  const url = new URL(
+    `https://secure-wms.com/customers/${customerId}/items`,
+  );
+  url.searchParams.set("pgsiz", String(pageSize));
+  url.searchParams.set("pgnum", String(page));
+
+  const res = await fetch(url.toString(), { headers });
+  const text = await res.text();
+  let json: any = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    json = {};
+  }
+  if (!res.ok) {
+    throw new Error(
+      json?.error || json?.message || json?.Error || text || res.statusText,
+    );
+  }
+  const items = Array.isArray(json?.ResourceList)
+    ? json.ResourceList
+    : Array.isArray(json)
+      ? json
+      : [];
+  return items;
+};
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -266,6 +364,78 @@ export async function GET(req: Request) {
     };
   };
 
+  const resolveExtensivCustomerId = async (): Promise<string | null> => {
+    const { data: channel } = await supabase
+      .from("channels")
+      .select("external_id")
+      .eq("account_id", effectiveAccountId)
+      .eq("source", EXT_SERVICE)
+      .maybeSingle();
+
+    const extIdRaw = String(channel?.external_id ?? "").trim();
+    if (extIdRaw.startsWith("ext-")) return extIdRaw.slice(4);
+    if (/^\d+$/.test(extIdRaw)) return extIdRaw;
+    return null;
+  };
+
+  const fetchLiveExtensivProducts = async () => {
+    const { data: integration } = await supabase
+      .from("account_integrations")
+      .select("credentials")
+      .eq("account_id", effectiveAccountId)
+      .eq("type", EXT_SERVICE)
+      .maybeSingle();
+
+    const creds = decryptExtensivCredentials(integration?.credentials);
+    if (!creds) return [];
+
+    const customerId = await resolveExtensivCustomerId();
+    if (!customerId) return [];
+
+    const token = await getExtensivToken(creds);
+    const items = await fetchExtensivItems({
+      token,
+      customerId,
+      page: 1,
+      pageSize: 200,
+    });
+
+    return items.map((it: any) => {
+      const pkg = it?.Options?.PackageUnit?.Imperial || {};
+      const qtyAvail =
+        it?.QuantityAvailable ??
+        it?.AvailableQuantity ??
+        it?.AvailableQty ??
+        it?.Available ??
+        it?.OnHand ??
+        it?.QuantityOnHand ??
+        it?.Quantity ??
+        it?.QtyAvailable ??
+        null;
+      return normalizeExtensiv({
+        id: it?.ItemId ?? it?.ReadOnly?.ItemId ?? it?.Sku ?? "",
+        sku: it?.Sku ?? "",
+        description: it?.Description ?? null,
+        pkg_weight_lb: pkg?.Weight ?? pkg?.weight ?? null,
+        pkg_length_in: pkg?.Length ?? pkg?.length ?? null,
+        pkg_width_in: pkg?.Width ?? pkg?.width ?? null,
+        pkg_height_in: pkg?.Height ?? pkg?.height ?? null,
+        quantity_available: qtyAvail === null ? null : Number(qtyAvail) || 0,
+        available: qtyAvail === null ? null : Number(qtyAvail) || 0,
+        parent_account_id: effectiveAccountId,
+        client_account_id: effectiveAccountId,
+        source: EXT_SERVICE,
+        raw: it,
+        warehouse_name:
+          it?.facilityIdentifier?.name ??
+          it?.FacilityIdentifier?.name ??
+          it?.facilityIdentifier?.Name ??
+          it?.FacilityIdentifier?.Name ??
+          "",
+      });
+    });
+  };
+
   const products =
     sourceParam === "sellercloud"
       ? all.map(normalizeSellercloud)
@@ -297,6 +467,20 @@ export async function GET(req: Request) {
         .filter(Boolean),
     ),
   );
+
+  // Live Extensiv fallback: if requesting extensiv and no rows, fetch directly from API
+  if (sourceParam === EXT_SERVICE && products.length === 0) {
+    try {
+      const live = await fetchLiveExtensivProducts();
+      if (live.length) {
+        return new Response(JSON.stringify({ products: live, sources }), {
+          status: 200,
+        });
+      }
+    } catch (err) {
+      console.warn("[api/products] extensiv live fallback failed", err);
+    }
+  }
 
   return new Response(JSON.stringify({ products, sources }), { status: 200 });
 }
