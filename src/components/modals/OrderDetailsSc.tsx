@@ -144,23 +144,56 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
       return { metadata: null, items: [] as any[] }
     }
 
-    const billTo = raw.billTo || raw.BillTo || {}
-    const shipTo = raw.shipTo || raw.ShipTo || {}
-    const routing = raw.routingInfo || {}
-    const readOnly = raw.readOnly || {}
-    const embeddedItems = raw._embedded?.['http://api.3plcentral.com/rels/orders/item'] || []
+    // Normalize common fields across Extensiv payload shapes
+    const readOnly = raw.readOnly || raw.ReadOnly || {}
+    const routing = raw.routingInfo || raw.RoutingInfo || {}
+    const customer = raw.customerIdentifier || raw.CustomerIdentifier || readOnly?.customerIdentifier || {}
+    const facility = raw.facilityIdentifier || raw.FacilityIdentifier || readOnly?.facilityIdentifier || {}
+    const billing = raw.billTo || raw.BillTo || {}
+    const shipping = raw.shipTo || raw.ShipTo || {}
+
+    const embeddedItems =
+      raw.OrderItems ||
+      raw.orderItems ||
+      raw._embedded?.['http://api.3plcentral.com/rels/orders/item'] ||
+      raw._embedded?.items ||
+      []
 
     const mappedItems = Array.isArray(embeddedItems)
       ? embeddedItems.map((item: any, index: number) => {
-          const qty = Number(item?.qty ?? item?.readOnly?.originalPrimaryQty ?? 0)
+          const qty = Number(
+            item?.qty ??
+              item?.Qty ??
+              item?.readOnly?.originalPrimaryQty ??
+              item?.ReadOnly?.OriginalPrimaryQty ??
+              item?.Quantity ??
+              0,
+          )
           return {
-            id: item?.readOnly?.orderItemId ?? item?.itemIdentifier?.id ?? `ext-${index}`,
-            sku: item?.itemIdentifier?.sku ?? item?.itemIdentifier?.name ?? '—',
+            id:
+              item?.readOnly?.orderItemId ??
+              item?.ReadOnly?.OrderItemId ??
+              item?.itemIdentifier?.id ??
+              item?.ItemIdentifier?.Id ??
+              `ext-${index}`,
+            sku:
+              item?.itemIdentifier?.sku ??
+              item?.ItemIdentifier?.Sku ??
+              item?.itemIdentifier?.name ??
+              item?.ItemIdentifier?.Name ??
+              item?.Sku ??
+              '—',
             quantity: qty,
             unit_price: null,
             total_price: null,
             metadata: {
-              ProductName: item?.itemIdentifier?.name ?? item?.itemIdentifier?.sku ?? '—',
+              ProductName:
+                item?.itemIdentifier?.name ??
+                item?.ItemIdentifier?.Name ??
+                item?.itemIdentifier?.sku ??
+                item?.ItemIdentifier?.Sku ??
+                item?.ProductName ??
+                '—',
               Qty: qty,
             },
           }
@@ -169,29 +202,41 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
 
     const metadata = {
       BillingAddress: {
-        RecipientName: billTo?.name ?? '',
-        FirstName: billTo?.name ?? '',
+        RecipientName: billing?.name ?? billing?.Name ?? '',
+        FirstName: billing?.name ?? billing?.Name ?? '',
         LastName: '',
-        StreetLine1: billTo?.address1 ?? '',
-        City: billTo?.city ?? '',
-        StateName: billTo?.state ?? '',
-        CountryName: billTo?.country ?? '',
-        Zip: billTo?.zip ?? '',
+        StreetLine1: billing?.address1 ?? billing?.Address1 ?? '',
+        City: billing?.city ?? billing?.City ?? '',
+        StateName: billing?.state ?? billing?.State ?? '',
+        CountryName: billing?.country ?? billing?.Country ?? '',
+        Zip: billing?.zip ?? billing?.Zip ?? '',
       },
       ShippingAddress: {
-        RecipientName: shipTo?.name ?? shipTo?.companyName ?? '',
-        FirstName: shipTo?.name ?? '',
+        RecipientName:
+          shipping?.name ?? shipping?.Name ?? shipping?.companyName ?? shipping?.CompanyName ?? '',
+        FirstName: shipping?.name ?? shipping?.Name ?? '',
         LastName: '',
-        StreetLine1: shipTo?.address1 ?? '',
-        City: shipTo?.city ?? '',
-        StateName: shipTo?.state ?? '',
-        CountryName: shipTo?.country ?? '',
-        Zip: shipTo?.zip ?? '',
+        StreetLine1: shipping?.address1 ?? shipping?.Address1 ?? '',
+        City: shipping?.city ?? shipping?.City ?? '',
+        StateName: shipping?.state ?? shipping?.State ?? '',
+        CountryName: shipping?.country ?? shipping?.Country ?? '',
+        Zip: shipping?.zip ?? shipping?.Zip ?? '',
       },
-      ShippingCarrier: routing?.carrier ?? '',
-      ShippingService: routing?.mode ?? '',
-      TrackingNumber: rawOrder?.tracking_number ?? readOnly?.trackingNumber ?? raw?.trackingNumber ?? '',
-      ShipDate: readOnly?.processDate ?? rawOrder?.process_date ?? rawOrder?.order_date ?? '',
+      ShippingCarrier: routing?.carrier ?? routing?.Carrier ?? '',
+      ShippingService: routing?.mode ?? routing?.Mode ?? '',
+      TrackingNumber:
+        rawOrder?.tracking_number ??
+        readOnly?.trackingNumber ??
+        routing?.trackingNumber ??
+        routing?.TrackingNumber ??
+        raw?.trackingNumber ?? '',
+      ShipDate:
+        readOnly?.processDate ??
+        readOnly?.ProcessDate ??
+        rawOrder?.process_date ??
+        rawOrder?.order_date ?? '',
+      CustomerName: customer?.Name || customer?.name || '',
+      FacilityName: facility?.Name || facility?.name || '',
       Items: mappedItems,
     }
 
@@ -274,13 +319,72 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
         })()
 
         if (extensivId !== null) {
-          const result = await supabase
-            .from('extensiv_orders')
-            .select('*')
-            .eq('id', extensivId)
-            .maybeSingle()
-          full = result.data
-          fullErr = result.error
+          // Live pull from Extensiv for full detail and items
+          try {
+            const detailRes = await fetch(`/api/orders/extensiv/detail?id=${extensivId}`, {
+              credentials: 'include',
+            })
+            const detailJson = await detailRes.json().catch(() => ({}))
+            if (detailRes.ok && detailJson?.success) {
+              full = {
+                id: extensivId,
+                raw_data: detailJson.order,
+                process_date:
+                  detailJson.order?.ReadOnly?.ProcessDate ??
+                  detailJson.order?.readOnly?.processDate ??
+                  null,
+                tracking_number:
+                  detailJson.order?.RoutingInfo?.TrackingNumber ??
+                  detailJson.order?.routingInfo?.trackingNumber ??
+                  null,
+              }
+
+              const mappedItems = Array.isArray(detailJson.items)
+                ? detailJson.items.map((it: any, idx: number) => {
+                    const qty =
+                      Number(it?.Quantity ?? it?.Qty ?? it?.readOnly?.originalPrimaryQty ?? 0)
+                    const sku =
+                      it?.ItemIdentifier?.Sku ??
+                      it?.ItemIdentifier?.Name ??
+                      it?.itemIdentifier?.sku ??
+                      it?.itemIdentifier?.name ??
+                      it?.Sku ??
+                      `ext-item-${idx}`
+                    return {
+                      id:
+                        it?.ReadOnly?.OrderItemId ??
+                        it?.readOnly?.orderItemId ??
+                        it?.ItemIdentifier?.Id ??
+                        it?.itemIdentifier?.id ??
+                        `ext-item-${idx}`,
+                      sku,
+                      quantity: qty,
+                      unit_price: null,
+                      total_price: null,
+                      metadata: it,
+                    }
+                  })
+                : []
+
+              if (mappedItems.length) {
+                itemsData = mappedItems
+                setItems(mappedItems)
+              }
+            }
+          } catch (err) {
+            console.error('❌ Extensiv live detail fetch failed:', err)
+          }
+
+          // Fallback to cached DB row if live pull failed
+          if (!full) {
+            const result = await supabase
+              .from('extensiv_orders')
+              .select('*')
+              .eq('id', extensivId)
+              .maybeSingle()
+            full = result.data
+            fullErr = result.error
+          }
         }
       } else {
         if (orderUuid) {
@@ -448,7 +552,7 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
             <div className="flex items-center gap-1 text-xs uppercase opacity-80">
               <FileText className="w-3 h-3" /> Marketplace ID
             </div>
-            <span className="text-lg font-semibold">${order?.order_source_order_id || '—'}</span>
+            <span className="text-lg font-semibold">{order?.order_source_order_id || '—'}</span>
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-1 text-xs uppercase opacity-80">

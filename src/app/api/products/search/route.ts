@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/types/supabase";
+import AES from "crypto-js/aes";
+import Utf8 from "crypto-js/enc-utf8";
 
 function getAccountContextFromUser(user: any): {
   accountId: string | null;
@@ -29,6 +31,209 @@ function toNum(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+const CREDENTIAL_SECRET =
+  process.env.NEXT_PUBLIC_CREDENTIAL_SECRET ||
+  process.env.CREDENTIAL_SECRET ||
+  "SYNC_SECRET";
+
+const EXT_SERVICE = "extensiv";
+
+function decryptExtensivCredentials(
+  raw: any,
+): { client_id: string; client_secret: string; extensiv_id: string } | null {
+  if (!raw) return null;
+  let parsed: any = raw;
+  if (typeof raw === "string") {
+    try {
+      const decrypted = AES.decrypt(raw, CREDENTIAL_SECRET).toString(Utf8);
+      parsed = JSON.parse(decrypted || "{}");
+    } catch {
+      return null;
+    }
+  }
+  const client_id = String(parsed?.client_id ?? "").trim();
+  const client_secret = String(parsed?.client_secret ?? "").trim();
+  const extensiv_id = String(parsed?.extensiv_id ?? "").trim();
+  if (!client_id || !client_secret || !extensiv_id) return null;
+  return { client_id, client_secret, extensiv_id };
+}
+
+async function getExtensivToken(creds: {
+  client_id: string;
+  client_secret: string;
+  extensiv_id: string;
+}) {
+  const basic = Buffer.from(
+    `${creds.client_id}:${creds.client_secret}`,
+  ).toString("base64");
+  const formBody = new URLSearchParams({
+    grant_type: "client_credentials",
+    user_login: creds.extensiv_id,
+  });
+
+  const res = await fetch("https://secure-wms.com/AuthServer/api/Token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${basic}`,
+    },
+    body: formBody.toString(),
+  });
+
+  const txt = await res.text();
+  let json: any = null;
+  try {
+    json = txt ? JSON.parse(txt) : null;
+  } catch {
+    json = null;
+  }
+
+  if (res.ok && (json?.access_token || json?.token)) {
+    return json.access_token || json.token;
+  }
+
+  throw new Error(
+    json?.error_description || json?.error || txt || "Extensiv token failed",
+  );
+}
+
+async function fetchExtensivItems(params: {
+  token: string;
+  customerId: string;
+  page: number;
+  pageSize: number;
+  term: string;
+}) {
+  const { token, customerId, page, pageSize, term } = params;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+
+  // Extensiv supports pagination via pgsiz / pgnum.
+  console.log("customerIs", customerId);
+
+  const url = new URL(`https://secure-wms.com/customers/${customerId}/items`);
+  // const url = new URL(`https://secure-wms.com/customers/2/items`);
+  url.searchParams.set("pgsiz", String(pageSize));
+  url.searchParams.set("pgnum", String(page));
+
+  const res = await fetch(url.toString(), { headers });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      json?.error || json?.message || json?.Error || text || res.statusText,
+    );
+  }
+
+  let items: any[] = Array.isArray(json?.ResourceList)
+    ? json.ResourceList
+    : Array.isArray(json)
+      ? json
+      : [];
+  // console.log("fetched items", items, items.length);
+
+  // Always filter out deactivated records at the API layer (extensiv does not support deactivated query param)
+  // items = items.filter((it) => {
+  //   const isDeactivated =
+  //     it?.Deactivated === true ||
+  //     it?.ReadOnly?.Deactivated === true ||
+  //     String(it?.ReadOnly?.ItemStatus || "").toLowerCase() === "deactivated";
+  //   return !isDeactivated;
+  // });
+
+  // Client-side term filtering (Extensiv API search filter not documented here)
+  const q = term.trim().toLowerCase();
+  if (q) {
+    items = items.filter((it) => {
+      const sku = String(it?.Sku || "").toLowerCase();
+      const desc = String(it?.Description || "").toLowerCase();
+      return sku.includes(q) || desc.includes(q);
+    });
+  }
+
+  // Since Extensiv does not support deactivated query filtering, we enforce it in-memory.
+  // `total` must reflect the active set shown on UI, not raw extension count.
+  const total = items.length;
+
+  return { items, total };
+}
+
+async function fetchExtensivCustomersList(token: string) {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+  const res = await fetch("https://secure-wms.com/customers", { headers });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  if (!res.ok) {
+    throw new Error(
+      json?.error || json?.message || json?.Error || text || res.statusText,
+    );
+  }
+  const list = Array.isArray(json?.ResourceList)
+    ? json.ResourceList
+    : Array.isArray(json)
+      ? json
+      : [];
+  return list;
+}
+
+async function resolveExtensivCustomerId(opts: {
+  clientIdParam: string;
+  callerAccountId: string;
+  supabase: any;
+}): Promise<string | null> {
+  const { clientIdParam, callerAccountId, supabase } = opts;
+
+  // ext-123 or numeric
+  if (clientIdParam.startsWith("ext-")) {
+    return clientIdParam.slice(4);
+  }
+  if (/^\d+$/.test(clientIdParam)) {
+    return clientIdParam;
+  }
+
+  // Try channels.external_id (Extensiv)
+  const { data: ch } = await supabase
+    .from("channels")
+    .select("external_id")
+    .eq("account_id", callerAccountId)
+    .eq("source", EXT_SERVICE)
+    .or(`id.eq.${clientIdParam},external_id.eq.${clientIdParam}`)
+    .maybeSingle();
+
+  const extId = String(ch?.external_id ?? "").trim();
+  if (extId && /^\d+$/.test(extId)) return extId;
+
+  // Fallback: first Extensiv channel for this account
+  const { data: chAny } = await supabase
+    .from("channels")
+    .select("external_id")
+    .eq("account_id", callerAccountId)
+    .eq("source", EXT_SERVICE)
+    .limit(1);
+
+  const fallback = String(chAny?.[0]?.external_id ?? "").trim();
+  if (fallback && /^\d+$/.test(fallback)) return fallback;
+
+  return null;
 }
 
 async function canAccessClientAccount(
@@ -118,23 +323,189 @@ export async function GET(req: Request) {
         (meRow as any)?.role ?? getAccountContextFromUser(user).role ?? "",
       ).trim() || null;
 
+    // Define allowed account IDs for draft access
+    const allowedAccountIds = [callerAccountId];
+    if (meRow.account_id !== callerAccountId) {
+      allowedAccountIds.push(String(meRow.account_id));
+    }
+
     const url = new URL(req.url);
     const clientIdParam = String(url.searchParams.get("clientId") ?? "").trim();
-    const warehousePublicId = String(
+    const warehousePublicIdRaw = String(
       url.searchParams.get("warehouseId") ?? "",
     ).trim();
+    const warehousePublicId = warehousePublicIdRaw;
     const shipFromName = String(
       url.searchParams.get("shipFromName") ?? "",
     ).trim();
     const term = String(url.searchParams.get("term") ?? "").trim();
+    const draftId = String(url.searchParams.get("draftId") ?? "").trim();
+    const serviceParam = url.searchParams.get("service")?.toLowerCase().trim();
     const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
     const pageSizeRaw = Math.max(
       1,
       Number(url.searchParams.get("pageSize") ?? 10) || 10,
     );
+
+    // Use warehouseId as Extensiv customer selector when clientId is app UUID
+    let extensivClientIdParam = clientIdParam;
+    if (!extensivClientIdParam && warehousePublicIdRaw.startsWith("ext-")) {
+      extensivClientIdParam = warehousePublicIdRaw;
+    }
+
+    // If draftId is provided, fetch draft and extract client extensiv_customer_id
+    if (draftId) {
+      const { data: draft, error: draftError } = await supabase
+        .from("saip_quote_drafts")
+        .select("*")
+        .eq("id", draftId)
+        // .in("account_id", allowedAccountIds)
+        .maybeSingle();
+      console.log("draft", draft);
+
+      if (draftError) {
+        console.error("[products/search] Draft fetch error:", draftError);
+      } else if (draft?.preferences) {
+        const clientData = draft.preferences as any;
+        if (clientData?.extensiv_customer_id) {
+          extensivClientIdParam = String(clientData.extensiv_customer_id);
+          console.log(
+            "[products/search] Using extensiv_customer_id from draft:",
+            extensivClientIdParam,
+          );
+        }
+      }
+    }
+
     const pageSize = Math.min(pageSizeRaw, 50);
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
+
+    // Extensiv live branch: bypass UUID/warehouse lookups if service=extensiv OR warehouseId starts with ext-
+    const isExtensivService =
+      serviceParam === EXT_SERVICE || warehousePublicIdRaw.startsWith("ext-");
+
+    if (isExtensivService) {
+      if (!extensivClientIdParam) {
+        return NextResponse.json(
+          {
+            error:
+              "Extensiv customer id is required. Pass clientId=<extensiv_customer_id> or ext-<id> in the query string, or use warehouseId=ext-<id>.",
+          },
+          { status: 400 },
+        );
+      }
+
+      const { data: integration } = await (supabase as any)
+        .from("account_integrations")
+        .select("credentials")
+        .eq("account_id", callerAccountId)
+        .eq("type", "extensiv")
+        .maybeSingle();
+
+      const creds = decryptExtensivCredentials(integration?.credentials);
+      if (!creds) {
+        return NextResponse.json(
+          { error: "Extensiv credentials not configured" },
+          { status: 400 },
+        );
+      }
+
+      try {
+        const token = await getExtensivToken(creds);
+        console.log("extensivClientIdParam", extensivClientIdParam);
+
+        let maybeExtId = await resolveExtensivCustomerId({
+          clientIdParam: extensivClientIdParam,
+          callerAccountId,
+          supabase,
+        });
+
+        if (
+          (!maybeExtId || !/^\d+$/.test(maybeExtId)) &&
+          warehousePublicIdRaw.startsWith("ext-")
+        ) {
+          maybeExtId = await resolveExtensivCustomerId({
+            clientIdParam: warehousePublicIdRaw,
+            callerAccountId,
+            supabase,
+          });
+        }
+
+        if (!maybeExtId || !/^\d+$/.test(maybeExtId)) {
+          return NextResponse.json(
+            {
+              error:
+                "Unable to resolve Extensiv customer id (expected numeric). Re-select an Extensiv customer or pass ext-<id>.",
+            },
+            { status: 400 },
+          );
+        }
+        console.log("token", token);
+
+        const { items, total } = await fetchExtensivItems({
+          token,
+          customerId: maybeExtId,
+          page,
+          pageSize,
+          term,
+        });
+        console.log("389", items);
+
+        const products = items.map((it: any) => {
+          const pkg = it?.Options?.PackageUnit?.Imperial || {};
+          const qtyAvail =
+            it?.QuantityAvailable ??
+            it?.AvailableQuantity ??
+            it?.AvailableQty ??
+            it?.Available ??
+            it?.OnHand ??
+            it?.QuantityOnHand ??
+            it?.Quantity ??
+            it?.QtyAvailable ??
+            null;
+          return {
+            id: `ext-item-${
+              it?.ItemId ?? it?.ReadOnly?.ItemId ?? it?.Sku ?? Math.random()
+            }`,
+            sku: it?.Sku || "",
+            description: it?.Description || "Extensiv Item",
+            pkg_weight_lb: Number(pkg.Weight ?? pkg.weight ?? 0) || null,
+            pkg_length_in: Number(pkg.Length ?? pkg.length ?? 0) || null,
+            pkg_width_in: Number(pkg.Width ?? pkg.width ?? 0) || null,
+            pkg_height_in: Number(pkg.Height ?? pkg.height ?? 0) || null,
+            quantity_available:
+              qtyAvail === null ? null : Number(qtyAvail) || 0,
+            available: qtyAvail === null ? null : Number(qtyAvail) || 0,
+            on_hold: null,
+            warehouse_name: null,
+            parent_account_id: callerAccountId,
+            client_account_id: callerAccountId,
+            source: "extensiv",
+            raw: it,
+          };
+        });
+
+        return NextResponse.json({
+          products,
+          draftId: draftId || null,
+          pagination: {
+            page,
+            pageSize,
+            total,
+            totalPages: Math.max(
+              1,
+              Math.ceil((total || products.length || 1) / pageSize),
+            ),
+          },
+        });
+      } catch (err: any) {
+        return NextResponse.json(
+          { error: err?.message || "Extensiv items fetch failed" },
+          { status: 400 },
+        );
+      }
+    }
 
     if (!warehousePublicId) {
       return NextResponse.json(
@@ -371,7 +742,11 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: extErr.message }, { status: 500 });
       }
 
-      const products = extData ?? [];
+      const products = (extData ?? []).map((row: any) => ({
+        ...row,
+        // Allow UI to bypass inventory gating for Extensiv sources
+        source: row?.source ?? "extensiv",
+      }));
       const totalCount = extCount ?? (extData ?? []).length;
 
       return NextResponse.json({

@@ -73,6 +73,17 @@ function toNumber(val: any, fallback: number | null = null): number | null {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function toExtensivId(val: any): number | null {
+  if (val === null || val === undefined) return null;
+  const str = String(val).trim();
+  // accept forms like "ext-123" or "customer:123"
+  const match = str.match(/(\d+)/);
+  if (match) {
+    return toNumber(match[1]);
+  }
+  return toNumber(str);
+}
+
 function parseJson<T = any>(v: any): T | null {
   if (v === null || v === undefined) return null;
   if (typeof v === "object") return v as T;
@@ -154,6 +165,136 @@ async function getExtensivToken(creds: ExtensivCredentials) {
     formText ||
     "Failed to get Extensiv token";
   throw new Error(msg);
+}
+
+async function fetchExtensivItemsForSkus(opts: {
+  token: string;
+  customerId: number;
+  skus: string[];
+  maxPages?: number;
+  pageSize?: number;
+}) {
+  const { token, customerId, skus } = opts;
+  const maxPages = opts.maxPages ?? 10;
+  // Extensiv API caps pgsiz at 100; enforce to avoid QueryParameterException
+  const pageSize = Math.min(opts.pageSize ?? 100, 100);
+  const target = new Set(skus.map((s) => s.toLowerCase()));
+  const found = new Map<string, any>();
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+
+  for (let page = 1; page <= maxPages && found.size < target.size; page++) {
+    const url = new URL(`${EXTENSIV_BASE_URL}/customers/${customerId}/items`);
+    url.searchParams.set("pgsiz", String(pageSize));
+    url.searchParams.set("pgnum", String(page));
+
+    const res = await fetch(url.toString(), { headers });
+    const txt = await res.text();
+    let json: any = null;
+    try {
+      json = txt ? JSON.parse(txt) : null;
+    } catch {
+      json = null;
+    }
+    if (!res.ok) {
+      throw new Error(
+        json?.error || json?.message || json?.Error || txt || res.statusText,
+      );
+    }
+
+    const list: any[] = Array.isArray(json?.ResourceList)
+      ? json.ResourceList
+      : Array.isArray(json)
+        ? json
+        : [];
+
+    for (const it of list) {
+      const sku = String(it?.Sku || "").toLowerCase();
+      if (target.has(sku) && !found.has(sku)) {
+        found.set(sku, it);
+      }
+    }
+
+    const total = Number(json?.TotalResults ?? 0);
+    const returned = list.length;
+    if (returned < pageSize && found.size === target.size) break;
+    if (returned === 0) break;
+    if (page * pageSize >= total) break;
+  }
+
+  return found;
+}
+
+async function fetchExtensivItemsForIds(opts: {
+  token: string;
+  customerId: number;
+  ids: Array<number | string>;
+  maxPages?: number;
+  pageSize?: number;
+}) {
+  const { token, customerId } = opts;
+  const maxPages = opts.maxPages ?? 10;
+  const pageSize = Math.min(opts.pageSize ?? 100, 100);
+  const target = new Set(
+    opts.ids
+      .map((v) => Number(v))
+      .filter((n) => Number.isFinite(n))
+      .map((n) => n),
+  );
+  const found = new Map<number, any>();
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+
+  for (let page = 1; page <= maxPages && found.size < target.size; page++) {
+    const url = new URL(`${EXTENSIV_BASE_URL}/customers/${customerId}/items`);
+    url.searchParams.set("pgsiz", String(pageSize));
+    url.searchParams.set("pgnum", String(page));
+
+    const res = await fetch(url.toString(), { headers });
+    const txt = await res.text();
+    let json: any = null;
+    try {
+      json = txt ? JSON.parse(txt) : null;
+    } catch {
+      json = null;
+    }
+    if (!res.ok) {
+      throw new Error(
+        json?.error || json?.message || json?.Error || txt || res.statusText,
+      );
+    }
+
+    const list: any[] = Array.isArray(json?.ResourceList)
+      ? json.ResourceList
+      : Array.isArray(json)
+        ? json
+        : [];
+
+    for (const it of list) {
+      const id =
+        Number(it?.ItemId) ||
+        Number(it?.itemId) ||
+        Number(it?.ReadOnly?.ItemId) ||
+        null;
+      if (id && target.has(id) && !found.has(id)) {
+        found.set(id, it);
+      }
+    }
+
+    const total = Number(json?.TotalResults ?? 0);
+    const returned = list.length;
+    if (returned < pageSize && found.size === target.size) break;
+    if (returned === 0) break;
+    if (page * pageSize >= total) break;
+  }
+
+  return found;
 }
 
 export async function POST(req: NextRequest) {
@@ -253,8 +394,8 @@ export async function POST(req: NextRequest) {
 
     const headers = {
       Authorization: `Bearer ${token}`,
-      Accept: "application/hal+json",
-      "Content-Type": "application/hal+json; charset=utf-8",
+      Accept: "application/json",
+      "Content-Type": "application/json",
     };
 
     const fetchDefaultFacilityId = async (): Promise<{
@@ -341,38 +482,77 @@ export async function POST(req: NextRequest) {
     };
 
     // Resolve Extensiv customer (channel)
-    const { data: channelRows, error: channelErr } = await admin
-      .from("channels")
-      .select("id, external_id")
-      .eq("account_id", accountId)
-      .eq("source", "extensiv")
-      .order("created_at", { ascending: false })
-      .limit(1);
+    const prefs = parseJson<any>(draft.preferences) || {};
+    const clientMeta = parseJson<any>(draft.client) || {};
+    const summary = parseJson<any>(draft.summary) || {};
 
-    const channel = Array.isArray(channelRows) ? channelRows[0] : channelRows;
+    let extensivCustomerId: number | null =
+      toExtensivId((body as any)?.customerId) ||
+      toExtensivId((body as any)?.customerIdentifier?.id) ||
+      toExtensivId(prefs?.extensiv_customer_id) ||
+      toExtensivId(prefs?.customer_id) ||
+      toExtensivId(prefs?.customerId) ||
+      toExtensivId(prefs?.customerIdentifier?.id) ||
+      toExtensivId(clientMeta?.extensiv_customer_id) ||
+      toExtensivId(clientMeta?.customer_id) ||
+      toExtensivId(clientMeta?.customerId) ||
+      toExtensivId(clientMeta?.customerIdentifier?.id) ||
+      toExtensivId(clientMeta?.identifier?.id) ||
+      toExtensivId(clientMeta?.external_id) ||
+      toExtensivId(clientMeta?.extensiv_id) ||
+      toExtensivId(clientMeta?.id) ||
+      toExtensivId(summary?.customer?.extensiv_customer_id) ||
+      toExtensivId(summary?.customer?.customer_id) ||
+      toExtensivId(summary?.customer?.id) ||
+      toExtensivId(summary?.customer_id) ||
+      toExtensivId(summary?.customerId) ||
+      toExtensivId(summary?.client_id) ||
+      null;
 
-    if (channelErr || !channel?.external_id) {
-      return NextResponse.json(
-        { error: "No Extensiv channel with external_id (customer id) found" },
-        { status: 400 },
-      );
-    }
-
-    const extensivCustomerId = toNumber(channel.external_id);
     if (!extensivCustomerId) {
-      return NextResponse.json(
-        { error: "Extensiv channel external_id must be a numeric customer id" },
-        { status: 400 },
-      );
+      const { data: channelRows, error: channelErr } = await admin
+        .from("channels")
+        .select("id, external_id")
+        .eq("account_id", accountId)
+        .eq("source", "extensiv")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const channel = Array.isArray(channelRows) ? channelRows[0] : channelRows;
+
+      const chanId = toExtensivId(channel?.external_id);
+      if (channelErr || !chanId) {
+        return NextResponse.json(
+          {
+            error:
+              "No Extensiv customer id found. Provide customerId in request or configure channels.external_id for Extensiv.",
+          },
+          { status: 400 },
+        );
+      }
+
+      extensivCustomerId = chanId;
     }
 
     // Resolve facility id from ship_from.warehouse metadata (optional)
     const shipFrom = parseJson<any>(draft.ship_from) || {};
-    let facilityId: number | null = null;
-    if (shipFrom?.wms_facility_id) {
+    let facilityId: number | null =
+      toNumber((body as any)?.facilityId) ||
+      toNumber((body as any)?.facilityIdentifier?.id) ||
+      toNumber(prefs?.facility_id) ||
+      toNumber(prefs?.extensiv_facility_id) ||
+      toNumber(prefs?.wms_facility_id) ||
+      toNumber(summary?.facility_id) ||
+      toNumber(summary?.facilityIdentifier?.id) ||
+      null;
+
+    if (!facilityId && shipFrom?.facility_id) {
+      facilityId = toNumber(shipFrom.facility_id);
+    }
+    if (!facilityId && shipFrom?.wms_facility_id) {
       facilityId = toNumber(shipFrom.wms_facility_id);
     }
-    if (shipFrom?.warehouse_id) {
+    if (!facilityId && shipFrom?.warehouse_id) {
       const whId = String(shipFrom.warehouse_id);
 
       const { data: warehouse } = await admin
@@ -382,8 +562,11 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       const meta = (warehouse as any)?.metadata || {};
-      facilityId = toNumber((meta as any)?.extensiv_facility_id);
-      if (!facilityId) facilityId = toNumber((meta as any)?.wms_facility_id);
+      facilityId =
+        facilityId ||
+        toNumber((meta as any)?.extensiv_facility_id) ||
+        toNumber((meta as any)?.wms_facility_id) ||
+        null;
 
       // If warehouse row lacks metadata, try billing warehouses view/table.
       if (!facilityId) {
@@ -415,129 +598,180 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const normalizeSku = (s: string) => s.replace(/^SC[-\\s]*/i, "").trim();
-
     const normalizeQty = (value: any): number => {
       const raw = toNumber(value, 1);
       if (raw === null || !Number.isFinite(raw) || raw <= 0) return 1;
       return Math.round(raw);
     };
 
-    // Map SKUs to Extensiv items (support Sellercloud prefix "SC-")
-    const requestedSkus = items
-      .map((it) => String(it.sku || "").trim())
+    // Collect requested item ids / skus
+    const itemIdsRequested = items
+      .map(
+        (line) =>
+          (line as any)?.itemIdentifier?.id ||
+          (line as any)?.itemId ||
+          (line as any)?.item_id ||
+          null,
+      )
+      .filter((v) => v !== null && v !== undefined)
+      .map((v) => Number(v))
+      .filter((n) => Number.isFinite(n));
+
+    const skusRequested = items
+      .map((line) => String((line as any)?.sku || "").trim())
       .filter(Boolean);
-    const normalizedRequested = requestedSkus.map(normalizeSku);
-    const allQuerySkus = Array.from(
-      new Set([...requestedSkus, ...normalizedRequested]),
-    ).filter(Boolean);
 
-    const { data: products, error: prodErr } = await admin
-      .from("extensiv_products_n")
-      .select("sku, item_id, uom, extensiv_customer_id")
-      .in("sku", allQuerySkus)
-      .or(
-        `client_account_id.eq.${accountId},parent_account_id.eq.${accountId}`,
-      );
-
-    if (prodErr) {
-      return NextResponse.json(
-        { error: `Failed to load Extensiv products: ${prodErr.message}` },
-        { status: 500 },
-      );
+    // Validate item ids belong to this customer; if missing/invalid, try resolving by SKU
+    let extItemsById: Map<number, any> | null = null;
+    if (itemIdsRequested.length > 0) {
+      extItemsById = await fetchExtensivItemsForIds({
+        token,
+        customerId: extensivCustomerId,
+        ids: itemIdsRequested,
+      });
+    } else {
+      extItemsById = new Map<number, any>();
     }
 
-    const findProduct = (sku: string) => {
-      const norm = normalizeSku(sku);
-      return (
-        products?.find((p) => p.sku === sku) ||
-        products?.find((p) => normalizeSku(p.sku) === norm)
-      );
-    };
+    // Resolve by SKU for lines whose id is missing or not found
+    const needSkuResolution = items.some((line) => {
+      const id =
+        (line as any)?.itemIdentifier?.id ||
+        (line as any)?.itemId ||
+        (line as any)?.item_id ||
+        null;
+      return !id || !extItemsById?.has(Number(id));
+    });
 
-    const missingSkus = requestedSkus.filter((sku) => !findProduct(sku));
-    if (missingSkus.length) {
-      return NextResponse.json(
-        {
-          error: `Missing Extensiv product mapping for SKUs: ${missingSkus.join(", ")}`,
-        },
-        { status: 400 },
-      );
+    let extItemsBySku: Map<string, any> | null = null;
+    if (needSkuResolution && skusRequested.length > 0) {
+      extItemsBySku = await fetchExtensivItemsForSkus({
+        token,
+        customerId: extensivCustomerId,
+        skus: skusRequested,
+      });
     }
 
     const orderItems = items.map((line) => {
-      const sku = String(line.sku || "").trim();
-      const product = findProduct(sku);
-      const outgoingSku = product?.sku || sku;
       const qty = normalizeQty(line.quantity ?? line.qty ?? line.PrimaryInvQty);
+
+      // Prefer provided id; if missing/invalid, resolve via SKU for this customer.
+      let itemId =
+        (line as any)?.itemIdentifier?.id ||
+        (line as any)?.itemId ||
+        (line as any)?.item_id ||
+        null;
+
+      const numericId = itemId !== null ? Number(itemId) : null;
+      const hasValidId =
+        numericId !== null &&
+        Number.isFinite(numericId) &&
+        extItemsById?.has(numericId);
+
+      if (!hasValidId) {
+        const sku = String((line as any)?.sku || "").trim().toLowerCase();
+        const fromSku =
+          sku && extItemsBySku
+            ? extItemsBySku.get(sku) ||
+              extItemsBySku.get(sku.toLowerCase()) ||
+              null
+            : null;
+        const resolvedId =
+          Number(fromSku?.ItemId) ||
+          Number(fromSku?.itemId) ||
+          Number(fromSku?.ReadOnly?.ItemId) ||
+          null;
+        if (resolvedId && Number.isFinite(resolvedId)) {
+          itemId = resolvedId;
+        }
+      }
+
+      if (!itemId) {
+        throw new Error(
+          "Extensiv item id missing on an order line; include itemIdentifier.id (or itemId/item_id) in items array.",
+        );
+      }
+
+      if (extItemsById && extItemsById.size > 0) {
+        const numId = Number(itemId);
+        if (!extItemsById.has(numId)) {
+          throw new Error(
+            `Extensiv item id ${itemId} not found for customer ${extensivCustomerId}. Ensure the item is assigned to this customer in Extensiv.`,
+          );
+        }
+      }
+
       return {
         qty,
-        PrimaryInvQty: qty,
         itemIdentifier: {
-          id: product?.item_id ?? null,
-          customerId: product?.extensiv_customer_id ?? extensivCustomerId,
-          sku: outgoingSku,
+          id: itemId,
+          customerId: extensivCustomerId,
         },
         qualifier: "",
-        description: line.product_name || line.description || outgoingSku,
+        description:
+          line.product_name ||
+          line.description ||
+          (line as any)?.description ||
+          "",
       };
     });
 
-    const invalidPrimaryQty = orderItems.filter(
-      (it) => it.PrimaryInvQty === null || it.PrimaryInvQty === undefined,
-    );
-    if (invalidPrimaryQty.length) {
-      return NextResponse.json(
-        {
-          error:
-            "Order item PrimaryInvQty is required and must be a positive integer",
-        },
-        { status: 400 },
-      );
-    }
-
-    const missingItemIds = orderItems
-      .filter((it) => !it.itemIdentifier?.id)
-      .map((it) => it.itemIdentifier?.sku)
-      .filter(Boolean);
-
-    if (missingItemIds.length) {
-      return NextResponse.json(
-        {
-          error: `Extensiv item_id not found for SKUs: ${missingItemIds.join(", ")}`,
-        },
-        { status: 400 },
-      );
-    }
-
     const payload: any = {
-      orderNumber: draft.id,
+      customerIdentifier: { id: extensivCustomerId },
+      facilityIdentifier: { id: facilityId },
       referenceNum: draft.summary?.order_number ?? draft.id,
-      orderIdentifier: { type: "ReferenceNum", value: draft.id },
-      orderDate: new Date().toISOString(),
-      customerIdentifier: { id: 19 }, //extensivCustomerId },
+      notes: draft.summary?.notes ?? null,
+      shippingNotes: prefs?.shipping_notes ?? null,
+      billingCode: prefs?.billing_code ?? "Prepaid",
+      asnNumber: prefs?.asn_number ?? null,
+      routingInfo: {
+        isCod: Boolean(prefs?.is_cod || prefs?.cod),
+        isInsurance: Boolean(prefs?.is_insurance || prefs?.insurance),
+        requiresDeliveryConf: Boolean(
+          prefs?.requires_delivery_conf || prefs?.delivery_confirmation,
+        ),
+        requiresReturnReceipt: Boolean(
+          prefs?.requires_return_receipt || prefs?.return_receipt,
+        ),
+        carrier:
+          prefs?.carrier ||
+          prefs?.service_carrier ||
+          prefs?.carrier_code ||
+          null,
+        mode: prefs?.mode || prefs?.service_mode || null,
+        scacCode: prefs?.scac_code || null,
+        account:
+          prefs?.carrier_account ||
+          prefs?.billing_account ||
+          prefs?.account ||
+          null,
+      },
       shipTo: {
+        companyName:
+          shipTo.company ||
+          shipTo.company_name ||
+          shipTo.business_name ||
+          shipTo.name ||
+          shipTo.full_name ||
+          "",
         name: shipTo.full_name || shipTo.name || "",
-        // email: shipTo.email || null,
-        phone: shipTo.phone || null,
-        address: {
-          address1: shipTo.address_line1 || "",
-          address2: shipTo.address_line2 || null,
-          city: shipTo.city || "",
-          state: shipTo.state || "",
-          postalCode: shipTo.zip_code || shipTo.zip || "",
-          countryCode: shipTo.country || "US",
+        address1: shipTo.address_line1 || "",
+        address2: shipTo.address_line2 || null,
+        city: shipTo.city || "",
+        state: shipTo.state || "",
+        zip: shipTo.zip_code || shipTo.zip || "",
+        country: shipTo.country || "US",
+      },
+      orderItems: orderItems.map((it) => ({
+        itemIdentifier: {
+          id: it.itemIdentifier?.id,
+          customerId: extensivCustomerId,
         },
-      },
-      _embedded: {
-        "http://api.3plcentral.com/rels/orders/item": orderItems,
-      },
-      status: 1,
+        qty: it.qty,
+      })),
     };
 
-    if (facilityId) {
-      payload.facilityIdentifier = { id: facilityId };
-    } else {
+    if (!facilityId) {
       return NextResponse.json(
         {
           error:
@@ -547,7 +781,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    console.log("payload", payload);
+    console.log("payload", JSON.stringify(payload), payload);
 
     const res = await fetch(`${EXTENSIV_BASE_URL}/orders`, {
       method: "POST",

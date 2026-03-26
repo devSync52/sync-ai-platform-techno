@@ -43,6 +43,23 @@ export function Step1ClientSelection({
   const [isLoadingDraft, setIsLoadingDraft] = useState(true)
   const [serviceFilter, setServiceFilter] = useState<string | null>(null)
 
+  const currentService = () => {
+    if (serviceFilter) return serviceFilter
+    if (typeof window !== 'undefined') {
+      const svc = new URLSearchParams(window.location.search).get('service')
+      if (svc) return svc.toLowerCase()
+    }
+    return null
+  }
+
+  const getClientChangeValue = (client: ClientOption | undefined | null) => {
+    if (!client) return null
+    if ((currentService() || '').toLowerCase() === 'extensiv') {
+      if (client.external_id) return `ext-${client.external_id}`
+    }
+    return client.account_id
+  }
+
   useEffect(() => {
     const filtered = applyFilterAndSort(allClients, serviceFilter)
     setClients(filtered)
@@ -76,7 +93,11 @@ export function Step1ClientSelection({
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const customersRes = await fetch('/api/customers', { credentials: 'include' })
+        const params = new URLSearchParams(window.location.search)
+        const svcParam = params.get('service')
+        const url = svcParam ? `/api/customers?service=${encodeURIComponent(svcParam)}` : '/api/customers'
+
+        const customersRes = await fetch(url, { credentials: 'include' })
         const customersJson = await customersRes.json()
 
         if (customersRes.ok) {
@@ -88,7 +109,7 @@ export function Step1ClientSelection({
               name: String(row?.name || 'Unnamed'),
               email: row?.email ?? null,
               source: row?.source ?? row?.origin ?? null,
-              external_id: row?.wms_user_identifier ?? null,
+              external_id: row?.external_id ?? row?.wms_user_identifier ?? null,
             }))
             .filter((row: ClientOption) => row.id.length > 0 && row.account_id.length > 0)
             .sort((a, b) => {
@@ -202,7 +223,7 @@ export function Step1ClientSelection({
       const byUser = clients.find((c) => c.id === draftClientUserId)
       if (byUser) {
         setSelectedClientId(byUser.id)
-        if (onClientChange) onClientChange(byUser.account_id)
+        if (onClientChange) onClientChange(getClientChangeValue(byUser))
         return
       }
     }
@@ -214,7 +235,7 @@ export function Step1ClientSelection({
       )
       if (byEmail) {
         setSelectedClientId(byEmail.id)
-        if (onClientChange) onClientChange(byEmail.account_id)
+        if (onClientChange) onClientChange(getClientChangeValue(byEmail))
         return
       }
     }
@@ -226,7 +247,7 @@ export function Step1ClientSelection({
       )
       if (byName) {
         setSelectedClientId(byName.id)
-        if (onClientChange) onClientChange(byName.account_id)
+        if (onClientChange) onClientChange(getClientChangeValue(byName))
         return
       }
     }
@@ -239,14 +260,14 @@ export function Step1ClientSelection({
     if (!match) return
 
     setSelectedClientId(match.id)
-    if (onClientChange) onClientChange(match.account_id)
+    if (onClientChange) onClientChange(getClientChangeValue(match))
   }, [isLoadingDraft, selectedClientId, draftClientAccountId, clients, onClientChange])
 
   useEffect(() => {
     if (!isLoadingDraft && !selectedClientId && clients.length === 1) {
       const onlyClient = clients[0]
       setSelectedClientId(onlyClient.id)
-      if (onClientChange) onClientChange(onlyClient.id)
+      if (onClientChange) onClientChange(getClientChangeValue(onlyClient))
     }
   }, [isLoadingDraft, selectedClientId, clients, onClientChange])
 
@@ -264,7 +285,7 @@ export function Step1ClientSelection({
               setSelectedClientId(clientId)
               const selected = clients.find((c) => c.id === clientId)
               if (selected && onClientChange) {
-                onClientChange(selected.account_id)
+                onClientChange(getClientChangeValue(selected))
               }
             }}
           >
@@ -295,9 +316,11 @@ export function Step1ClientSelection({
 
               const selected = clients.find((c) => c.id === selectedClientId)
               const clientAccountId = selected?.account_id || selectedClientId
+              const service = (currentService() || '').toLowerCase()
 
               // Try to prefill contact data for Step 3 with the customer's name/email.
               let nextShipTo: any = null
+              let draftPrefs: any = {}
               try {
                 const draftRes = await fetch(`/api/quotes/drafts/${draftId}`, {
                   credentials: 'include',
@@ -315,6 +338,18 @@ export function Step1ClientSelection({
                       })()
                     : rawShipTo || {}
 
+                const rawPrefs = draftJson?.draft?.preferences
+                draftPrefs =
+                  rawPrefs && typeof rawPrefs === 'string'
+                    ? (() => {
+                        try {
+                          return JSON.parse(rawPrefs)
+                        } catch {
+                          return {}
+                        }
+                      })()
+                    : rawPrefs || {}
+
                 nextShipTo = {
                   ...shipToObj,
                   full_name: shipToObj?.full_name || selected?.name || '',
@@ -324,15 +359,24 @@ export function Step1ClientSelection({
                 console.warn('⚠️ Could not prefill ship_to from draft:', err)
               }
 
+              const patchPayload: any = {
+                client: clientAccountId,
+                client_user_id: selected?.id ?? selectedClientId,
+                ...(nextShipTo ? { ship_to: nextShipTo } : {}),
+              }
+
+              if (service === 'extensiv' && selected?.external_id) {
+                patchPayload.preferences = {
+                  ...draftPrefs,
+                  extensiv_customer_id: selected.external_id,
+                }
+              }
+
               const res = await fetch(`/api/quotes/drafts/${draftId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({
-                  client: clientAccountId,
-                  client_user_id: selected?.id ?? selectedClientId,
-                  ...(nextShipTo ? { ship_to: nextShipTo } : {}),
-                }),
+                body: JSON.stringify(patchPayload),
               })
 
               const json = await res.json()
@@ -344,7 +388,7 @@ export function Step1ClientSelection({
               }
 
               toast.success('Customer selected successfully')
-              if (onClientChange) onClientChange(clientAccountId)
+              if (onClientChange) onClientChange(getClientChangeValue(selected))
               if (onClientSaved) onClientSaved(clientAccountId, selected?.id ?? selectedClientId)
               onNext()
             }}

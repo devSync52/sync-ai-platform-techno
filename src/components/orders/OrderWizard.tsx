@@ -745,7 +745,10 @@ export default function OrderWizard() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ draftId: quoteData.id }),
+          body: JSON.stringify({
+            draftId: quoteData.id,
+            customerId: clientId, // send selected client explicitly for Extensiv
+          }),
         })
 
         const createOrderJson = await createOrderRes.json().catch(() => ({}))

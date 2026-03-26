@@ -57,6 +57,7 @@ function ProductSearchModal({
   clientId,
   warehouseId,
   shipFromName,
+  draftId,
 }: {
   show: boolean
   onClose: () => void
@@ -64,11 +65,16 @@ function ProductSearchModal({
   clientId: string
   warehouseId?: string
   shipFromName?: string
+  draftId?: string
 }) {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const serviceParam =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('service')?.toLowerCase()
+      : null
 
   const handleSearch = async () => {
     if (!clientId || !warehouseId) return
@@ -87,8 +93,13 @@ function ProductSearchModal({
         clientId,
         warehouseId: warehouseId || '',
         shipFromName: shipFromName || '',
+        draftId: draftId || '',
         term: searchTerm || '',
       })
+
+      if (serviceParam) {
+        params.set('service', serviceParam)
+      }
   
       const res = await fetch(`/api/products/search?${params.toString()}`, {
         credentials: 'include',
@@ -205,7 +216,17 @@ function ProductSearchModal({
                   variant="secondary"
                   className="w-full sm:w-auto"
                   onClick={() => handleAdd(product)}
-                  disabled={Number(product.available ?? 0) <= 0}
+                  disabled={
+                    (() => {
+                      const isExtensiv =
+                        serviceParam === 'extensiv' ||
+                        String(product?.source ?? '').toLowerCase() ===
+                          'extensiv'
+                      return isExtensiv
+                        ? false
+                        : Number(product.available ?? 0) <= 0
+                    })()
+                  }
                 >
                   Add to package
                 </Button>
@@ -576,6 +597,7 @@ export default function Step4PackageDetails({ draftId, initialItems, onNext, onB
         clientId={clientId}
         warehouseId={warehouseId}
         shipFromName={shipFromName}
+        draftId={draftId}
       />
     </div>
   )

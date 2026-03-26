@@ -293,6 +293,76 @@ async function getExtensivToken(creds: {
   throw new Error(msg);
 }
 
+async function fetchExtensivCustomers(args: { accountId: string }): Promise<
+  | {
+      ok: true;
+      rows: any[];
+    }
+  | { ok: false; error: string }
+> {
+  const { accountId } = args;
+
+  try {
+    const { data: integration, error } = await supabaseAdmin
+      .from("account_integrations")
+      .select("credentials")
+      .eq("account_id", accountId)
+      .eq("type", "extensiv")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[customers][extensiv] integration fetch error", error);
+      return { ok: false, error: error.message };
+    }
+
+    const creds = decryptExtensivCredentials(integration?.credentials);
+    if (!creds) {
+      return {
+        ok: false,
+        error: "Extensiv credentials not configured for this account",
+      };
+    }
+
+    const token = await getExtensivToken(creds);
+    console.log("token", token);
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    } as const;
+
+    const res = await fetch(`${EXTENSIV_BASE_URL}/customers`, { headers });
+    const text = await res.text();
+
+    let json: any = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch (err) {
+      console.error("[customers][extensiv] parse error", err, text);
+      return { ok: false, error: "Failed to parse Extensiv response" };
+    }
+
+    if (!res.ok) {
+      const message =
+        json?.error || json?.message || json?.Error || json || res.statusText;
+      return {
+        ok: false,
+        error: `Extensiv fetch failed: ${String(message || res.status)}`,
+      };
+    }
+
+    const list = Array.isArray(json?.ResourceList)
+      ? json.ResourceList
+      : Array.isArray(json)
+        ? json
+        : [];
+
+    return { ok: true, rows: list };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Unknown Extensiv error" };
+  }
+}
+
 async function resolveCallerContext() {
   const supabase = await createServerSupabaseClient();
   const {
@@ -340,13 +410,54 @@ async function resolveCallerContext() {
   return { userId: user.id, accountId };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const context = await resolveCallerContext();
   if ("error" in context) {
     return NextResponse.json(
       { error: context.error },
       { status: context.status },
     );
+  }
+
+  const service = req.nextUrl.searchParams.get("service")?.toLowerCase();
+
+  // Special branch: when order creation is for Extensiv, pull live customers directly
+  if (service === "extensiv") {
+    const res = await fetchExtensivCustomers({ accountId: context.accountId });
+    if (!res.ok) {
+      return NextResponse.json({ error: res.error }, { status: 400 });
+    }
+
+    const customers = res.rows.map((row: any) => {
+      const readOnly = row?.ReadOnly || {};
+      const company = row?.CompanyInfo || {};
+      const primary = row?.PrimaryContact || {};
+      const name =
+        String(company.CompanyName || primary.Name || "Extensiv Customer").trim();
+      const email = String(primary.EmailAddress || "").trim();
+      const custId = String(readOnly.CustomerId || row?.CustomerId || "").trim();
+      const createdAt = readOnly.CreationDate || row?.CreationDate || null;
+      const deactivated = Boolean(readOnly.Deactivated || false);
+
+      return {
+        id: `ext-${custId || name}`,
+        account_id: context.accountId,
+        name,
+        email: email || "-",
+        role: "client",
+        created_at: createdAt,
+        last_login_at: null,
+        has_logged_in: null,
+        auth_type: "wms_extensiv" as AuthType,
+        wms_user_identifier: custId || null,
+        external_id: custId || null,
+        status: deactivated ? "disabled" : "active",
+        source: "extensiv" as SourceType,
+        origin: "extensiv",
+      };
+    });
+
+    return NextResponse.json({ customers });
   }
 
   const { data: customers, error } = await supabaseAdmin
@@ -438,6 +549,51 @@ export async function GET() {
 
   const seenKeys = new Set<string>();
   const discoveredRows: any[] = [];
+
+  // Pull live customers directly from Extensiv using the same account credentials
+  const extensivResult = await fetchExtensivCustomers({
+    accountId: context.accountId,
+  });
+
+  if (extensivResult.ok) {
+    for (const row of extensivResult.rows) {
+      const wmsId = String(
+        row?.ReadOnly?.CustomerId || row?.CustomerId || "",
+      ).trim();
+      const companyInfo = row?.CompanyInfo || {};
+      const primaryContact = row?.PrimaryContact || {};
+      const name =
+        String(companyInfo.CompanyName || primaryContact.Name || "").trim() ||
+        "Extensiv Customer";
+      const email = String(primaryContact.EmailAddress || "").trim();
+      const dedupeKey = wmsId || email || name;
+      if (!dedupeKey || seenKeys.has(dedupeKey)) continue;
+      seenKeys.add(dedupeKey);
+      if (email) existingEmails.add(email.toLowerCase());
+
+      discoveredRows.push({
+        id: `ext-${wmsId || name}`,
+        name,
+        email: email || "-",
+        role: "client",
+        created_at:
+          row?.ReadOnly?.CreationDate ||
+          row?.creationDate ||
+          row?.CreationDate ||
+          null,
+        last_login_at: null,
+        has_logged_in: null,
+        account_id: context.accountId,
+        auth_type: "wms_extensiv",
+        wms_user_identifier: wmsId || null,
+        status: row?.ReadOnly?.Deactivated ? "disabled" : "active",
+        source: "extensiv",
+        origin: "extensiv",
+      });
+    }
+  } else {
+    console.warn("[customers][extensiv]", extensivResult.error);
+  }
 
   // Also surface customers that were synced into the `channels` table (e.g.,
   // Sellercloud/Extensiv) even if login users have not been provisioned yet.
