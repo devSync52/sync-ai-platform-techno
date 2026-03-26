@@ -397,7 +397,7 @@ export async function POST(req: NextRequest) {
       Accept: "application/json",
       "Content-Type": "application/json",
     };
-
+    //test
     const fetchDefaultFacilityId = async (): Promise<{
       id: number | null;
       debug?: any;
