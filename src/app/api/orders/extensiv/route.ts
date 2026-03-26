@@ -485,28 +485,29 @@ export async function POST(req: NextRequest) {
     const prefs = parseJson<any>(draft.preferences) || {};
     const clientMeta = parseJson<any>(draft.client) || {};
     const summary = parseJson<any>(draft.summary) || {};
+    console.log("draft", draft);
 
     let extensivCustomerId: number | null =
-      toExtensivId((body as any)?.customerId) ||
-      toExtensivId((body as any)?.customerIdentifier?.id) ||
+      // toExtensivId((body as any)?.customerId) ||
+      // toExtensivId((body as any)?.customerIdentifier?.id) ||
       toExtensivId(prefs?.extensiv_customer_id) ||
-      toExtensivId(prefs?.customer_id) ||
-      toExtensivId(prefs?.customerId) ||
-      toExtensivId(prefs?.customerIdentifier?.id) ||
-      toExtensivId(clientMeta?.extensiv_customer_id) ||
-      toExtensivId(clientMeta?.customer_id) ||
-      toExtensivId(clientMeta?.customerId) ||
-      toExtensivId(clientMeta?.customerIdentifier?.id) ||
-      toExtensivId(clientMeta?.identifier?.id) ||
-      toExtensivId(clientMeta?.external_id) ||
-      toExtensivId(clientMeta?.extensiv_id) ||
-      toExtensivId(clientMeta?.id) ||
-      toExtensivId(summary?.customer?.extensiv_customer_id) ||
-      toExtensivId(summary?.customer?.customer_id) ||
-      toExtensivId(summary?.customer?.id) ||
-      toExtensivId(summary?.customer_id) ||
-      toExtensivId(summary?.customerId) ||
-      toExtensivId(summary?.client_id) ||
+      // toExtensivId(prefs?.customer_id) ||
+      // toExtensivId(prefs?.customerId) ||
+      // toExtensivId(prefs?.customerIdentifier?.id) ||
+      // toExtensivId(clientMeta?.extensiv_customer_id) ||
+      // toExtensivId(clientMeta?.customer_id) ||
+      // toExtensivId(clientMeta?.customerId) ||
+      // toExtensivId(clientMeta?.customerIdentifier?.id) ||
+      // toExtensivId(clientMeta?.identifier?.id) ||
+      // toExtensivId(clientMeta?.external_id) ||
+      // toExtensivId(clientMeta?.extensiv_id) ||
+      // toExtensivId(clientMeta?.id) ||
+      // toExtensivId(summary?.customer?.extensiv_customer_id) ||
+      // toExtensivId(summary?.customer?.customer_id) ||
+      // toExtensivId(summary?.customer?.id) ||
+      // toExtensivId(summary?.customer_id) ||
+      // toExtensivId(summary?.customerId) ||
+      // toExtensivId(summary?.client_id) ||
       null;
 
     if (!extensivCustomerId) {
@@ -669,7 +670,9 @@ export async function POST(req: NextRequest) {
         extItemsById?.has(numericId);
 
       if (!hasValidId) {
-        const sku = String((line as any)?.sku || "").trim().toLowerCase();
+        const sku = String((line as any)?.sku || "")
+          .trim()
+          .toLowerCase();
         const fromSku =
           sku && extItemsBySku
             ? extItemsBySku.get(sku) ||
