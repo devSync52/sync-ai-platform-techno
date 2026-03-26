@@ -11,11 +11,7 @@ interface Props {
   onImported?: () => void
 }
 
-export function SyncOrdersButton({
-  accountId,
-  companyName = '',
-  onImported,
-}: {
+export function SyncOrdersButton({ accountId, companyName = '', onImported, }: {
   accountId: string
   companyName?: string
   onImported?: () => void
