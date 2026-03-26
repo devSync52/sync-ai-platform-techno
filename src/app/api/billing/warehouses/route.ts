@@ -415,6 +415,10 @@ async function resolveAccountContext(request: Request): Promise<UserContext> {
 }
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const sourceFilter =
+    searchParams.get("source")?.trim().toLowerCase() || null;
+
   const context = await resolveAccountContext(request);
   if (!context.ok) {
     return NextResponse.json(
@@ -438,9 +442,17 @@ export async function GET(request: Request) {
   }
 
   let shaped = (data ?? []).map(shapeWarehouse);
+  let filtered = sourceFilter
+    ? shaped.filter(
+        (w) => String(w.source || "").toLowerCase() === sourceFilter,
+      )
+    : shaped;
 
   // Fallback: if no warehouses are stored, fetch live from Extensiv API
-  if (!shaped.length) {
+  const shouldFetchExtensiv =
+    sourceFilter === "extensiv" ? filtered.length === 0 : shaped.length === 0;
+
+  if (shouldFetchExtensiv) {
     const { data: integration } = await sr
       .from("account_integrations")
       .select("credentials")
@@ -479,7 +491,16 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ data: shaped });
+  // Re-apply source filter after possible fallback enrichment
+  if (sourceFilter) {
+    filtered = (shaped || []).filter(
+      (w) => String(w.source || "").toLowerCase() === sourceFilter,
+    );
+  } else {
+    filtered = shaped;
+  }
+
+  return NextResponse.json({ data: filtered });
 }
 
 export async function POST(request: Request) {

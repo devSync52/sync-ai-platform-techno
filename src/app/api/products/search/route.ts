@@ -331,6 +331,9 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url);
     const clientIdParam = String(url.searchParams.get("clientId") ?? "").trim();
+    const extCustomerIdParam = String(
+      url.searchParams.get("extCustomerId") ?? url.searchParams.get("customerId") ?? "",
+    ).trim();
     const warehousePublicIdRaw = String(
       url.searchParams.get("warehouseId") ?? "",
     ).trim();
@@ -351,6 +354,9 @@ export async function GET(req: Request) {
     let extensivClientIdParam = clientIdParam;
     if (!extensivClientIdParam && warehousePublicIdRaw.startsWith("ext-")) {
       extensivClientIdParam = warehousePublicIdRaw;
+    }
+    if (extCustomerIdParam) {
+      extensivClientIdParam = extCustomerIdParam;
     }
 
     // If draftId is provided, fetch draft and extract client extensiv_customer_id
@@ -386,15 +392,7 @@ export async function GET(req: Request) {
       serviceParam === EXT_SERVICE || warehousePublicIdRaw.startsWith("ext-");
 
     if (isExtensivService) {
-      if (!extensivClientIdParam) {
-        return NextResponse.json(
-          {
-            error:
-              "Extensiv customer id is required. Pass clientId=<extensiv_customer_id> or ext-<id> in the query string, or use warehouseId=ext-<id>.",
-          },
-          { status: 400 },
-        );
-      }
+      // We'll try multiple strategies to obtain an Extensiv customer id.
 
       const { data: integration } = await (supabase as any)
         .from("account_integrations")
@@ -415,11 +413,22 @@ export async function GET(req: Request) {
         const token = await getExtensivToken(creds);
         console.log("extensivClientIdParam", extensivClientIdParam);
 
-        let maybeExtId = await resolveExtensivCustomerId({
-          clientIdParam: extensivClientIdParam,
-          callerAccountId,
-          supabase,
-        });
+        // 1) explicit param (already set)
+        let maybeExtId: string | null = null;
+        if (extensivClientIdParam) {
+          maybeExtId = extensivClientIdParam.startsWith("ext-")
+            ? extensivClientIdParam.slice(4)
+            : extensivClientIdParam;
+        }
+
+        // 2) channel lookup
+        if (!maybeExtId || !/^\d+$/.test(maybeExtId)) {
+          maybeExtId = await resolveExtensivCustomerId({
+            clientIdParam: extensivClientIdParam || clientIdParam,
+            callerAccountId,
+            supabase,
+          });
+        }
 
         if (
           (!maybeExtId || !/^\d+$/.test(maybeExtId)) &&
@@ -430,6 +439,32 @@ export async function GET(req: Request) {
             callerAccountId,
             supabase,
           });
+        }
+
+        // 3) Last resort: fetch customer list and pick first active
+        if (!maybeExtId || !/^\d+$/.test(maybeExtId)) {
+          try {
+            const customerList = await fetchExtensivCustomersList(token);
+            const first = customerList.find(
+              (c: any) =>
+                /^\d+$/.test(String(c?.CustomerId ?? c?.customerId ?? "")) &&
+                c?.Deactivated !== true,
+            );
+            if (first) {
+              maybeExtId = String(
+                first.CustomerId ?? first.customerId ?? "",
+              ).trim();
+              console.log(
+                "[products/search] fallback using first Extensiv customer id",
+                maybeExtId,
+              );
+            }
+          } catch (err) {
+            console.warn(
+              "[products/search] fetchExtensivCustomersList failed",
+              err,
+            );
+          }
         }
 
         if (!maybeExtId || !/^\d+$/.test(maybeExtId)) {
