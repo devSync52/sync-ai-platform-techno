@@ -28,11 +28,75 @@ const shapeWarehouse = (w: any) => ({
   city: w.city,
   state: w.state,
   is_default: w.is_default,
-  parent_account_id: w.parent_account_id,
+  parent_account_id: w.parent_account_id ?? w.account_id ?? null,
   source: w.source,
+  source_logo: w.source_logo || w.provider_icon || null,
   wms_facility_id: w.wms_facility_id,
   is_active: w.is_active,
 });
+
+async function fetchRelatedWarehouses(
+  sr: ReturnType<typeof getServiceRoleClient>,
+  userId: string,
+  sourceFilter: string | null = null,
+) {
+  const { data, error } = await sr
+    .from("warehouses_relation")
+    .select(
+      `is_default,
+       warehouse:warehouses (
+        id,
+       name,
+       city,
+       state,
+       is_default,
+       account_id,
+       provider_id,
+        provider:integrations(name, provider_icon),
+        sellercloud_warehouse_id,
+        extensiv_facility_id,
+        metadata
+      )`,
+    )
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  console.log("data", data);
+
+  const relatedWarehouses = (data ?? [])
+    .map((row: any) => ({
+      warehouse: row?.warehouse,
+      is_default: row?.is_default,
+    }))
+    .filter((row: any) => row.warehouse)
+    .map((row: any) =>
+      shapeWarehouse({
+        ...(row.warehouse as any),
+        is_default: Boolean(row.is_default),
+        parent_account_id: row.warehouse.account_id ?? null,
+        source:
+          row.warehouse.provider?.name ??
+          (row.warehouse.provider_id ? "integration" : "manual"),
+        source_logo: row.warehouse.provider?.provider_icon ?? null,
+        wms_facility_id:
+          row.warehouse.extensiv_facility_id ??
+          row.warehouse.sellercloud_warehouse_id ??
+          row.warehouse.wms_facility_id ??
+          null,
+        is_active: (row.warehouse as any).is_active ?? true,
+      }),
+    );
+
+  if (sourceFilter) {
+    return relatedWarehouses.filter(
+      (w) => String(w.source || "").toLowerCase() === sourceFilter,
+    );
+  }
+
+  return relatedWarehouses;
+}
 
 type SellercloudCredentials = {
   domain: string;
@@ -293,7 +357,10 @@ async function fetchExtensivFacilities(
         const pageFacilities =
           json._embedded?.[
             "http://api.3plcentral.com/rels/inventory/facility"
-          ] || json._embedded?.["facilities"] || json.items || [];
+          ] ||
+          json._embedded?.["facilities"] ||
+          json.items ||
+          [];
 
         facilities.push(
           ...(Array.isArray(pageFacilities) ? pageFacilities : []),
@@ -333,7 +400,7 @@ async function fetchExtensivFacilities(
 }
 
 type UserContext =
-  | { ok: true; accountId: string; rawAccountId: string }
+  | { ok: true; accountId: string; rawAccountId: string; userId: string }
   | { ok: false; status: number; message: string };
 
 async function resolveAccountContext(request: Request): Promise<UserContext> {
@@ -411,13 +478,12 @@ async function resolveAccountContext(request: Request): Promise<UserContext> {
   const effectiveAccountId = String(
     accountRow?.parent_account_id ?? rawAccountId,
   );
-  return { ok: true, accountId: effectiveAccountId, rawAccountId };
+  return { ok: true, accountId: effectiveAccountId, rawAccountId, userId };
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const sourceFilter =
-    searchParams.get("source")?.trim().toLowerCase() || null;
+  const sourceFilter = searchParams.get("source")?.trim().toLowerCase() || null;
 
   const context = await resolveAccountContext(request);
   if (!context.ok) {
@@ -427,80 +493,23 @@ export async function GET(request: Request) {
     );
   }
 
-  // 3) Service Role para ler a view pública e filtrar por parent_account_id
   const sr = getServiceRoleClient();
-  const { data, error } = await sr
-    .from("v_billing_warehouses")
-    .select("*")
-    .eq("parent_account_id", context.accountId)
-    .eq("is_active", true)
-    .order("is_default", { ascending: false })
-    .order("name", { ascending: true });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-
-  let shaped = (data ?? []).map(shapeWarehouse);
-  let filtered = sourceFilter
-    ? shaped.filter(
-        (w) => String(w.source || "").toLowerCase() === sourceFilter,
-      )
-    : shaped;
-
-  // Fallback: if no warehouses are stored, fetch live from Extensiv API
-  const shouldFetchExtensiv =
-    sourceFilter === "extensiv" ? filtered.length === 0 : shaped.length === 0;
-
-  if (shouldFetchExtensiv) {
-    const { data: integration } = await sr
-      .from("account_integrations")
-      .select("credentials")
-      .eq("account_id", context.accountId)
-      .eq("type", "extensiv")
-      .maybeSingle();
-
-    const creds = parseExtensivCredentials(integration?.credentials);
-    if (creds) {
-      try {
-        const token = await getExtensivToken(creds);
-        const { facilities } = await fetchExtensivFacilities(token, []);
-        shaped = (facilities || []).map((f: any) => {
-          const addr = f.Contact || f.address || f.Address || {};
-          const idVal =
-            f.FacilityId ||
-            f.FacilityID ||
-            f.facilityId ||
-            f.facilityID ||
-            f.id;
-          return shapeWarehouse({
-            id: `ext-${idVal ?? f.Name ?? Math.random().toString(36).slice(2)}`,
-            name: f.Name || f.name || "Extensiv Facility",
-            city: addr.City || addr.city || null,
-            state: addr.State || addr.state || null,
-            is_default: false,
-            parent_account_id: context.accountId,
-            source: "extensiv",
-            wms_facility_id: idVal ? String(idVal) : null,
-            is_active: !f.Deactivated,
-          });
-        });
-      } catch (err) {
-        console.warn("[warehouses][GET][extensiv_fallback]", err);
-      }
-    }
-  }
-
-  // Re-apply source filter after possible fallback enrichment
-  if (sourceFilter) {
-    filtered = (shaped || []).filter(
-      (w) => String(w.source || "").toLowerCase() === sourceFilter,
+  try {
+    const relatedWarehouses = await fetchRelatedWarehouses(
+      sr,
+      context.userId,
+      sourceFilter,
     );
-  } else {
-    filtered = shaped;
+
+    if (relatedWarehouses.length > 0) {
+      return NextResponse.json({ data: relatedWarehouses });
+    }
+  } catch (relationError: any) {
+    console.warn("[warehouses][GET][relation]", relationError?.message);
   }
 
-  return NextResponse.json({ data: filtered });
+  // Nenhuma relação encontrada, retorne lista vazia (não usar v_billing_warehouses)
+  return NextResponse.json({ data: [] });
 }
 
 export async function POST(request: Request) {
@@ -539,57 +548,46 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: targetWarehouse, error: fetchErr } = await sr
-      .from("v_billing_warehouses")
-      .select("*")
-      .eq("parent_account_id", accountId)
-      .eq("id", warehouseId)
+    const { data: relationRow, error: relationErr } = await sr
+      .from("warehouses_relation")
+      .select("warehouse_id, warehouse:warehouses(id, account_id)")
+      .eq("user_id", context.userId)
+      .eq("warehouse_id", warehouseId)
       .maybeSingle();
 
-    if (fetchErr) {
-      return NextResponse.json({ error: fetchErr.message }, { status: 400 });
+    if (relationErr) {
+      return NextResponse.json({ error: relationErr.message }, { status: 400 });
     }
+
+    const targetWarehouse = relationRow?.warehouse;
     if (!targetWarehouse) {
       return NextResponse.json(
-        { error: "Warehouse not found" },
+        { error: "Warehouse not found for this user" },
         { status: 404 },
       );
     }
 
+    // clear existing defaults for this user and set chosen one
     const { error: clearErr } = await sr
-      .schema("billing")
-      .from("warehouses")
+      .from("warehouses_relation")
       .update({ is_default: false })
-      .eq("parent_account_id", accountId);
-
+      .eq("user_id", context.userId);
     if (clearErr) {
       return NextResponse.json({ error: clearErr.message }, { status: 400 });
     }
 
     const { error: setErr } = await sr
-      .schema("billing")
-      .from("warehouses")
+      .from("warehouses_relation")
       .update({ is_default: true })
-      .eq("id", warehouseId)
-      .eq("parent_account_id", accountId);
-
+      .eq("user_id", context.userId)
+      .eq("warehouse_id", warehouseId);
     if (setErr) {
       return NextResponse.json({ error: setErr.message }, { status: 400 });
     }
 
-    const { data: refreshed, error: refreshErr } = await sr
-      .from("v_billing_warehouses")
-      .select("*")
-      .eq("parent_account_id", accountId)
-      .eq("is_active", true)
-      .order("is_default", { ascending: false })
-      .order("name", { ascending: true });
+    const refreshed = await fetchRelatedWarehouses(sr, context.userId);
 
-    if (refreshErr) {
-      return NextResponse.json({ error: refreshErr.message }, { status: 400 });
-    }
-
-    return NextResponse.json({ data: (refreshed ?? []).map(shapeWarehouse) });
+    return NextResponse.json({ data: refreshed });
   }
 
   if (action === "create") {
@@ -606,16 +604,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const insertPayload: Record<string, any> = {
-      parent_account_id: accountId,
-      name,
-      city,
-      state,
-      is_active: true,
-      is_default: isDefault,
-      source: payload?.source ?? "manual",
-      wms_facility_id: payload?.wms_facility_id ?? null,
-    };
+  const insertPayload: Record<string, any> = {
+    account_id: accountId,
+    name,
+    city,
+    state,
+    sellercloud_warehouse_id: payload?.sellercloud_warehouse_id ?? null,
+    extensiv_facility_id: payload?.extensiv_facility_id ?? null,
+  };
 
     if (customId) insertPayload.id = customId;
 
@@ -638,32 +634,53 @@ export async function POST(request: Request) {
       );
     }
 
-    if (isDefault && createdId) {
-      const { error: clearErr } = await sr
-        .schema("billing")
-        .from("warehouses")
-        .update({ is_default: false })
-        .eq("parent_account_id", accountId)
-        .neq("id", createdId);
+    const { data: existingRelation } = await sr
+      .from("warehouses_relation")
+      .select("warehouse_id")
+      .eq("user_id", context.userId)
+      .eq("warehouse_id", createdId)
+      .maybeSingle();
 
+    if (!existingRelation) {
+      if (isDefault) {
+        const { error: clearErr } = await sr
+          .from("warehouses_relation")
+          .update({ is_default: false })
+          .eq("user_id", context.userId);
+        if (clearErr) {
+          return NextResponse.json({ error: clearErr.message }, { status: 400 });
+        }
+      }
+      const { error: relationErr } = await sr
+        .from("warehouses_relation")
+        .insert({
+          user_id: context.userId,
+          warehouse_id: createdId,
+          is_default: isDefault || false,
+        });
+      if (relationErr) {
+        console.warn("[warehouses][create][relation]", relationErr.message);
+      }
+    } else if (isDefault) {
+      const { error: clearErr } = await sr
+        .from("warehouses_relation")
+        .update({ is_default: false })
+        .eq("user_id", context.userId);
       if (clearErr) {
         return NextResponse.json({ error: clearErr.message }, { status: 400 });
       }
+      const { error: setErr } = await sr
+        .from("warehouses_relation")
+        .update({ is_default: true })
+        .eq("user_id", context.userId)
+        .eq("warehouse_id", createdId);
+      if (setErr) {
+        return NextResponse.json({ error: setErr.message }, { status: 400 });
+      }
     }
 
-    const { data: refreshed, error: refreshErr } = await sr
-      .from("v_billing_warehouses")
-      .select("*")
-      .eq("parent_account_id", accountId)
-      .eq("is_active", true)
-      .order("is_default", { ascending: false })
-      .order("name", { ascending: true });
-
-    if (refreshErr) {
-      return NextResponse.json({ error: refreshErr.message }, { status: 400 });
-    }
-
-    return NextResponse.json({ data: (refreshed ?? []).map(shapeWarehouse) });
+    const related = await fetchRelatedWarehouses(sr, context.userId);
+    return NextResponse.json({ data: related });
   }
 
   if (action === "syncSellercloud") {
@@ -742,6 +759,7 @@ export async function POST(request: Request) {
     let synced = 0;
     const failures: Array<{ externalId: string; name: string; error: string }> =
       [];
+    const touchedIds: string[] = [];
 
     for (const row of rows) {
       const externalId = String(row?.ID ?? row?.Id ?? row?.id ?? "").trim();
@@ -755,15 +773,13 @@ export async function POST(request: Request) {
           : {};
       const city = String(warehouseAddress?.City ?? "").trim() || null;
       const state = String(warehouseAddress?.State ?? "").trim() || null;
-      const isDefault = Boolean(row?.IsDefault ?? false);
 
       const { data: existing } = await sr
         .schema("billing")
         .from("warehouses")
         .select("id")
-        .eq("parent_account_id", accountId)
-        .eq("source", "sellercloud")
-        .eq("wms_facility_id", externalId)
+        .eq("account_id", accountId)
+        .eq("sellercloud_warehouse_id", externalId)
         .maybeSingle();
 
       if (existing?.id) {
@@ -774,51 +790,57 @@ export async function POST(request: Request) {
             name,
             city,
             state,
-            is_default: isDefault,
-            is_active: true,
+            sellercloud_warehouse_id: externalId,
           })
           .eq("id", existing.id);
         if (updateErr) {
           failures.push({ externalId, name, error: updateErr.message });
         } else {
           synced += 1;
+          touchedIds.push(existing.id);
         }
       } else {
-        const { error: insertErr } = await sr
+        const { data: inserted, error: insertErr } = await sr
           .schema("billing")
           .from("warehouses")
           .insert({
-            parent_account_id: accountId,
+            account_id: accountId,
             name,
             city,
             state,
-            is_active: true,
-            is_default: isDefault,
-            source: "sellercloud",
-            wms_facility_id: externalId,
-          });
+            sellercloud_warehouse_id: externalId,
+          })
+          .select("id")
+          .maybeSingle();
         if (insertErr) {
           failures.push({ externalId, name, error: insertErr.message });
         } else {
           synced += 1;
+          if (inserted?.id) touchedIds.push(inserted.id);
         }
       }
     }
 
-    const { data: refreshed, error: refreshErr } = await sr
-      .from("v_billing_warehouses")
-      .select("*")
-      .eq("parent_account_id", accountId)
-      .eq("is_active", true)
-      .order("is_default", { ascending: false })
-      .order("name", { ascending: true });
-
-    if (refreshErr) {
-      return NextResponse.json({ error: refreshErr.message }, { status: 400 });
+    // Ensure relation entries for current user
+    for (const wid of touchedIds) {
+      const { data: relExists } = await sr
+        .from("warehouses_relation")
+        .select("warehouse_id")
+        .eq("user_id", context.userId)
+        .eq("warehouse_id", wid)
+        .maybeSingle();
+      if (!relExists) {
+        const { error: relErr } = await sr
+          .from("warehouses_relation")
+          .insert({ user_id: context.userId, warehouse_id: wid });
+        if (relErr) console.warn("[warehouses][sellercloud][relation]", relErr);
+      }
     }
 
+    const refreshed = await fetchRelatedWarehouses(sr, context.userId);
+
     return NextResponse.json({
-      data: (refreshed ?? []).map(shapeWarehouse),
+      data: refreshed,
       summary: {
         received: rows.length,
         synced,
@@ -939,8 +961,7 @@ export async function POST(request: Request) {
       if (!effectiveFacilities || effectiveFacilities.length === 0) {
         effectiveFacilities = customerIds.map((cid) => ({
           id: String(cid),
-          name:
-            channelByExternalId.get(String(cid))?.name ?? `Extensiv ${cid}`,
+          name: channelByExternalId.get(String(cid))?.name ?? `Extensiv ${cid}`,
           city: channelByExternalId.get(String(cid))?.city ?? null,
           state: channelByExternalId.get(String(cid))?.state ?? null,
           source: "extensiv_placeholder",
@@ -964,7 +985,7 @@ export async function POST(request: Request) {
           ) || null;
         return {
           id: `ext-${idVal ?? f.name ?? f.Name ?? Math.random().toString(36).slice(2)}`,
-          parent_account_id: accountId,
+          account_id: accountId,
           name:
             String(
               f.name ??
@@ -981,10 +1002,7 @@ export async function POST(request: Request) {
             String(addr.state ?? addr.State ?? "").trim() ||
             channelGeo?.state ||
             null,
-          is_active: true,
-          is_default: Boolean(f.isDefault ?? f.defaultFacility ?? false),
-          source: "extensiv",
-          wms_facility_id: idVal ? String(idVal) : null,
+          extensiv_facility_id: idVal ? String(idVal) : null,
           // keep minimal columns present in billing.warehouses
         };
       });
@@ -995,19 +1013,35 @@ export async function POST(request: Request) {
           .schema("billing")
           .from("warehouses")
           .delete()
-          .eq("parent_account_id", accountId)
-          .eq("source", "extensiv");
+          .eq("account_id", accountId)
+          .not("extensiv_facility_id", "is", null);
 
-        await sr
-          .schema("billing")
-          .from("warehouses")
-          .insert(rows);
+        await sr.schema("billing").from("warehouses").insert(rows);
       } catch (persistErr) {
         console.warn("[warehouses][extensiv][persist]", persistErr);
       }
 
+      // Ensure relation links for current user
+      for (const r of rows) {
+        const wid = r.id;
+        const { data: relExists } = await sr
+          .from("warehouses_relation")
+          .select("warehouse_id")
+          .eq("user_id", context.userId)
+          .eq("warehouse_id", wid)
+          .maybeSingle();
+        if (!relExists) {
+          const { error: relErr } = await sr
+            .from("warehouses_relation")
+            .insert({ user_id: context.userId, warehouse_id: wid });
+          if (relErr) console.warn("[warehouses][extensiv][relation]", relErr);
+        }
+      }
+
+      const refreshed = await fetchRelatedWarehouses(sr, context.userId);
+
       return NextResponse.json({
-        data: rows.map(shapeWarehouse),
+        data: refreshed,
         summary: { received: effectiveFacilities.length },
       });
     } catch (err: any) {

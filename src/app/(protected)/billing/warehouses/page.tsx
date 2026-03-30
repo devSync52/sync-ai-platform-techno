@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 interface WarehouseRow {
   id: string
@@ -19,6 +20,7 @@ interface WarehouseRow {
   is_default?: boolean | null
   parent_account_id?: string | null
   source?: string | null
+  source_logo?: string | null
   wms_facility_id?: string | null
   is_active?: boolean | null
 }
@@ -243,7 +245,16 @@ export default function WarehousesPage() {
                   </td>
                   <td className="py-2 pr-3">{formatLocation(w.city, w.state)}</td>
                   <td className="py-2 pr-3">
-                    <span className="rounded bg-muted px-2 py-0.5 text-xs uppercase">
+                    <span className="inline-flex items-center gap-2 rounded bg-muted px-2 py-0.5 text-xs uppercase">
+                      {w.source_logo && (
+                        <Image
+                          src={w.source_logo}
+                          alt={String(w.source || 'source')}
+                          width={18}
+                          height={18}
+                          className="h-4 w-4 object-contain rounded-sm bg-white"
+                        />
+                      )}
                       {String(w.source || 'manual')}
                     </span>
                   </td>
