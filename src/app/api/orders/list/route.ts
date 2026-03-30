@@ -11,10 +11,18 @@ function pick<T = any>(obj: any, keys: string[], fallback: T = null as T): T {
 
 function deriveCustomerName(primary: any, metadata: any): string {
   const first = String(
-    pick(metadata, ["FirstName", "ShippingAddressFirstName", "BillingAddressFirstName"], ""),
+    pick(
+      metadata,
+      ["FirstName", "ShippingAddressFirstName", "BillingAddressFirstName"],
+      "",
+    ),
   ).trim();
   const last = String(
-    pick(metadata, ["LastName", "ShippingAddressLastName", "BillingAddressLastName"], ""),
+    pick(
+      metadata,
+      ["LastName", "ShippingAddressLastName", "BillingAddressLastName"],
+      "",
+    ),
   ).trim();
   const full = `${first} ${last}`.trim();
   if (full) return full;
@@ -71,6 +79,8 @@ function normalizeOrderRow(row: any) {
     source: row.origin || "manual",
     marketplace_name: marketplaceName,
     _metadata: metadata,
+    shipping_address: row.shipping_address || null,
+    billing_address: row.billing_address || null,
   };
 }
 
@@ -81,7 +91,13 @@ function matchesCustomerIdentity(params: {
   customerName: string;
   customerCompanyName: string;
 }): boolean {
-  const { row, customerEmail, customerWmsId, customerName, customerCompanyName } = params;
+  const {
+    row,
+    customerEmail,
+    customerWmsId,
+    customerName,
+    customerCompanyName,
+  } = params;
   const metadata = row?._metadata || {};
   const rowEmail = String(
     pick(metadata, ["CustomerEmail", "Email", "customer_email"], ""),
@@ -91,7 +107,9 @@ function matchesCustomerIdentity(params: {
   const rowWmsId = String(
     pick(metadata, ["CustomerID", "customer_id", "WmsUserIdentifier"], ""),
   ).trim();
-  const rowName = String(row?.client_name || "").trim().toLowerCase();
+  const rowName = String(row?.client_name || "")
+    .trim()
+    .toLowerCase();
   const rowCompany = String(
     pick(metadata, ["CompanyName", "company_name"], row?.client_name || ""),
   )
@@ -104,6 +122,38 @@ function matchesCustomerIdentity(params: {
   if (customerCompanyName && rowCompany && customerCompanyName === rowCompany)
     return true;
   return false;
+}
+
+async function hydrateAddresses(rows: any[]) {
+  const addressIds = new Set<string>();
+  for (const row of rows) {
+    if (row.shipping_address) addressIds.add(String(row.shipping_address));
+    if (row.billing_address) addressIds.add(String(row.billing_address));
+  }
+
+  const ids = Array.from(addressIds).filter(Boolean);
+  if (!ids.length) return rows;
+
+  const { data: addressRows, error } = await supabaseAdmin
+    .from("address")
+    .select("*")
+    .in("id", ids);
+
+  if (error) {
+    console.error("❌ Error hydrating addresses:", error.message);
+    return rows;
+  }
+
+  const byId = new Map<string, any>();
+  for (const addr of addressRows || []) {
+    if (addr?.id) byId.set(String(addr.id), addr);
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    shipping_address_data: row.shipping_address ? byId.get(String(row.shipping_address)) || null : null,
+    billing_address_data: row.billing_address ? byId.get(String(row.billing_address)) || null : null,
+  }));
 }
 
 export async function GET(req: NextRequest) {
@@ -151,7 +201,8 @@ export async function GET(req: NextRequest) {
     .eq("id", userRecord.account_id)
     .maybeSingle();
 
-  const effectiveAccountId = accountRecord?.parent_account_id || userRecord.account_id;
+  const effectiveAccountId =
+    accountRecord?.parent_account_id || userRecord.account_id;
   const customerAccountScope = Array.from(
     new Set([effectiveAccountId, userRecord.account_id].filter(Boolean)),
   );
@@ -162,32 +213,46 @@ export async function GET(req: NextRequest) {
   if (isCustomerUser) {
     let strictQuery = supabaseAdmin
       .from("orders")
-      .select("*")
-      .in("account_id", customerAccountScope)
-      .eq("client_id", userRecord.account_id);
+      .select("*", { count: "exact" });
+    // .in("account_id", customerAccountScope)
+    // .eq("client_id", userRecord.account_id);
     if (source !== "all") strictQuery = strictQuery.eq("origin", source);
     if (status) strictQuery = strictQuery.eq("status", status);
-    if (startDate)
-      strictQuery = strictQuery.gte("created_at", `${startDate}T00:00:00.000Z`);
-    if (endDate)
-      strictQuery = strictQuery.lte("created_at", `${endDate}T23:59:59.999Z`);
+    // if (startDate)
+    //   strictQuery = strictQuery.gte("created_at", `${startDate}T00:00:00.000Z`);
+    // if (endDate)
+    //   strictQuery = strictQuery.lte("created_at", `${endDate}T23:59:59.999Z`);
 
-    const { data: strictRows, error: strictError } = await strictQuery
+    const {
+      data: strictRows,
+      error: strictError,
+      count: strictCount,
+    } = await strictQuery
       .order("created_at", { ascending: false })
-      .limit(5000);
+      .range(start, end);
 
     if (strictError) {
       return NextResponse.json({ error: strictError.message }, { status: 500 });
     }
 
     let mapped = (strictRows || []).map(normalizeOrderRow);
+    mapped = await hydrateAddresses(mapped);
     if (search) {
       const term = search.toLowerCase();
-      mapped = mapped.filter((row: any) =>
-        String(row.order_id || "").toLowerCase().includes(term) ||
-        String(row.order_source_order_id || "").toLowerCase().includes(term) ||
-        String(row.marketplace_name || "").toLowerCase().includes(term) ||
-        String(row.client_name || "").toLowerCase().includes(term),
+      mapped = mapped.filter(
+        (row: any) =>
+          String(row.order_id || "")
+            .toLowerCase()
+            .includes(term) ||
+          String(row.order_source_order_id || "")
+            .toLowerCase()
+            .includes(term) ||
+          String(row.marketplace_name || "")
+            .toLowerCase()
+            .includes(term) ||
+          String(row.client_name || "")
+            .toLowerCase()
+            .includes(term),
       );
     }
 
@@ -200,13 +265,13 @@ export async function GET(req: NextRequest) {
             .map((v: any) => String(v)),
         ),
       );
-      const pagedRows = mapped
-        .slice(start, end + 1)
-        .map(({ _metadata, _client_id, ...rest }) => rest);
+      const pagedRows = mapped.map(
+        ({ _metadata, _client_id, ...rest }) => rest,
+      );
       return NextResponse.json({
         role: userRecord.role,
         accountId: effectiveAccountId,
-        totalCount: mapped.length,
+        totalCount: strictCount ?? mapped.length,
         statuses: allStatuses,
         rows: pagedRows,
       });
@@ -220,19 +285,29 @@ export async function GET(req: NextRequest) {
     if (source !== "all") customerQuery = customerQuery.eq("origin", source);
     if (status) customerQuery = customerQuery.eq("status", status);
     if (startDate)
-      customerQuery = customerQuery.gte("created_at", `${startDate}T00:00:00.000Z`);
+      customerQuery = customerQuery.gte(
+        "created_at",
+        `${startDate}T00:00:00.000Z`,
+      );
     if (endDate)
-      customerQuery = customerQuery.lte("created_at", `${endDate}T23:59:59.999Z`);
+      customerQuery = customerQuery.lte(
+        "created_at",
+        `${endDate}T23:59:59.999Z`,
+      );
 
-    const { data: allRows, error } = await customerQuery
+    const {
+      data: allRows,
+      error,
+      count: allRowsCount,
+    } = await customerQuery
       .order("created_at", { ascending: false })
-      .limit(5000);
+      .range(start, end);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const legacyMapped = (allRows || []).map(normalizeOrderRow);
+    const legacyMapped = await hydrateAddresses((allRows || []).map(normalizeOrderRow));
     const { data: customerAccount } = await supabaseAdmin
       .from("accounts")
       .select("name")
@@ -246,7 +321,9 @@ export async function GET(req: NextRequest) {
         (user.app_metadata as any)?.wms_user_identifier ||
         "",
     ).trim();
-    const customerName = String(userRecord.name || "").trim().toLowerCase();
+    const customerName = String(userRecord.name || "")
+      .trim()
+      .toLowerCase();
     const customerCompanyName = String(customerAccount?.name || "")
       .trim()
       .toLowerCase();
@@ -266,11 +343,20 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       const term = search.toLowerCase();
-      ownRows = ownRows.filter((row: any) =>
-        String(row.order_id || "").toLowerCase().includes(term) ||
-        String(row.order_source_order_id || "").toLowerCase().includes(term) ||
-        String(row.marketplace_name || "").toLowerCase().includes(term) ||
-        String(row.client_name || "").toLowerCase().includes(term),
+      ownRows = ownRows.filter(
+        (row: any) =>
+          String(row.order_id || "")
+            .toLowerCase()
+            .includes(term) ||
+          String(row.order_source_order_id || "")
+            .toLowerCase()
+            .includes(term) ||
+          String(row.marketplace_name || "")
+            .toLowerCase()
+            .includes(term) ||
+          String(row.client_name || "")
+            .toLowerCase()
+            .includes(term),
       );
     }
 
@@ -284,24 +370,24 @@ export async function GET(req: NextRequest) {
     );
 
     const pagedRows = ownRows
-      .slice(start, end + 1)
+      .slice(0, pageSize)
       .map(({ _metadata, _client_id, ...rest }) => rest);
     return NextResponse.json({
       role: userRecord.role,
       accountId: effectiveAccountId,
-      totalCount: ownRows.length,
+      totalCount: allRowsCount ?? ownRows.length,
       statuses: allStatuses,
       rows: pagedRows,
     });
   }
 
-  let statusQuery = supabaseAdmin
-    .from("orders")
-    .select("status")
-    .eq("account_id", effectiveAccountId);
-  if (source !== "all") statusQuery = statusQuery.eq("origin", source);
-  if (startDate) statusQuery = statusQuery.gte("created_at", `${startDate}T00:00:00.000Z`);
-  if (endDate) statusQuery = statusQuery.lte("created_at", `${endDate}T23:59:59.999Z`);
+  let statusQuery = supabaseAdmin.from("orders").select("status");
+  // .eq("account_id", effectiveAccountId);
+  // if (source !== "all") statusQuery = statusQuery.eq("origin", source);
+  // if (startDate)
+  //   statusQuery = statusQuery.gte("created_at", `${startDate}T00:00:00.000Z`);
+  // if (endDate)
+  //   statusQuery = statusQuery.lte("created_at", `${endDate}T23:59:59.999Z`);
   if (search) {
     statusQuery = statusQuery.or(
       `order_number.ilike.%${search}%,origin.ilike.%${search}%,status.ilike.%${search}%`,
@@ -318,17 +404,15 @@ export async function GET(req: NextRequest) {
     ),
   );
 
-  let query = supabaseAdmin
-    .from("orders")
-    .select("*", {
-      count: "exact",
-    })
-    .eq("account_id", effectiveAccountId);
+  let query = supabaseAdmin.from("orders").select("*", {
+    count: "exact",
+  });
+  // .eq("account_id", effectiveAccountId);
 
-  if (source !== "all") query = query.eq("origin", source);
-  if (status) query = query.eq("status", status);
-  if (startDate) query = query.gte("created_at", `${startDate}T00:00:00.000Z`);
-  if (endDate) query = query.lte("created_at", `${endDate}T23:59:59.999Z`);
+  // if (source !== "all") query = query.eq("origin", source);
+  // if (status) query = query.eq("status", status);
+  // if (startDate) query = query.gte("created_at", `${startDate}T00:00:00.000Z`);
+  // if (endDate) query = query.lte("created_at", `${endDate}T23:59:59.999Z`);
   if (search) {
     query = query.or(
       `order_number.ilike.%${search}%,origin.ilike.%${search}%,status.ilike.%${search}%`,
@@ -342,11 +426,14 @@ export async function GET(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  console.log("data", data);
 
-  const rows = (data || []).map((row: any) => {
-    const { _metadata, ...rest } = normalizeOrderRow(row);
-    return rest;
-  });
+  const rows = await hydrateAddresses(
+    (data || []).map((row: any) => {
+      const { _metadata, ...rest } = normalizeOrderRow(row);
+      return rest;
+    })
+  );
 
   return NextResponse.json({
     role: userRecord.role,
