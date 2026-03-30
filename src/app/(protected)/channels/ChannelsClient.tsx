@@ -24,6 +24,14 @@ type CustomerUser = {
   status: CustomerStatus
   source?: 'local' | 'sellercloud'
   origin?: string
+  phone?: string | null
+  address1?: string | null
+  address2?: string | null
+  city?: string | null
+  state?: string | null
+  postal_code?: string | null
+  country?: string | null
+  company_name?: string | null
 }
 
 type FormState = {
@@ -174,16 +182,16 @@ export default function ChannelsClient({ accountId }: ChannelsClientProps) {
       status: customer.status ?? 'active',
       source: (customer.origin as SourceType) ?? 'local',
       companyId: customer.wms_user_identifier ?? '',
-      companyName: customer.name ?? '',
+      companyName: customer.company_name ?? customer.name ?? '',
       firstName: customer.name?.split(' ')?.[0] ?? '',
       lastName: customer.name?.split(' ')?.slice(1).join(' ') ?? '',
-      phone: '',
-      address1: '',
-      address2: '',
-      city: '',
-      state: '',
-      postalCode: '',
-      country: 'US',
+      phone: customer.phone ?? '',
+      address1: customer.address1 ?? '',
+      address2: customer.address2 ?? '',
+      city: customer.city ?? '',
+      state: customer.state ?? '',
+      postalCode: customer.postal_code ?? '',
+      country: customer.country ?? 'US',
       customerType: 'wholesale',
       contactPassword: '',
     })

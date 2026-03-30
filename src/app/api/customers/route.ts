@@ -419,276 +419,79 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const service = req.nextUrl.searchParams.get("service")?.toLowerCase();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("client_relation")
+      .select(
+        `is_default,
+         client:clients (
+          id,
+          name,
+          email,
+          created_at,
+          external_id,
+          provider_id,
+          provider:integrations (name, provider_icon),
+          account:accounts (
+            name,
+            address_line_1,
+            address_line_2,
+            city,
+            state,
+            zip_code,
+            country,
+            phone
+          )
+        )`,
+      )
+      .eq("user_id", context.userId);
 
-  // Special branch: when order creation is for Extensiv, pull live customers directly
-  if (service === "extensiv") {
-    const res = await fetchExtensivCustomers({ accountId: context.accountId });
-    if (!res.ok) {
-      return NextResponse.json({ error: res.error }, { status: 400 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    console.log("client_relation data", JSON.stringify(data));
 
-    const customers = res.rows.map((row: any) => {
-      const readOnly = row?.ReadOnly || {};
-      const company = row?.CompanyInfo || {};
-      const primary = row?.PrimaryContact || {};
-      const name =
-        String(company.CompanyName || primary.Name || "Extensiv Customer").trim();
-      const email = String(primary.EmailAddress || "").trim();
-      const custId = String(readOnly.CustomerId || row?.CustomerId || "").trim();
-      const createdAt = readOnly.CreationDate || row?.CreationDate || null;
-      const deactivated = Boolean(readOnly.Deactivated || false);
+    const customers = (data || [])
+      .map((row: any) => row?.client)
+      .filter(Boolean)
+      .map((client: any) => {
+        const providerName =
+          (client.provider?.name as string | undefined)?.toLowerCase() || null;
+        const account = client.account || {};
 
-      return {
-        id: `ext-${custId || name}`,
-        account_id: context.accountId,
-        name,
-        email: email || "-",
-        role: "client",
-        created_at: createdAt,
-        last_login_at: null,
-        has_logged_in: null,
-        auth_type: "wms_extensiv" as AuthType,
-        wms_user_identifier: custId || null,
-        external_id: custId || null,
-        status: deactivated ? "disabled" : "active",
-        source: "extensiv" as SourceType,
-        origin: "extensiv",
-      };
-    });
+        return {
+          id: client.id,
+          name: client.name ?? client.external_id ?? "Customer",
+          email: client.email ?? "-",
+          role: "client",
+          created_at: client.created_at ?? null,
+          last_login_at: null,
+          has_logged_in: null,
+          account_id: context.accountId,
+          auth_type: "local" as AuthType,
+          wms_user_identifier: client.external_id ?? null,
+          status: "active" as const,
+          source: client.provider?.name ?? "relation",
+          origin: providerName || "relation",
+          source_logo: client.provider?.provider_icon ?? null,
+          phone: account.phone ?? null,
+          address1: account.address_line_1 ?? null,
+          address2: account.address_line_2 ?? null,
+          city: account.city ?? null,
+          state: account.state ?? null,
+          postal_code: account.zip_code ?? null,
+          country: account.country ?? null,
+          company_name: account.name ?? null,
+        };
+      });
 
     return NextResponse.json({ customers });
-  }
-
-  const { data: customers, error } = await supabaseAdmin
-    .from("users")
-    .select(
-      "id, account_id, name, email, role, created_at, last_login_at, has_logged_in",
-    )
-    .eq("account_id", context.accountId)
-    .in("role", ["client", "staff-client", "staff-user", "client-user"])
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  const authUsersResult = await supabaseAdmin.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  });
-  if (authUsersResult.error) {
+  } catch (err: any) {
     return NextResponse.json(
-      { error: authUsersResult.error.message },
+      { error: err?.message || "Failed to load customers" },
       { status: 500 },
     );
   }
-
-  const now = Date.now();
-  const authById = new Map(
-    authUsersResult.data.users.map((authUser) => [authUser.id, authUser]),
-  );
-
-  const payload = (customers ?? []).map((customer) => {
-    const authUser = authById.get(customer.id);
-    const userMetadata = authUser?.user_metadata ?? {};
-    const appMetadata = authUser?.app_metadata ?? {};
-
-    const authType =
-      normalizeAuthType(
-        userMetadata.customer_auth_type ??
-          userMetadata.auth_type ??
-          appMetadata.customer_auth_type ??
-          appMetadata.auth_type,
-      ) ?? "local";
-
-    const bannedUntil = authUser?.banned_until
-      ? new Date(authUser.banned_until).getTime()
-      : 0;
-
-    return {
-      ...customer,
-      account_id: (customer as any)?.account_id ?? context.accountId,
-      auth_type: authType,
-      wms_user_identifier:
-        (userMetadata.wms_user_identifier as string | undefined) ??
-        (appMetadata.wms_user_identifier as string | undefined) ??
-        null,
-      status: bannedUntil > now ? "disabled" : "active",
-      source: "local",
-      origin:
-        (userMetadata.customer_source as string | undefined) ??
-        (appMetadata.customer_source as string | undefined) ??
-        "manual",
-    };
-  });
-
-  // Merge customers discovered from synced orders so they are visible
-  // in the Customers screen even when they are not platform auth users.
-  const { data: orderRows, error: ordersError } = await supabaseAdmin
-    .from("orders")
-    .select("client_name, origin, metadata, created_at, order_number")
-    .eq("account_id", context.accountId)
-    .order("created_at", { ascending: false })
-    .limit(5000);
-
-  if (ordersError) {
-    console.error("[customers][orders] failed to load orders:", ordersError);
-    return NextResponse.json({ customers: payload });
-  }
-
-  const existingEmails = new Set(
-    payload
-      .map((row: any) =>
-        String(row?.email || "")
-          .trim()
-          .toLowerCase(),
-      )
-      .filter((email: string) => email.length > 0),
-  );
-
-  const seenKeys = new Set<string>();
-  const discoveredRows: any[] = [];
-
-  // Pull live customers directly from Extensiv using the same account credentials
-  const extensivResult = await fetchExtensivCustomers({
-    accountId: context.accountId,
-  });
-
-  if (extensivResult.ok) {
-    for (const row of extensivResult.rows) {
-      const wmsId = String(
-        row?.ReadOnly?.CustomerId || row?.CustomerId || "",
-      ).trim();
-      const companyInfo = row?.CompanyInfo || {};
-      const primaryContact = row?.PrimaryContact || {};
-      const name =
-        String(companyInfo.CompanyName || primaryContact.Name || "").trim() ||
-        "Extensiv Customer";
-      const email = String(primaryContact.EmailAddress || "").trim();
-      const dedupeKey = wmsId || email || name;
-      if (!dedupeKey || seenKeys.has(dedupeKey)) continue;
-      seenKeys.add(dedupeKey);
-      if (email) existingEmails.add(email.toLowerCase());
-
-      discoveredRows.push({
-        id: `ext-${wmsId || name}`,
-        name,
-        email: email || "-",
-        role: "client",
-        created_at:
-          row?.ReadOnly?.CreationDate ||
-          row?.creationDate ||
-          row?.CreationDate ||
-          null,
-        last_login_at: null,
-        has_logged_in: null,
-        account_id: context.accountId,
-        auth_type: "wms_extensiv",
-        wms_user_identifier: wmsId || null,
-        status: row?.ReadOnly?.Deactivated ? "disabled" : "active",
-        source: "extensiv",
-        origin: "extensiv",
-      });
-    }
-  } else {
-    console.warn("[customers][extensiv]", extensivResult.error);
-  }
-
-  // Also surface customers that were synced into the `channels` table (e.g.,
-  // Sellercloud/Extensiv) even if login users have not been provisioned yet.
-  const { data: channelRows, error: channelError } = await supabaseAdmin
-    .from("channels")
-    .select(
-      "id, company_name, contact_name, email, external_id, source, created_at",
-    )
-    .eq("account_id", context.accountId)
-    .order("created_at", { ascending: false });
-
-  if (channelError) {
-    console.error(
-      "[customers][channels] failed to load channels:",
-      channelError,
-    );
-  }
-
-  for (const channel of channelRows || []) {
-    const email = String(channel.email || "")
-      .trim()
-      .toLowerCase();
-    const wmsId = String(channel.external_id || "").trim();
-    const name =
-      String(channel.contact_name || "").trim() ||
-      String(channel.company_name || "").trim() ||
-      "Channel Customer";
-    const source = String(channel.source || "channel").toLowerCase();
-    const dedupeKey = wmsId || email || `channel:${channel.id}`;
-
-    if (!dedupeKey || seenKeys.has(dedupeKey)) continue;
-    seenKeys.add(dedupeKey);
-    if (email) existingEmails.add(email);
-
-    discoveredRows.push({
-      id: `chn-${channel.id}`,
-      name,
-      email: email || "-",
-      role: "client",
-      created_at: channel.created_at ?? null,
-      last_login_at: null,
-      has_logged_in: null,
-      account_id: context.accountId,
-      auth_type: "wms_extensiv",
-      wms_user_identifier: wmsId || null,
-      status: "active",
-      source,
-      origin: source,
-    });
-  }
-
-  for (const row of orderRows || []) {
-    const metadata = (row as any)?.metadata || {};
-    const customerName = deriveCustomerName(
-      (row as any)?.client_name,
-      metadata,
-    );
-
-    const email = String(metadata?.CustomerEmail || "")
-      .trim()
-      .toLowerCase();
-    const wmsId = String(
-      metadata?.CustomerID || metadata?.customer_id || "",
-    ).trim();
-    const source =
-      String((row as any)?.origin || "orders")
-        .trim()
-        .toLowerCase() || "orders";
-    const dedupeKey =
-      wmsId || email || `${source}:${customerName.toLowerCase()}`;
-    if (!dedupeKey || seenKeys.has(dedupeKey)) continue;
-    seenKeys.add(dedupeKey);
-
-    if (email && existingEmails.has(email)) {
-      continue;
-    }
-
-    discoveredRows.push({
-      id: `ord-${wmsId || email || String((row as any)?.order_number || dedupeKey)}`,
-      name: customerName,
-      email: email || "-",
-      role: "client",
-      created_at: (row as any)?.created_at ?? null,
-      last_login_at: null,
-      has_logged_in: null,
-      account_id: context.accountId,
-      auth_type: "wms_extensiv",
-      wms_user_identifier: wmsId || null,
-      status: "active",
-      source,
-      origin: source,
-    });
-  }
-
-  return NextResponse.json({ customers: [...payload, ...discoveredRows] });
 }
 
 export async function POST(req: NextRequest) {
