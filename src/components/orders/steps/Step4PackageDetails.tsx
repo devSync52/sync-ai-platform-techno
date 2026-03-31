@@ -16,6 +16,7 @@ type PackageItem = {
   sku: string;
   itemIdentifier?: { id?: string | number | null; sku?: string | null };
   itemId?: string | number | null;
+  external_id?: string | number | null;
   item_id?: string | number | null;
   source?: string | null;
   raw?: any;
@@ -89,7 +90,9 @@ function ProductSearchModal({
 
   const serviceParam =
     typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("service")?.toLowerCase()
+      ? new URLSearchParams(window.location.search)
+          .get("service")
+          ?.toLowerCase()
       : null;
 
   const fetchProducts = async (page = 1) => {
@@ -177,11 +180,11 @@ function ProductSearchModal({
     fetchProducts(1);
   }, [show, clientId, warehouseId, shipFromName]);
 
-    const handleAdd = (product: any) => {
-      const length = Number(product.pkg_length_in ?? 0);
-      const width = Number(product.pkg_width_in ?? 0);
-      const height = Number(product.pkg_height_in ?? 0);
-      const weight = Number(product.pkg_weight_lb ?? 0);
+  const handleAdd = (product: any) => {
+    const length = Number(product.pkg_length_in ?? 0);
+    const width = Number(product.pkg_width_in ?? 0);
+    const height = Number(product.pkg_height_in ?? 0);
+    const weight = Number(product.pkg_weight_lb ?? 0);
     const productPrice = Number(
       product.price ??
         product.site_price ??
@@ -205,11 +208,19 @@ function ProductSearchModal({
         ? Number(itemIdRaw)
         : itemIdRaw;
 
+    const resolvedExternalId =
+      product.external_id ?? product.id ?? product.sku ?? null;
+    console.log("external id", product.external_id);
+
+    const resolvedSku =
+      product.sku ?? (resolvedExternalId ? String(resolvedExternalId) : "");
+
     const packageItem: PackageItem = {
-      sku: product.sku,
-      itemIdentifier: { id: itemId, sku: product.sku ?? null },
+      sku: resolvedSku,
+      itemIdentifier: { id: itemId, sku: resolvedSku || null },
       itemId,
       item_id: itemId,
+      external_id: resolvedExternalId,
       source: product?.source ?? null,
       raw,
       product_name: product.description || "",
@@ -257,11 +268,11 @@ function ProductSearchModal({
               }
             }}
           />
-        <Button
-          className="w-full sm:w-auto"
-          onClick={handleSearch}
-          disabled={loading || warehouseMissing}
-        >
+          <Button
+            className="w-full sm:w-auto"
+            onClick={handleSearch}
+            disabled={loading || warehouseMissing}
+          >
             {warehouseMissing
               ? "Select a warehouse first"
               : loading
@@ -311,22 +322,27 @@ function ProductSearchModal({
                       ? ` · Allocated: ${Number(product.allocated ?? 0).toLocaleString("en-US")}`
                       : ""}
                   </p>
+                  <p className="text-sm text-gray-500">
+                    Price:{" "}
+                    {Number(product.price ?? 0).toLocaleString("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                    })}
+                  </p>
                 </div>
                 <Button
                   variant="secondary"
                   className="w-full sm:w-auto"
                   onClick={() => handleAdd(product)}
-                  disabled={
-                    (() => {
-                      const isExtensiv =
-                        serviceParam === "extensiv" ||
-                        String(product?.source ?? "").toLowerCase() ===
-                          "extensiv";
-                      return isExtensiv
-                        ? false
-                        : Number(product.available ?? 0) <= 0;
-                    })()
-                  }
+                  disabled={(() => {
+                    const isExtensiv =
+                      serviceParam === "extensiv" ||
+                      String(product?.source ?? "").toLowerCase() ===
+                        "extensiv";
+                    return isExtensiv
+                      ? false
+                      : Number(product.available ?? 0) <= 0;
+                  })()}
                 >
                   Add to package
                 </Button>
@@ -382,7 +398,9 @@ export default function Step4PackageDetails({
   const [items, setItems] = useState<PackageItem[]>([]);
   const [showProductSearchModal, setShowProductSearchModal] = useState(false);
   const [clientId, setClientId] = useState<string>("");
-  const [warehouseId, setWarehouseId] = useState<string>(initialWarehouseId || "");
+  const [warehouseId, setWarehouseId] = useState<string>(
+    initialWarehouseId || "",
+  );
   const [shipFromName, setShipFromName] = useState<string>("");
   const [isCalculating, setIsCalculating] = useState(false);
 
@@ -431,11 +449,11 @@ export default function Step4PackageDetails({
 
         setClientId(String(draft.client));
 
-      const wh =
-        (draft as any)?.ship_from?.warehouse_id ??
-        (draft as any)?.ship_from?.warehouseId ??
-        (draft as any)?.ship_from?.sellercloud_warehouse_id ??
-        "";
+        const wh =
+          (draft as any)?.ship_from?.warehouse_id ??
+          (draft as any)?.ship_from?.warehouseId ??
+          (draft as any)?.ship_from?.sellercloud_warehouse_id ??
+          "";
         const shipName = (draft as any)?.ship_from?.name ?? "";
 
         setWarehouseId(String(wh || ""));
@@ -493,16 +511,18 @@ export default function Step4PackageDetails({
   };
 
   const handleAddProductFromSearch = (product: PackageItem) => {
-    const qtyToAdd = Number(product.quantity ?? 1) > 0 ? Number(product.quantity ?? 1) : 1;
+    const qtyToAdd =
+      Number(product.quantity ?? 1) > 0 ? Number(product.quantity ?? 1) : 1;
     const price = Number.isFinite(product.price) ? Number(product.price) : 0;
 
     const key = (it: PackageItem) =>
-      (it.itemIdentifier?.id ?? it.itemId ?? it.item_id ?? null) ??
+      it.itemIdentifier?.id ??
+      it.itemId ??
+      it.item_id ??
+      null ??
       (it.sku ? String(it.sku).toLowerCase() : null);
 
-    const existingIdx = items.findIndex(
-      (it) => key(it) === key(product),
-    );
+    const existingIdx = items.findIndex((it) => key(it) === key(product));
 
     if (existingIdx >= 0) {
       const updated = [...items];

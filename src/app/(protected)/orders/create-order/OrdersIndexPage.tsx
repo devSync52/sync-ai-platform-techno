@@ -40,39 +40,99 @@ export default function QuotesPage() {
       if (!user?.account_id) return
       setLoadingServices(true)
 
-      const { data, error } = await supabase
-        .from('account_integrations')
-        .select('type, status, metadata')
-        .eq('account_id', user.account_id)
-        .in('type', ['sellercloud', 'extensiv'])
+      // 1) Global catalog of order-capable, active integrations
+      const { data: integrationsData, error: integrationsError } = await supabase
+        .from('integrations')
+        .select('id, slug, orders, is_active')
+        .eq('orders', true)
+        .eq('is_active', true)
 
-      if (error) {
-        console.error('❌ Failed to load integrations for order creation:', error)
+      if (integrationsError) {
+        console.error('❌ Failed to load integrations catalog:', integrationsError)
         setAvailableServices([])
         setDefaultService(null)
         setLoadingServices(false)
         return
       }
 
-      const active = (data || [])
-        .filter((row: any) => String(row?.status || '').toLowerCase() === 'active')
-        .map((row: any) => String(row?.type || '').toLowerCase())
-        .filter((type: string): type is ExternalService => type === 'sellercloud' || type === 'extensiv')
+      // 2) Account-level connections (may have provider_id null)
+      const { data: accountRows, error: accountError } = await supabase
+        .from('account_integrations')
+        .select('id, provider_id, type, status, is_default, metadata')
+        .eq('account_id', user.account_id)
 
-      const defaultRow = (data || []).find((row: any) => {
-        const type = String(row?.type || '').toLowerCase()
-        const isActive = String(row?.status || '').toLowerCase() === 'active'
-        const isDefault = Boolean((row?.metadata as Record<string, unknown> | null)?.['is_default'])
-        return isActive && isDefault && (type === 'sellercloud' || type === 'extensiv')
+      if (accountError) {
+        console.error('❌ Failed to load account integrations:', accountError)
+        setAvailableServices([])
+        setDefaultService(null)
+        setLoadingServices(false)
+        return
+      }
+
+      const catalog = integrationsData || []
+
+      const rows = (accountRows || []).map((row: any) => {
+        const matched =
+          catalog.find((c: any) => c.id === row.provider_id) ||
+          catalog.find(
+            (c: any) =>
+              String(c?.slug || '').toLowerCase() ===
+              String(row?.type || '').toLowerCase()
+          )
+
+        // Fallback mapping when provider_id/type are null:
+        // - use metadata.slug if present
+        // - if row is marked default and still unmatched, assume sellercloud (product default)
+        // - if only one catalog entry exists, use it
+        const metaSlug = String((row?.metadata as any)?.slug || '').toLowerCase()
+        let serviceKey = String(matched?.slug || row?.type || metaSlug || '').toLowerCase()
+        if (!serviceKey) {
+          if (row?.is_default) {
+            serviceKey = 'sellercloud'
+          } else if (catalog.length === 1) {
+            serviceKey = String(catalog[0]?.slug || '').toLowerCase()
+          }
+        }
+
+        const statusRaw = String(row?.status || 'active').toLowerCase()
+        const isActive = statusRaw === 'active' || statusRaw === ''
+
+        return {
+          ...row,
+          serviceKey,
+          isActive,
+          hasService: Boolean(matched) && (serviceKey === 'sellercloud' || serviceKey === 'extensiv'),
+        }
       })
 
-      const resolvedDefault = defaultRow
-        ? (String(defaultRow.type).toLowerCase() as ExternalService)
-        : null
+      const activeRows = rows.filter((r) => r.hasService && r.isActive)
+      const active = activeRows
+        .map((row) => row.serviceKey)
+        .filter((type): type is ExternalService => type === 'sellercloud' || type === 'extensiv')
+
+      // Prioritize explicit column flag; fall back to metadata flag.
+      const defaultRow =
+        activeRows.find(
+          (row) =>
+            row?.is_default === true &&
+            (row.serviceKey === 'sellercloud' || row.serviceKey === 'extensiv'),
+        ) ||
+        activeRows.find((row) => {
+          const metaDefault = Boolean(
+            (row?.metadata as Record<string, unknown> | null)?.['is_default'],
+          )
+          return (
+            metaDefault &&
+            (row.serviceKey === 'sellercloud' || row.serviceKey === 'extensiv')
+          )
+        })
+
+      const resolvedDefault = defaultRow ? (defaultRow.serviceKey as ExternalService) : null
+      const preferredFallback = resolvedDefault ?? active[0] ?? null
 
       setAvailableServices(active)
       setDefaultService(resolvedDefault)
-      setSelectedService(resolvedDefault ?? active[0] ?? null)
+      setSelectedService(preferredFallback)
       setLoadingServices(false)
     }
 
