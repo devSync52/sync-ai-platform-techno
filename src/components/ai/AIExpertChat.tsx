@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useSyncAgent, ChatMessage } from '@/hooks/useSyncAgent'
-import { Loader2, Mic, MicOff, Settings2, X, VolumeX, MoreHorizontal, } from 'lucide-react'
+import { Loader2, Mic, MicOff, Settings2, X, VolumeX, MoreHorizontal, Expand, } from 'lucide-react'
 import { QuickPrompts } from './QuickPrompts'
 import { ChatChart } from './charts/chatChart'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -36,21 +36,22 @@ function BotMessageWithCopy({ content }: { content: string }) {
 
   return (
     <>
-      <div className="flex items-start gap-2 max-w-full">
-        <div
-          className="rounded-lg px-4 py-2 text-sm whitespace-pre-wrap max-w-[85%] overflow-x-auto bg-gray-100 text-gray-900"
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
+      <div className="flex items-start max-w-full">
+        <div className="relative rounded-lg px-4 py-2 pr-12 text-sm whitespace-pre-wrap max-w-[85%] overflow-x-auto bg-gray-100 text-gray-900">
+          {hasTable && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded(true)}
+              className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-white hover:text-gray-700"
+              title="Expand message"
+              aria-label="Expand message"
+            >
+              <Expand className="h-4 w-4" />
+            </button>
+          )}
 
-        {hasTable && (
-          <button
-            type="button"
-            onClick={() => setIsExpanded(true)}
-            className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Expand
-          </button>
-        )}
+          <div dangerouslySetInnerHTML={{ __html: content }} />
+        </div>
       </div>
       {
         isExpanded && (
@@ -59,7 +60,6 @@ function BotMessageWithCopy({ content }: { content: string }) {
               <DialogHeader>
                 <DialogTitle>Full Response</DialogTitle>
               </DialogHeader>
-
               <div
                 className="overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900"
                 style={{ maxHeight: 'calc(85vh - 6rem)' }}
