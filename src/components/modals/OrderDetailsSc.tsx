@@ -468,21 +468,79 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
           }
         }
       } else if (orderUuid) {
-        const itemsQuery = supabase
-          .from("order_items")
-          .select("*")
-          .eq("order_id", orderUuid);
+        // Use server-side API (service role) to bypass RLS and include product join
+        try {
+          const resp = await fetch(`/api/orders/items?orderId=${orderUuid}`);
+          if (resp.ok) {
+            const json = await resp.json();
+            const orderedProducts = json?.items || [];
 
-        const { data: savedItems, error: savedItemsErr } = await itemsQuery;
+            if (Array.isArray(orderedProducts) && orderedProducts.length > 0) {
+              const mapped = orderedProducts.map((it: any) => {
+                const qty = Number(
+                  it?.quantity ??
+                    it?.meta?.Qty ??
+                    it?.meta?.Quantity ??
+                    0,
+                );
+                const unitPrice = Number(
+                  it?.price ??
+                    it?.meta?.UnitPrice ??
+                    it?.meta?.Price ??
+                    it?.meta?.unit_price ??
+                    0,
+                );
+                const totalPrice = Number(
+                  it?.meta?.TotalPrice ??
+                    it?.meta?.LineTotal ??
+                    unitPrice * qty,
+                );
 
-        if (savedItemsErr) {
-          console.error(
-            "❌ Erro ao buscar itens do pedido (order_items):",
-            savedItemsErr.message,
-          );
-        } else if (Array.isArray(savedItems) && savedItems.length > 0) {
-          itemsData = savedItems;
-          setItems(savedItems);
+                const productName =
+                  it?.product?.product_name ??
+                  it?.meta?.ProductName ??
+                  it?.meta?.product_name ??
+                  null;
+
+                return {
+                  ...it,
+                  sku: it?.product?.sku ?? it?.meta?.SKU ?? null,
+                  quantity: qty,
+                  unit_price: unitPrice,
+                  total_price: totalPrice,
+                  metadata: {
+                    ...(it?.meta || {}),
+                    ProductName: productName ?? (it?.meta || {}).ProductName ?? "—",
+                  },
+                };
+              });
+
+              itemsData = mapped;
+              setItems(mapped);
+            }
+          } else {
+            console.error("❌ Error fetching ordered_products via API:", await resp.text());
+          }
+        } catch (err) {
+          console.error("❌ Error calling ordered_products API:", err);
+        }
+
+        // Legacy fallback (keep until all orders migrated)
+        if (!itemsData.length) {
+          const { data: savedItems, error: savedItemsErr } = await supabase
+            .from("order_items")
+            .select("*")
+            .eq("order_id", orderUuid);
+
+          if (savedItemsErr) {
+            console.error(
+              "❌ Erro ao buscar itens do pedido (order_items):",
+              savedItemsErr.message,
+            );
+          } else if (Array.isArray(savedItems) && savedItems.length > 0) {
+            itemsData = savedItems;
+            setItems(savedItems);
+          }
         }
       }
 

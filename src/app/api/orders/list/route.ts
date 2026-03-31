@@ -207,15 +207,46 @@ export async function GET(req: NextRequest) {
     new Set([effectiveAccountId, userRecord.account_id].filter(Boolean)),
   );
 
+  // Resolve which orders belong to the logged-in user via order_relation
+  const { data: relationRows, error: relationError } = await supabaseAdmin
+    .from("order_relation")
+    .select("order_id")
+    .eq("user_id", user.id);
+
+  if (relationError) {
+    return NextResponse.json(
+      { error: relationError.message },
+      { status: 500 },
+    );
+  }
+
+  const orderIds = Array.from(
+    new Set(
+      (relationRows || [])
+        .map((r) => r.order_id)
+        .filter((v): v is string => !!v),
+    ),
+  );
+
+  if (!orderIds.length) {
+    return NextResponse.json({
+      role: userRecord.role,
+      accountId: effectiveAccountId,
+      totalCount: 0,
+      statuses: [],
+      rows: [],
+    });
+  }
+
   const start = (page - 1) * pageSize;
   const end = start + pageSize - 1;
 
   if (isCustomerUser) {
     let strictQuery = supabaseAdmin
       .from("orders")
-      .select("*", { count: "exact" });
-    // .in("account_id", customerAccountScope)
-    // .eq("client_id", userRecord.account_id);
+      .select("*", { count: "exact" })
+      .in("id", orderIds);
+
     if (source !== "all") strictQuery = strictQuery.eq("origin", source);
     if (status) strictQuery = strictQuery.eq("status", status);
     // if (startDate)
@@ -281,6 +312,7 @@ export async function GET(req: NextRequest) {
     let customerQuery = supabaseAdmin
       .from("orders")
       .select("*")
+      .in("id", orderIds)
       .in("account_id", customerAccountScope);
     if (source !== "all") customerQuery = customerQuery.eq("origin", source);
     if (status) customerQuery = customerQuery.eq("status", status);
@@ -382,7 +414,7 @@ export async function GET(req: NextRequest) {
   }
 
   let statusQuery = supabaseAdmin.from("orders").select("status");
-  // .eq("account_id", effectiveAccountId);
+  statusQuery = statusQuery.in("id", orderIds);
   // if (source !== "all") statusQuery = statusQuery.eq("origin", source);
   // if (startDate)
   //   statusQuery = statusQuery.gte("created_at", `${startDate}T00:00:00.000Z`);
@@ -404,10 +436,12 @@ export async function GET(req: NextRequest) {
     ),
   );
 
-  let query = supabaseAdmin.from("orders").select("*", {
-    count: "exact",
-  });
-  // .eq("account_id", effectiveAccountId);
+  let query = supabaseAdmin
+    .from("orders")
+    .select("*", {
+      count: "exact",
+    })
+    .in("id", orderIds);
 
   // if (source !== "all") query = query.eq("origin", source);
   // if (status) query = query.eq("status", status);
