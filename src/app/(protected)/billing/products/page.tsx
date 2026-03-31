@@ -11,6 +11,8 @@ interface ProductRow {
   id: string
   sku: string | null
   description: string | null
+  product_name?: string | null
+  image?: string | null
   available: number | null
   on_hold: number | null
   warehouse_name: string | null
@@ -219,16 +221,38 @@ export default function BillingProductsPage() {
                 <tr key={`${p.id}-${p.sku ?? 'no-sku'}`} className="border-b last:border-0">
                   <td className="py-2 pr-3 font-medium">{p.sku || '-'}</td>
                   <td className="py-2 pr-3">
-                    {!p.description ? (
-                      '-'
-                    ) : containsHtml(p.description) ? (
-                      <div
-                        className="max-h-16 overflow-hidden text-sm leading-5 [&_table]:w-full [&_td]:align-top"
-                        dangerouslySetInnerHTML={{ __html: sanitizeHtmlForPreview(p.description) }}
-                      />
-                    ) : (
-                      stripHtml(p.description)
-                    )}
+                    <div className="flex items-center gap-3">
+                      {p.image ? (
+                        <img
+                          src={p.image}
+                          alt={p.product_name || stripHtml(p.description) || p.sku || 'Product'}
+                          className="h-10 w-10 rounded-md object-cover border border-gray-200 bg-gray-100"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-md bg-gray-200 border border-gray-200 text-gray-700 flex items-center justify-center font-semibold">
+                          {(p.description || p.product_name || p.sku || 'P').trim().charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex flex-col">
+                        {!p.description ? (
+                          <span className="text-gray-700">-</span>
+                        ) : containsHtml(p.description) ? (
+                          <div
+                            className="max-h-16 overflow-hidden text-sm leading-5 [&_table]:w-full [&_td]:align-top"
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtmlForPreview(p.description) }}
+                          />
+                        ) : (
+                          <span className="text-gray-800 font-medium">
+                            {stripHtml(p.description)}
+                          </span>
+                        )}
+                        {p.product_name && p.product_name !== p.description && (
+                          <span className="text-xs text-muted-foreground">
+                            {stripHtml(p.product_name)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   <td className="py-2 pr-3">{p.available ?? '-'}</td>
                   <td className="py-2 pr-3">{p.on_hold ?? '-'}</td>

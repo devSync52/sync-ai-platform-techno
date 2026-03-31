@@ -11,12 +11,17 @@ interface Props {
   userRole: string;
 }
 
+type ProductWithImage = ProductList & {
+  image?: string | null;
+  product_name?: string | null;
+};
+
 export default function ImportProductsClient({
   accountId,
   companyName,
   userRole,
 }: Props) {
-  const [products, setProducts] = useState<ProductList[]>([]);
+  const [products, setProducts] = useState<ProductWithImage[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -67,7 +72,7 @@ export default function ImportProductsClient({
               }
               return acc;
             },
-            {} as Record<string, ProductList>,
+            {} as Record<string, ProductWithImage>,
           ),
         )
       : products;
@@ -101,6 +106,9 @@ export default function ImportProductsClient({
     if (sortBy === "price") return (b.site_price || 0) - (a.site_price || 0);
     return 0;
   });
+
+  const getInitial = (value?: string | null) =>
+    value?.trim()?.charAt(0)?.toUpperCase() || "P";
 
   const paginatedProducts = sorted.slice(
     (currentPage - 1) * itemsPerPage,
@@ -232,7 +240,35 @@ export default function ImportProductsClient({
                 </td>
 
                 <td className="py-3 px-4 text-gray-600">
-                  {product.description || "-"}
+                  <div className="flex items-center gap-3">
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt={
+                          product.product_name ||
+                          product.description ||
+                          product.sku ||
+                          "Product"
+                        }
+                        className="h-10 w-10 rounded-md object-cover border border-gray-200 bg-gray-100"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-md bg-gray-200 border border-gray-200 text-gray-700 flex items-center justify-center font-semibold">
+                        {getInitial(product.description ?? product.product_name ?? product.sku)}
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <span className="text-gray-800 font-medium">
+                        {product.description || "-"}
+                      </span>
+                      {product.product_name &&
+                        product.product_name !== product.description && (
+                          <span className="text-xs text-gray-500">
+                            {product.product_name}
+                          </span>
+                        )}
+                    </div>
+                  </div>
                 </td>
                 <td className="py-3 px-4 text-gray-600">
                   {product.pkg_length_in &&
