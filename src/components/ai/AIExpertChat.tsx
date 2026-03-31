@@ -6,6 +6,7 @@ import { useSyncAgent, ChatMessage } from '@/hooks/useSyncAgent'
 import { Loader2, Mic, MicOff, Settings2, X, VolumeX, MoreHorizontal, } from 'lucide-react'
 import { QuickPrompts } from './QuickPrompts'
 import { ChatChart } from './charts/chatChart'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 // ---- iOS audio unlock helpers ----
 const isIOS = typeof navigator !== 'undefined' && /iP(hone|ad|od)/.test(navigator.userAgent)
@@ -30,13 +31,45 @@ async function unlockAudioContext() {
 }
 
 function BotMessageWithCopy({ content }: { content: string }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const hasTable = /<table[\s>]/i.test(content)
+
   return (
-    <div className="flex items-center">
-      <div
-        className="rounded-lg px-4 py-2 text-sm whitespace-pre-wrap max-w-[85%] bg-gray-100 text-gray-900"
-        dangerouslySetInnerHTML={{ __html: content }}
-      />
-    </div>
+    <>
+      <div className="flex items-start gap-2 max-w-full">
+        <div
+          className="rounded-lg px-4 py-2 text-sm whitespace-pre-wrap max-w-[85%] overflow-x-auto bg-gray-100 text-gray-900"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+
+        {hasTable && (
+          <button
+            type="button"
+            onClick={() => setIsExpanded(true)}
+            className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Expand
+          </button>
+        )}
+      </div>
+      {
+        isExpanded && (
+          <Dialog open={isExpanded} onOpenChange={setIsExpanded}>
+            <DialogContent className="w-[calc(100%-1.5rem)] max-w-5xl max-h-[85vh] overflow-hidden bg-white">
+              <DialogHeader>
+                <DialogTitle>Full Response</DialogTitle>
+              </DialogHeader>
+
+              <div
+                className="overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900"
+                style={{ maxHeight: 'calc(85vh - 6rem)' }}
+                dangerouslySetInnerHTML={{ __html: content }}
+              />
+            </DialogContent>
+          </Dialog>
+        )
+      }
+    </>
   )
 }
 
