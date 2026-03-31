@@ -3,15 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useSyncAgent, ChatMessage } from '@/hooks/useSyncAgent'
-import {
-  Loader2,
-  Mic,
-  MicOff,
-  Settings2,
-  X,
-  VolumeX,
-  MoreHorizontal,
-} from 'lucide-react'
+import { Loader2, Mic, MicOff, Settings2, X, VolumeX, MoreHorizontal, } from 'lucide-react'
 import { QuickPrompts } from './QuickPrompts'
 import { ChatChart } from './charts/chatChart'
 
@@ -34,31 +26,23 @@ async function unlockAudioContext() {
     src.buffer = buf
     src.connect(sharedAC.destination)
     src.start(0)
-  } catch {}
+  } catch { }
 }
 
 function BotMessageWithCopy({ content }: { content: string }) {
   return (
     <div className="flex items-center">
-      <div className="rounded-lg px-4 py-2 text-sm whitespace-pre-wrap max-w-[85%] bg-gray-100 text-gray-900">
-        {content}
-      </div>
+      <div
+        className="rounded-lg px-4 py-2 text-sm whitespace-pre-wrap max-w-[85%] bg-gray-100 text-gray-900"
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
     </div>
   )
 }
 
 type VoicePhase = 'idle' | 'listening' | 'thinking' | 'preparing' | 'speaking'
 
-/** ---------------- Voice Overlay (animações ricas + fases) ---------------- */
-function VoiceModeOverlay({
-  open,
-  phase,
-  onClose,
-  onToggleMic,
-  listening,
-  isSpeaking,
-  stopSpeaking,
-}: {
+interface VoiceModeOverlayProps {
   open: boolean
   phase: VoicePhase
   onClose: () => void
@@ -66,19 +50,18 @@ function VoiceModeOverlay({
   listening: boolean
   isSpeaking: boolean
   stopSpeaking: () => void
-}) {
+}
+
+/** ---------------- Voice Overlay (animações ricas + fases) ---------------- */
+function VoiceModeOverlay({ open, phase, onClose, onToggleMic, listening, isSpeaking, stopSpeaking, }: VoiceModeOverlayProps) {
   if (!open) return null
 
   const isListening = phase === 'listening'
-  const isThinking  = phase === 'thinking'
+  const isThinking = phase === 'thinking'
   const isPreparing = phase === 'preparing'
   const isSpeakingP = phase === 'speaking'
 
-  const subtitle =
-    isListening ? 'Listening…'
-    : isThinking ? 'Thinking…'
-    : isPreparing ? 'Preparing voice…'
-    : 'Speaking…'
+  const subtitle = isListening ? 'Listening…' : isThinking ? 'Thinking…' : isPreparing ? 'Preparing voice…' : 'Speaking…'
 
   const base = isSpeakingP ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8'
   const soft = isSpeakingP ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1'
@@ -87,14 +70,10 @@ function VoiceModeOverlay({
     <div className="absolute inset-0 z-50 bg-white">
       {/* Top bar */}
       <div className="flex items-center justify-end gap-3 p-3">
-        <button
-          onClick={() => {
-            if (isSpeaking) stopSpeaking()
-            onClose()
-          }}
-          className="rounded-full bg-gray-100 p-2 hover:bg-gray-200"
-          title="Close"
-        >
+        <button className="rounded-full bg-gray-100 p-2 hover:bg-gray-200" title="Close" onClick={() => {
+          if (isSpeaking) stopSpeaking()
+          onClose()
+        }}>
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -104,57 +83,54 @@ function VoiceModeOverlay({
         {/* Wrapper MAIOR e com overflow visível (evita corte) */}
         <div className="relative h-56 w-56 overflow-visible" key={`phase-${phase}`}>
           {/* Ondas concêntricas — apenas listening/preparing */}
-          {(isListening || isPreparing) && [0, 1, 2].map((i) => (
-            <motion.span
-              key={i}
-              className="absolute inset-0 rounded-full pointer-events-none"
-              style={{ border: `2px solid ${soft}` }}
-              animate={
-                isPreparing
-                  ? { scale: [1, 1.05, 1], opacity: [0.4, 0.9, 0.4] }
-                  : { scale: [1, 1.18, 1.3], opacity: [0.6, 0.25, 0] }
-              }
-              transition={{
+          {
+            (isListening || isPreparing) && [0, 1, 2].map((i) => (
+              <motion.span key={i} className="absolute inset-0 rounded-full pointer-events-none" style={{ border: `2px solid ${soft}` }} animate={isPreparing ? { scale: [1, 1.05, 1], opacity: [0.4, 0.9, 0.4] } : { scale: [1, 1.18, 1.3], opacity: [0.6, 0.25, 0] }} transition={{
                 duration: isPreparing ? 1.1 : 2.1,
                 repeat: Infinity,
                 delay: i * 0.22,
                 ease: 'easeInOut',
-              }}
-            />
-          ))}
+              }} />
+            ))
+          }
 
           {/* Núcleo com inset (folga) + aceleração GPU (iOS) */}
           <motion.div
             className="absolute inset-3 rounded-full will-change-transform"
-            style={{
-              transform: 'translateZ(0)',
-              background: `radial-gradient(circle at 50% 42%, ${soft} 8%, ${base} 75%)`,
-              boxShadow: '0 12px 40px rgba(0,0,0,0.12)',
-            }}
+            style={{ transform: 'translateZ(0)', background: `radial-gradient(circle at 50% 42%, ${soft} 8%, ${base} 75%)`, boxShadow: '0 12px 40px rgba(0,0,0,0.12)', }}
             animate={
-              isSpeakingP
-                ? { scale: [1, 1.06, 1], filter: ['brightness(1)', 'brightness(1.1)', 'brightness(1)'] }
-                : isListening
-                ? { scale: [1, 1.03, 1] }
-                : { scale: [1, 1.01, 1] }
+              isSpeakingP ? {
+                scale: [1, 1.06, 1],
+                filter: ['brightness(1)', 'brightness(1.1)', 'brightness(1)']
+              } : isListening ? {
+                scale: [1, 1.03, 1]
+              } : {
+                scale: [1, 1.01, 1]
+              }
             }
-            transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+            transition={{
+              duration: 1.1,
+              repeat: Infinity,
+              ease: 'easeInOut'
+            }}
           />
 
           {/* Equalizer — apenas speaking */}
-          {isSpeakingP && (
-            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-end gap-1 pointer-events-none">
-              {[6, 10, 16, 10, 6].map((h, idx) => (
-                <motion.span
-                  key={idx}
-                  className="w-1.5 rounded-sm"
-                  style={{ background: base, height: h }}
-                  animate={{ height: [6, 18, 8, 16, 6] }}
-                  transition={{ duration: 0.9 + idx * 0.06, repeat: Infinity, ease: 'easeInOut' }}
-                />
-              ))}
-            </div>
-          )}
+          {
+            isSpeakingP && (
+              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-end gap-1 pointer-events-none">
+                {[6, 10, 16, 10, 6].map((h, idx) => (
+                  <motion.span
+                    key={idx}
+                    className="w-1.5 rounded-sm"
+                    style={{ background: base, height: h }}
+                    animate={{ height: [6, 18, 8, 16, 6] }}
+                    transition={{ duration: 0.9 + idx * 0.06, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                ))}
+              </div>
+            )
+          }
         </div>
 
         <div className="mt-8 text-sm text-gray-600 flex items-center gap-2">
@@ -169,24 +145,14 @@ function VoiceModeOverlay({
           <MoreHorizontal className="h-5 w-5" />
         </button>
 
-        <button
-          onClick={onToggleMic}
-          className={`rounded-full p-4 hover:opacity-90 ${
-            listening ? 'bg-red-500 text-white' : 'bg-gray-100'
-          }`}
-          title={listening ? 'Stop recording' : 'Start recording'}
-        >
+        <button onClick={onToggleMic} className={`rounded-full p-4 hover:opacity-90 ${listening ? 'bg-red-500 text-white' : 'bg-gray-100'}`} title={listening ? 'Stop recording' : 'Start recording'}>
           {listening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
         </button>
 
-        <button
-          onClick={() => {
-            if (isSpeaking) stopSpeaking()
-            onClose()
-          }}
-          className="rounded-full bg-gray-100 p-4 hover:bg-gray-200"
-          title="Close"
-        >
+        <button className="rounded-full bg-gray-100 p-4 hover:bg-gray-200" title="Close" onClick={() => {
+          if (isSpeaking) stopSpeaking()
+          onClose()
+        }}>
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -196,25 +162,21 @@ function VoiceModeOverlay({
 
 /** --------------------------------------------------------------------------- */
 
-export default function AIExpertChat({
-  user_id,
-  account_id,
-  user_type,
-  session_id,
-  apiUrl,
-}: {
+interface AIExpertChatProps {
   user_id: string
   account_id: string
   user_type: 'owner' | 'client' | 'end_client'
   session_id: string
   apiUrl: string
-}) {
+}
+
+export default function AIExpertChat({ user_id, account_id, user_type, session_id, apiUrl, }: AIExpertChatProps) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [listening, setListening] = useState(false)
 
   const [speechEnabled, setSpeechEnabled] = useState(true)
-  const [voiceFirstMode, setVoiceFirstMode] = useState(true) // comportamento, não desabilita input
+  const [voiceFirstMode, setVoiceFirstMode] = useState(true)
   const [showAudioConfig, setShowAudioConfig] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [language, setLanguage] = useState<'en' | 'pt' | 'es'>('en')
@@ -240,7 +202,7 @@ export default function AIExpertChat({
     const ar: any = audioRef.current
     try {
       if (ar && ar._mode === 'webaudio' && ar._node) {
-        try { ar._node.stop(); ar._node.disconnect() } catch {}
+        try { ar._node.stop(); ar._node.disconnect() } catch { }
         if (ar._ctx && ar._ctx.state !== 'closed') {
           // keep context alive for next unlock, just disconnect node
         }
@@ -248,7 +210,7 @@ export default function AIExpertChat({
         audioRef.current.pause()
         audioRef.current.currentTime = 0
       }
-    } catch {}
+    } catch { }
     setIsSpeaking(false)
     setVoicePhase('idle')
   }
@@ -281,7 +243,7 @@ export default function AIExpertChat({
         const src = ac.createBufferSource()
         src.buffer = audioBuffer
         src.connect(ac.destination)
-        ;(audioRef as any).current = { _mode: 'webaudio', _node: src, _ctx: ac }
+          ; (audioRef as any).current = { _mode: 'webaudio', _node: src, _ctx: ac }
         setVoicePhase('speaking')
         src.onended = () => {
           setIsSpeaking(false)
@@ -394,7 +356,7 @@ export default function AIExpertChat({
   const stopRecording = () => {
     try {
       recognitionRef.current?.stop()
-    } catch {}
+    } catch { }
     setListening(false)
   }
 
@@ -420,7 +382,7 @@ export default function AIExpertChat({
     return () => {
       try {
         recognitionRef.current?.stop()
-      } catch {}
+      } catch { }
       stopSpeaking()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
