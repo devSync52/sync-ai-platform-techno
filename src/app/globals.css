@@ -72,3 +72,14 @@ body {
 .remove-arrow {
     -moz-appearance: textfield;
 }
+
+.chat_box table{
+  width: 100%;
+  white-space: nowrap;
+}
+.chat_box table td,
+.chat_box table th{
+  padding: .5rem .5rem;
+  border: 1px solid #ccc;
+  font-size: 12px;
+}

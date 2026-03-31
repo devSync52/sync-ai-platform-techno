@@ -48,7 +48,7 @@ function BotMessageWithCopy({ content }: { content: string }) {
             <Expand className="h-4 w-4" />
           </button>
 
-          <div dangerouslySetInnerHTML={{ __html: content }} />
+          <div className='chat_box' dangerouslySetInnerHTML={{ __html: content }} />
         </div>
       </div>
       {
@@ -58,8 +58,8 @@ function BotMessageWithCopy({ content }: { content: string }) {
               <DialogHeader>
                 <DialogTitle>Full Response</DialogTitle>
               </DialogHeader>
-              <div
-                className="overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900"
+              <div 
+                className="overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 chat_box"
                 style={{ maxHeight: 'calc(85vh - 6rem)' }}
                 dangerouslySetInnerHTML={{ __html: content }}
               />
