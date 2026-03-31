@@ -330,6 +330,9 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
 
       let full: any = null;
       let fullErr: any = null;
+      // Track any item rows we resolve while fetching so we can reuse
+      // them across fallbacks and finally decide whether to show the table.
+      let itemsData: any[] = [];
 
       if (orderSource === "extensiv") {
         const extensivId = (() => {
@@ -440,7 +443,6 @@ export default function OrderDetailsSc({ order, open, onCloseAction }: Props) {
         console.error("❌ Erro ao buscar order completo:", fullErr.message);
       }
 
-      let itemsData: any[] = [];
       if (orderSource === "extensiv") {
         const extensivId = (() => {
           if (order?.extensiv_order_id) return Number(order.extensiv_order_id);

@@ -633,6 +633,23 @@ export default function Step4PackageDetails({
           // Always clear previous quote results when package details change
           quote_results: null,
         });
+
+        // Trigger order syncing worker (Supabase Edge Function) in the background.
+        try {
+          await fetch(
+            "https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/order-syncing-worker",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                draftId,
+              }),
+            },
+          );
+        } catch (syncErr) {
+          console.warn("[Step4] order-syncing-worker call failed", syncErr);
+        }
       } catch (e) {
         console.error("❌ Failed to save quote items:", e);
         return;
