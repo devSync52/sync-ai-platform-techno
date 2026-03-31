@@ -38,13 +38,7 @@ function BotMessageWithCopy({ content }: { content: string }) {
     <>
       <div className="flex items-start max-w-full">
         <div className="relative rounded-lg px-4 py-2 pr-12 text-sm whitespace-pre-wrap max-w-[85%] overflow-x-auto bg-gray-100 text-gray-900">
-          <button
-            type="button"
-            onClick={() => setIsExpanded(true)}
-            className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-white hover:text-gray-700"
-            title="Expand message"
-            aria-label="Expand message"
-          >
+          <button type="button" onClick={() => setIsExpanded(true)} className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-white hover:text-gray-700" title="Expand message" aria-label="Expand message">
             <Expand className="h-4 w-4" />
           </button>
 
@@ -58,7 +52,7 @@ function BotMessageWithCopy({ content }: { content: string }) {
               <DialogHeader>
                 <DialogTitle>Full Response</DialogTitle>
               </DialogHeader>
-              <div 
+              <div
                 className="overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 chat_box"
                 style={{ maxHeight: 'calc(85vh - 6rem)' }}
                 dangerouslySetInnerHTML={{ __html: content }}
