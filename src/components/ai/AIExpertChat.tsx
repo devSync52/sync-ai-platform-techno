@@ -81,7 +81,7 @@ function VoiceModeOverlay({ open, phase, onClose, onToggleMic, listening, isSpea
 
   const isInitial = phase == 'initial', isListening = phase == 'listening', isThinking = phase == 'thinking', isStreaming = phase == 'streaming'
 
-  const subtitle = isInitial ? 'Tap the mic to start' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Voice streaming...'
+  const subtitle = isInitial ? 'Tap the mic to start' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Speaking...'
   const base = isStreaming ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8'
   const soft = isStreaming ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1'
 
