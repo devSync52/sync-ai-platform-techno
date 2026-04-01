@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import { useSupabase } from '@/components/supabase-provider'
 import { useSession } from '@/components/supabase-provider'
 import { v4 as uuidv4 } from 'uuid'
-import { History as HistoryIcon, Plus } from 'lucide-react'
+import { ExpandIcon, History as HistoryIcon, Plus, X } from 'lucide-react'
 import AIExpertChat from '@/components/ai/AIExpertChat'
 import ChatHistoryList from '@/components/ai/ChatHistoryList'
 
 export default function AIChatWidget() {
   const [open, setOpen] = useState(false)
+  const [openExpanded, setOpenExpanded] = useState(false)
   const [view, setView] = useState<'chat' | 'history'>('chat')
   const [accountId, setAccountId] = useState<string | null>(null)
   const [userType, setUserType] = useState<'owner' | 'client' | 'end_client' | null>(null)
@@ -80,28 +81,33 @@ export default function AIChatWidget() {
   // Overlay fecha ao clicar fora (só área escura)
   return (
     <>
+    {/* style={{ background: 'rgba(0,0,0,0.08)' }} */}
       {open && (
-        <div className="fixed inset-0 z-50 flex" style={{ background: 'rgba(0,0,0,0.08)' }} onClick={() => setOpen(false)}>
-          <div style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }} className={`relative ml-auto top-[98px] h-[calc(100%-98px)] w-full sm:top-0 sm:right-0 sm:h-full sm:w-[400px] bg-white sm:border-l rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
+        <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-t-[16px]' : 'fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-t-[16px]'} style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }} 
+        onClick={() => setOpen(false)}>
+          <div className={`w-full overflow-hidden rounded-t-[16px] rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
             {/* Topbar */}
-            <div className="flex items-center justify-between p-4 border-b bg-white sticky top-0 z-10">
+            <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px] ">
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold ml-2">SynC AI Expert</h2>
+                <h2 className="text-lg font-semibold ml-2 text-white">SynC AI Expert</h2>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={openHistory} className="text-gray-500 hover:text-primary transition p-1" title="Chat history">
+                <button onClick={openHistory} className="text-white hover:text-white transition p-1" title="Chat history">
                   <HistoryIcon className="w-5 h-5" />
                 </button>
                 <button onClick={handleNewSession} className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90" title="Start new conversation">
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">New Chat</span>
                 </button>
-                <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-gray-800 text-xl font-extrabold ml-2" title="Fechar chat">
-                  ×
+                <button onClick={() => setOpenExpanded(!openExpanded)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
+                  <ExpandIcon className="w-4 h-4"/>
+                </button>
+                <button onClick={() => setOpen(false)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-hidden flex flex-col">
+            <div className={openExpanded ? 'overflow-hidden flex flex-col h-[calc(100vh_-_200px)] rounded-b-[16px] bg-white' : 'overflow-hidden flex flex-col h-[500px] rounded-b-[16px] bg-white'}>
               {view === 'history' ? (
                 <ChatHistoryList
                   userId={user.id}
