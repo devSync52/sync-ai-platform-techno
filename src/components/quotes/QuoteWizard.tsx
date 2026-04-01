@@ -3,13 +3,15 @@
 import { useParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import type { Database } from '@/types/supabase'
-import QuoteStepsHeader, { QuoteStepsHeaderProps } from './QuoteStepsHeader'
-import { Step1ClientSelection } from './steps/Step1ClientSelection'
-import { Step2WarehouseSelection } from './steps/Step2WarehouseSelection'
-import Step3ShippingDetails from './steps/Step3ShippingDetails'
-import Step4PackageDetails from './steps/Step4PackageDetails'
-import Step5DeliveryPreferences from './steps/Step5DeliveryPreferences'
-import { StepSelectService } from './steps/StepSelectService'
+import QuoteStepsHeader from './QuoteStepsHeader'
+// Reuse the richer order wizard steps so quotations pull clients/warehouses/items
+// from the same database sources and filters as the order flow.
+import { Step1ClientSelection } from '@/components/orders/steps/Step1ClientSelection'
+import { Step2WarehouseSelection } from '@/components/orders/steps/Step2WarehouseSelection'
+import Step3ShippingDetails from '@/components/orders/steps/Step3ShippingDetails'
+import Step4PackageDetails from '@/components/orders/steps/Step4PackageDetails'
+import Step5DeliveryPreferences from '@/components/orders/steps/Step5DeliveryPreferences'
+import { StepSelectService } from '@/components/orders/steps/StepSelectService'
 import { Button } from '@/components/ui/button'
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
@@ -784,6 +786,7 @@ export default function QuoteWizard() {
             <Step4PackageDetails
               draftId={quoteData!.id}
               initialItems={(quoteData!.items as any[]) || []}
+              callSyncWorker={false}
               onNext={() => setCurrentStep(4)}
               onBack={() => setCurrentStep(2)}
             />

@@ -143,6 +143,19 @@ export default function Step5DeliveryPreferences({
 
   // Pega o draft atual pelo draftId
   useEffect(() => {
+    const parseJsonMaybe = <T,>(v: any): T | null => {
+      if (v === null || v === undefined) return null
+      if (typeof v === 'object') return v as T
+      if (typeof v === 'string') {
+        try {
+          return JSON.parse(v) as T
+        } catch {
+          return null
+        }
+      }
+      return null
+    }
+
     const fetchDraftById = async () => {
       const { data, error } = await supabase
         .from('saip_quote_drafts')
@@ -156,6 +169,11 @@ export default function Step5DeliveryPreferences({
         return
       }
 
+      const prefsObj = parseJsonMaybe<Record<string, any>>(data?.preferences) ?? (data?.preferences as any) ?? {}
+      const shipFromObj = parseJsonMaybe<any>(data?.ship_from) ?? (data?.ship_from as any) ?? {}
+      const shipToObj = parseJsonMaybe<any>(data?.ship_to) ?? (data?.ship_to as any) ?? {}
+      const itemsArray = parseJsonMaybe<any[]>(data?.items) ?? (Array.isArray(data?.items) ? (data?.items as any[]) : [])
+
       const filledDraft = {
         ship_from_warehouse: '',
         ...data,
@@ -168,23 +186,23 @@ export default function Step5DeliveryPreferences({
           confirmation: '',
           service_class: '',
           residential: false,
-          ...(data?.preferences || {}),
+          ...prefsObj,
         },
         ship_from: {
           address: {
             zip_code: '',
-            ...(data?.ship_from?.address || {}),
+            ...(shipFromObj?.address || {}),
           },
-          ...(data?.ship_from || {}),
+          ...shipFromObj,
         },
         ship_to: {
           zip_code: '',
-          ...(data?.ship_to || {}),
+          ...shipToObj,
         },
         items: [],
       }
 
-      const draftItems = data?.items || []
+      const draftItems = itemsArray || []
       filledDraft.items = draftItems
       setItems(draftItems)
 

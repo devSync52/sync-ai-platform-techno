@@ -422,7 +422,7 @@ export async function GET(req: Request) {
       .select(
         `product:products(
              id, sku, name, description, price, available_quantity, physical_qty, on_hold,
-             warehouse_name, source,external_id
+             warehouse_name, source, external_id, meta, raw, weight
            )`,
       )
       // .select(
@@ -467,12 +467,40 @@ export async function GET(req: Request) {
         .filter(Boolean)
         .map((p: any) => {
           const raw = p?.raw && typeof p.raw === "object" ? p.raw : {};
+          const meta =
+            p?.meta && typeof p.meta === "object"
+              ? (p.meta as Record<string, any>)
+              : {};
           const available =
             toNum(p?.available) ??
             toNum(p?.physical_qty) ??
             toNum((raw as any)?.InventoryAvailableQty) ??
             null;
           const onHold = toNum(p?.on_hold) ?? toNum((raw as any)?.ReservedQty);
+          const length =
+            toNum(meta?.ShippingLength) ??
+            toNum(meta?.length) ??
+            toNum(meta?.Length) ??
+            toNum(meta?.PackageLength) ??
+            null;
+          const width =
+            toNum(meta?.ShippingWidth) ??
+            toNum(meta?.width) ??
+            toNum(meta?.Width) ??
+            toNum(meta?.PackageWidth) ??
+            null;
+          const height =
+            toNum(meta?.ShippingHeight) ??
+            toNum(meta?.height) ??
+            toNum(meta?.Height) ??
+            toNum(meta?.PackageHeight) ??
+            null;
+          const weight =
+            toNum(meta?.ShippingWeight) ??
+            toNum(p?.weight) ??
+            toNum(meta?.Weight) ??
+            toNum(meta?.PackageWeight) ??
+            null;
           return {
             id: p.id,
             sku: p.sku,
@@ -489,6 +517,12 @@ export async function GET(req: Request) {
             source: p.source ?? "db",
             warehouse_name: p.warehouse_name ?? null,
             external_id: p.external_id ?? null,
+            length,
+            width,
+            height,
+            weight_lbs: weight,
+            meta,
+            raw,
           };
         }) ?? [];
 

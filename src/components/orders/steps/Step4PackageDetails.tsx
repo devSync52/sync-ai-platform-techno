@@ -60,6 +60,8 @@ interface Step4PackageDetailsProps {
   nextLabel?: string;
   /** Optional initial warehouse id (billing/public id) already selected in Step 2 */
   initialWarehouseId?: string | null;
+  /** Whether to call the order-syncing worker after saving items (orders flow only) */
+  callSyncWorker?: boolean;
 }
 
 function ProductSearchModal({
@@ -181,10 +183,20 @@ function ProductSearchModal({
   }, [show, clientId, warehouseId, shipFromName]);
 
   const handleAdd = (product: any) => {
-    const length = Number(product.pkg_length_in ?? 0);
-    const width = Number(product.pkg_width_in ?? 0);
-    const height = Number(product.pkg_height_in ?? 0);
-    const weight = Number(product.pkg_weight_lb ?? 0);
+    const length =
+      Number(product.pkg_length_in ?? product.length ?? product.meta?.ShippingLength ?? 0);
+    const width =
+      Number(product.pkg_width_in ?? product.width ?? product.meta?.ShippingWidth ?? 0);
+    const height =
+      Number(product.pkg_height_in ?? product.height ?? product.meta?.ShippingHeight ?? 0);
+    const weight =
+      Number(
+        product.pkg_weight_lb ??
+          product.weight_lbs ??
+          product.weight ??
+          product.meta?.ShippingWeight ??
+          0,
+      );
     const productPrice = Number(
       product.price ??
         product.site_price ??
@@ -394,6 +406,7 @@ export default function Step4PackageDetails({
   onItemsChange,
   nextLabel = "Next",
   initialWarehouseId = null,
+  callSyncWorker = true,
 }: Step4PackageDetailsProps) {
   const [items, setItems] = useState<PackageItem[]>([]);
   const [showProductSearchModal, setShowProductSearchModal] = useState(false);
@@ -449,12 +462,25 @@ export default function Step4PackageDetails({
 
         setClientId(String(draft.client));
 
+        // ship_from may be JSONB or a stringified JSON; normalize first.
+        const rawShipFrom = (draft as any)?.ship_from;
+        const shipFromObj =
+          typeof rawShipFrom === "string"
+            ? (() => {
+                try {
+                  return JSON.parse(rawShipFrom);
+                } catch {
+                  return null;
+                }
+              })()
+            : rawShipFrom || {};
+
         const wh =
-          (draft as any)?.ship_from?.warehouse_id ??
-          (draft as any)?.ship_from?.warehouseId ??
-          (draft as any)?.ship_from?.sellercloud_warehouse_id ??
+          (shipFromObj as any)?.warehouse_id ??
+          (shipFromObj as any)?.warehouseId ??
+          (shipFromObj as any)?.sellercloud_warehouse_id ??
           "";
-        const shipName = (draft as any)?.ship_from?.name ?? "";
+        const shipName = (shipFromObj as any)?.name ?? "";
 
         setWarehouseId(String(wh || ""));
         setShipFromName(String(shipName || ""));
@@ -514,6 +540,15 @@ export default function Step4PackageDetails({
     const qtyToAdd =
       Number(product.quantity ?? 1) > 0 ? Number(product.quantity ?? 1) : 1;
     const price = Number.isFinite(product.price) ? Number(product.price) : 0;
+    const length = Number.isFinite(product.length) ? Number(product.length) : 0;
+    const width = Number.isFinite(product.width) ? Number(product.width) : 0;
+    const height = Number.isFinite(product.height) ? Number(product.height) : 0;
+    const weight =
+      Number.isFinite((product as any).weight_lbs)
+        ? Number((product as any).weight_lbs)
+        : Number.isFinite((product as any).weight)
+          ? Number((product as any).weight)
+          : 0;
 
     const key = (it: PackageItem) =>
       it.itemIdentifier?.id ??
@@ -533,6 +568,10 @@ export default function Step4PackageDetails({
         quantity: nextQty,
         price,
         subtotal: price * nextQty,
+        length: length || current.length || 0,
+        width: width || current.width || 0,
+        height: height || current.height || 0,
+        weight_lbs: weight || current.weight_lbs || 0,
       };
       setItems(updated);
     } else {
@@ -541,6 +580,10 @@ export default function Step4PackageDetails({
         quantity: qtyToAdd,
         price,
         subtotal: price * qtyToAdd,
+        length,
+        width,
+        height,
+        weight_lbs: weight,
       };
       setItems([...items, enriched]);
     }
@@ -634,21 +677,20 @@ export default function Step4PackageDetails({
           quote_results: null,
         });
 
-        // Trigger order syncing worker (Supabase Edge Function) in the background.
-        try {
-          await fetch(
+        if (callSyncWorker) {
+          // Fire-and-forget order syncing worker so UI isn't blocked
+          // if the edge function is slow or unreachable.
+          fetch(
             "https://euzjrgnyzfgldubqglba.supabase.co/functions/v1/order-syncing-worker",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
-              body: JSON.stringify({
-                draftId,
-              }),
+              body: JSON.stringify({ draftId }),
             },
+          ).catch((syncErr) =>
+            console.warn("[Step4] order-syncing-worker call failed", syncErr),
           );
-        } catch (syncErr) {
-          console.warn("[Step4] order-syncing-worker call failed", syncErr);
         }
       } catch (e) {
         console.error("❌ Failed to save quote items:", e);
