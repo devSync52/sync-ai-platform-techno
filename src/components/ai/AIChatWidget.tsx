@@ -81,51 +81,22 @@ export default function AIChatWidget() {
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex"
-          style={{ background: 'rgba(0,0,0,0.08)' }}
-          onClick={() => setOpen(false)}
-        >
-          <div
-            style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }}
-            className={`
-              relative ml-auto top-[98px] h-[calc(100%-98px)] w-full
-              sm:top-0 sm:right-0 sm:h-full sm:w-[400px]
-              bg-white sm:border-l rounded-t-2xl sm:rounded-none
-              px-2 sm:px-0 transition-all duration-300 flex flex-col
-            `}
-            onClick={e => e.stopPropagation()} // Não fecha ao clicar dentro do chat
-          >
+        <div className="fixed inset-0 z-50 flex" style={{ background: 'rgba(0,0,0,0.08)' }} onClick={() => setOpen(false)}>
+          <div style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }} className={`relative ml-auto top-[98px] h-[calc(100%-98px)] w-full sm:top-0 sm:right-0 sm:h-full sm:w-[400px] bg-white sm:border-l rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
             {/* Topbar */}
             <div className="flex items-center justify-between p-4 border-b bg-white sticky top-0 z-10">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold ml-2">SynC AI Expert</h2>
-
-
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={openHistory}
-                  className="text-gray-500 hover:text-primary transition p-1"
-                  title="Chat history"
-                >
+                <button onClick={openHistory} className="text-gray-500 hover:text-primary transition p-1" title="Chat history">
                   <HistoryIcon className="w-5 h-5" />
                 </button>
-
-                <button
-                  onClick={handleNewSession}
-                  className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90"
-                  title="Start new conversation"
-                >
+                <button onClick={handleNewSession} className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90" title="Start new conversation">
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">New Chat</span>
                 </button>
-
-                <button
-                  onClick={() => setOpen(false)}
-                  className="text-gray-500 hover:text-gray-800 text-xl font-extrabold ml-2"
-                  title="Fechar chat"
-                >
+                <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-gray-800 text-xl font-extrabold ml-2" title="Fechar chat">
                   ×
                 </button>
               </div>
