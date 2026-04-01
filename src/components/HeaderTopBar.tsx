@@ -126,10 +126,10 @@ useEffect(() => {
         {/* Botão Chat */}
         <button
           onClick={() => window.dispatchEvent(new Event('open-ai-widget'))}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded-lg text-base shadow transition"
+          className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-full text-base shadow transition w-[60px] h-[60px] justify-center fixed bottom-4 right-4"
         >
           <Bot className="w-6 h-6" />
-          SynC AI Assistant
+          {/* SynC AI Assistant */}
         </button>
 
         {/* Engrenagem */}
