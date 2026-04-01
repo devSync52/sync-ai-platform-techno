@@ -617,10 +617,7 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
 
     const toSend = input
     setInput('')
-    if (voiceFirstMode) {
-      await unlockAudioContext()
-    }
-    await processQuestion(toSend, { speakBack: voiceFirstMode })
+    await processQuestion(toSend, { speakBack: false })
   }
 
   const handleQuickPrompt = (prompt: string) => setInput(prompt)
