@@ -30,7 +30,8 @@ export function useSyncAgent(apiUrl: string) {
     async (
       question: string,
       options: AskOptions,
-      onProgress?: (chunk: string) => void
+      onProgress?: (chunk: string) => void,
+      others: Record<string, unknown> = {}
     ): Promise<string | null> => {
       setLoading(true)
       setThinking(true)
@@ -46,6 +47,7 @@ export function useSyncAgent(apiUrl: string) {
             session_id: options.sessionId,
             user_id: options.userId,
             user_type: options.userType,
+            ...others
           }),
         })
         if (!res.ok) throw new Error('API Error')

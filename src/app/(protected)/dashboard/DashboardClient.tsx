@@ -2,13 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSupabase } from "@/components/supabase-provider";
-import {
-  ShoppingBag,
-  DollarSignIcon,
-  PackageCheck,
-  Settings2,
-  Crown,
-} from "lucide-react";
+import { ShoppingBag, DollarSignIcon, PackageCheck, Settings2, Crown, } from "lucide-react";
 import { DashboardCard } from "@/types/dashboard";
 import ShippedOrdersChart from "@/components/dashboard/ShippedOrdersChart";
 import NewOrdersChart from "@/components/dashboard/NewOrderChart";
@@ -18,19 +12,11 @@ import { DateRange } from "react-day-picker";
 import { startOfMonth, endOfMonth } from "date-fns";
 import "@/styles/daypicker-custom.css";
 import DashboardGrid from "@/components/dashboard/DashboardGrid";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, } from "@/components/ui/sheet";
 import DashboardBuilder from "@/components/dashboard/DashboardBuilder";
 import SalesVsPreviousMonthChart from "@/components/dashboard/SalesVsPreviousMonthChart";
 import SalesByMarketplaceChart from "@/components/dashboard/SalesByMarketplaceChart";
 import OrdersPerDayChart from "@/components/dashboard/OrdersPerDayChart";
-import LowStockAlertChart from "@/components/dashboard/LowStockAlertChart";
-import ReorderForecastChart from "@/components/dashboard/ReorderForecastChart";
 import TopSellingProductsChart from "@/components/dashboard/TopSellingProductsChart";
 import { Button } from "@/components/ui/button";
 import { useSearchParams } from "next/navigation";
@@ -48,24 +34,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
 
-  const [startDate, setStartDate] = useState(
-    () => startOfMonth(new Date()).toISOString().split("T")[0],
-  );
-  const [endDate, setEndDate] = useState(
-    () => endOfMonth(new Date()).toISOString().split("T")[0],
-  );
+  const [startDate, setStartDate] = useState(() => startOfMonth(new Date()).toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(() => endOfMonth(new Date()).toISOString().split("T")[0]);
   // ✅ PLAN STATE
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
 
-  const {
-    cardsOrder = [],
-    visibleCards = [],
-    saveOrder,
-    toggleCard,
-    resetLayout,
-    reloadPreferences,
-    loading,
-  } = useDashboardPreferences(userId);
+  const { cardsOrder = [], visibleCards = [], saveOrder, reloadPreferences } = useDashboardPreferences(userId);
 
   const [openBuilder, setOpenBuilder] = useState(false);
   const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
@@ -108,11 +82,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   useEffect(() => {
     async function fetchData() {
-      const { data: userRecord, error: userError } = await supabase
-        .from("users")
-        .select("account_id, role, plan_id")
-        .eq("id", userId)
-        .maybeSingle();
+      const { data: userRecord, error: userError } = await supabase.from("users").select("account_id, role, plan_id").eq("id", userId).maybeSingle();
 
       if (userError || !userRecord) {
         console.error("❌ Error fetching user info:", userError?.message);
@@ -123,12 +93,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setUserRole(userRole);
       // ✅ FETCH PLAN DETAILS
       if (userRole !== "superadmin" && userRecord.plan_id) {
-        const { data: planData } = await supabase
-          .from("plans")
-          .select("*")
-          .eq("id", userRecord.plan_id)
-          .single();
-
+        const { data: planData } = await supabase.from("plans").select("*").eq("id", userRecord.plan_id).single();
         if (planData) {
           setSelectedPlan(planData);
         }
@@ -147,32 +112,17 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setAccountId(userAccountId);
 
       try {
-        const params = new URLSearchParams({
-          page: "1",
-          pageSize: "5000",
-          source: "all",
-          search: "",
-          startDate,
-          endDate,
-        });
-        const response = await fetch(`/api/orders/list?${params.toString()}`, {
-          cache: "no-store",
-        });
+        const params = new URLSearchParams({ page: "1", pageSize: "5000", source: "all", search: "", startDate, endDate, });
+        const response = await fetch(`/api/orders/list?${params.toString()}`, { cache: "no-store", });
         const result = await response.json().catch(() => null);
         if (!response.ok) {
-          console.error(
-            "❌ Error fetching dashboard orders:",
-            result?.error || response.statusText,
-          );
+          console.error("❌ Error fetching dashboard orders:", result?.error || response.statusText,);
           setOrders([]);
           return;
         }
         setOrders(Array.isArray(result?.rows) ? result.rows : []);
       } catch (error: any) {
-        console.error(
-          "❌ Error fetching dashboard orders:",
-          error?.message || String(error),
-        );
+        console.error("❌ Error fetching dashboard orders:", error?.message || String(error),);
         setOrders([]);
       }
     }

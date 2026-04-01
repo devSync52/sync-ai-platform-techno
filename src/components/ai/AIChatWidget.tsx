@@ -79,56 +79,51 @@ export default function AIChatWidget() {
   }
 
   // Overlay fecha ao clicar fora (só área escura)
-  return (
-    <>
-    {/* style={{ background: 'rgba(0,0,0,0.08)' }} */}
-      {open && (
-        <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-t-[16px]' : 'fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-t-[16px]'} style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }} 
-        onClick={() => setOpen(false)}>
-          <div className={`w-full overflow-hidden rounded-t-[16px] rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
-            {/* Topbar */}
-            <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px] ">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold ml-2 text-white">SynC AI Expert</h2>
-              </div>
-              <div className="flex items-center gap-1">
-                <button onClick={openHistory} className="text-white hover:text-white transition p-1" title="Chat history">
-                  <HistoryIcon className="w-5 h-5" />
-                </button>
-                <button onClick={handleNewSession} className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90" title="Start new conversation">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">New Chat</span>
-                </button>
-                <button onClick={() => setOpenExpanded(!openExpanded)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
-                  <ExpandIcon className="w-4 h-4"/>
-                </button>
-                <button onClick={() => setOpen(false)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <div className={openExpanded ? 'overflow-hidden flex flex-col h-[calc(100vh_-_200px)] rounded-b-[16px] bg-white' : 'overflow-hidden flex flex-col h-[500px] rounded-b-[16px] bg-white'}>
-              {view === 'history' ? (
-                <ChatHistoryList
-                  userId={user.id}
-                  currentSessionId={sessionId ?? ''}
-                  onSelectSession={handleSelectSession}
-                  onNewSession={handleNewSession}
-                  onClose={() => setView('chat')}
-                />
-              ) : (
-                <AIExpertChat
-                  apiUrl={process.env.NEXT_PUBLIC_API_URL || ''}
-                  user_id={user.id}
-                  account_id={accountId}
-                  user_type={userType}
-                  session_id={sessionId || ''}
-                />
-              )}
-            </div>
+  return open ? (
+    <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-t-[16px]' : 'fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-t-[16px]'} style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }}
+      onClick={() => setOpen(false)}>
+      <div className={`w-full overflow-hidden rounded-t-[16px] rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
+        {/* Topbar */}
+        <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px] ">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold ml-2 text-white">SynC AI Expert</h2>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={openHistory} className="text-white hover:text-white transition p-1" title="Chat history">
+              <HistoryIcon className="w-5 h-5" />
+            </button>
+            <button onClick={handleNewSession} className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90" title="Start new conversation">
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">New Chat</span>
+            </button>
+            <button onClick={() => setOpenExpanded(!openExpanded)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
+              <ExpandIcon className="w-4 h-4" />
+            </button>
+            <button onClick={() => setOpen(false)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
-      )}
-    </>
-  )
+        <div className={openExpanded ? 'overflow-hidden flex flex-col h-[calc(100vh_-_200px)] rounded-b-[16px] bg-white' : 'overflow-hidden flex flex-col h-[500px] rounded-b-[16px] bg-white'}>
+          {view === 'history' ? (
+            <ChatHistoryList
+              userId={user.id}
+              currentSessionId={sessionId ?? ''}
+              onSelectSession={handleSelectSession}
+              onNewSession={handleNewSession}
+              onClose={() => setView('chat')}
+            />
+          ) : (
+            <AIExpertChat
+              apiUrl={process.env.NEXT_PUBLIC_API_URL || ''}
+              user_id={user.id}
+              account_id={accountId}
+              user_type={userType}
+              session_id={sessionId || ''}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  ) : ''
 }
