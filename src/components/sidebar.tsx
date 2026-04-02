@@ -32,6 +32,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const [userType, setUserType] = useState<'owner' | 'client' | 'end_client' | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const initialAskHandledRef = useRef(false)
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
+  const visitedPagesRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!sessionId) setSessionId(uuidv4())
@@ -152,12 +154,23 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     return ''
   }
 
+  const stopSpeaking = () => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current = null
+    }
+  }
+
   const handleAskAgent = async (targetPath: string = '', initial = false) => {
     if (!accountId || !sessionId) {
       console.error("Missing required parameters to ask the AI agent.")
       return
     }
     const page = resolvePageFromPath(targetPath || pathname) || targetPath || pathname || ''
+
+    if (visitedPagesRef.current.has(page)) return
+    visitedPagesRef.current.add(page)
+
     let aiMessage = ''
     const speak = async (message: string) => {
       if (!message.trim()) return
@@ -182,15 +195,22 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
           throw new Error('Received empty Murf audio response.')
         }
 
+        if (currentAudioRef.current) {
+          currentAudioRef.current.pause()
+          currentAudioRef.current = null
+        }
+
         const url = URL.createObjectURL(blob)
         const audio = new Audio(url)
         audio.preload = 'auto'
+        currentAudioRef.current = audio
 
         await new Promise<void>((resolve, reject) => {
           const cleanup = () => {
             audio.removeEventListener('ended', onEnded)
             audio.removeEventListener('error', onError)
             URL.revokeObjectURL(url)
+            currentAudioRef.current = null
           }
 
           const onEnded = () => {
@@ -233,13 +253,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     }
 
     if (userRole === "superadmin") {
-      return (
-        item.href === "/dashboard" ||
-        item.href === "/users" ||
-        item.href === "/plans" ||
-        item.href === "/features" ||
-        item.href === "/billing/invoices"
-      );
+      return (item.href == "/dashboard" || item.href == "/users" || item.href == "/plans" || item.href == "/features" || item.href == "/billing/invoices");
     }
 
     // Keep the root "Invoices" entry exclusive to superadmin.
@@ -319,6 +333,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
 
   const handleChange = (targetPath: string = '') => {
     if (onLinkClick) onLinkClick();
+    stopSpeaking()
     handleAskAgent(targetPath, false)
   }
 
@@ -432,11 +447,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
             <span className="text-white text-xs">{userRole ?? "—"}</span>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          title="Sign out"
-          className="text-red-500 hover:text-red-700 transition"
-        >
+        <button onClick={handleLogout} title="Sign out" className="text-red-500 hover:text-red-700 transition">
           <LogOut size={18} />
         </button>
       </div>
