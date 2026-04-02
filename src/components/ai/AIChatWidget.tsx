@@ -114,7 +114,7 @@ export default function AIChatWidget() {
               onClose={() => setView('chat')}
             />
           ) : (
-            <AIExpertChat
+            <AIExpertChat 
               apiUrl={process.env.NEXT_PUBLIC_API_URL || ''}
               user_id={user.id}
               account_id={accountId}
