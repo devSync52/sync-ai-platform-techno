@@ -33,11 +33,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const initialAskHandledRef = useRef(false)
   const currentAudioRef = useRef<HTMLAudioElement | null>(null)
-  const visitedPagesRef = useRef<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!sessionId) setSessionId(uuidv4())
-  }, [sessionId])
+  const currentTtsAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -161,15 +157,14 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     }
   }
 
-  const handleAskAgent = async (targetPath: string = '', initial = false) => {
-    if (!accountId || !sessionId) {
+  const handleAskAgent = async (targetPath: string = '', initial = false, newSessionId?: string) => {
+    if (!accountId) {
       console.error("Missing required parameters to ask the AI agent.")
       return
     }
+    const activeSessionId = newSessionId || sessionId
+    if (!activeSessionId) return
     const page = resolvePageFromPath(targetPath || pathname) || targetPath || pathname || ''
-
-    if (visitedPagesRef.current.has(page)) return
-    visitedPagesRef.current.add(page)
 
     let aiMessage = ''
     const speak = async (message: string) => {
@@ -242,7 +237,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       }
     };
 
-    await askQuestion('', { userId: user?.id || '', accountId, sessionId: sessionId || '', userType: userType || 'owner' }, (partial) => { aiMessage = partial }, others)
+    await askQuestion('', { userId: user?.id || '', accountId, sessionId: activeSessionId, userType: userType || 'owner' }, (partial) => { aiMessage = partial }, others)
+    if (aiMessage) window.dispatchEvent(new CustomEvent('sidebar-agent-message', { detail: { message: aiMessage, sessionId: activeSessionId } }))
     await speak(aiMessage)
   }
 
@@ -334,7 +330,10 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const handleChange = (targetPath: string = '') => {
     if (onLinkClick) onLinkClick();
     stopSpeaking()
-    handleAskAgent(targetPath, false)
+    const newSessionId = uuidv4()
+    setSessionId(newSessionId)
+    window.dispatchEvent(new Event('open-ai-widget'))
+    handleAskAgent(targetPath, false, newSessionId)
   }
 
   useEffect(() => {
@@ -348,13 +347,14 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   }, [])
 
   useEffect(() => {
-
+    if (!accountId || !userType || initialAskHandledRef.current) return
     const page = resolvePageFromPath(pathname)
     if (!page) return
-
     initialAskHandledRef.current = true
-    handleAskAgent(pathname, true)
-  }, [pathname, accountId, sessionId, userType])
+    const newSessionId = uuidv4()
+    setSessionId(newSessionId)
+    handleAskAgent(pathname, true, newSessionId)
+  }, [accountId, userType])
 
   return (
     <div className="flex flex-col h-full bg-primary text-white shadow-md">

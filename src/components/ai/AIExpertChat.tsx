@@ -612,6 +612,15 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
   }, [isSpeaking])
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const message = (e as CustomEvent<{ message: string }>).detail.message
+      if (message) setMessages([{ role: 'assistant', content: message }])
+    }
+    window.addEventListener('sidebar-agent-message', handler)
+    return () => window.removeEventListener('sidebar-agent-message', handler)
+  }, [])
+
+  useEffect(() => {
     if (session_id) {
       getHistory(session_id).then(setMessages)
     }

@@ -13,7 +13,7 @@ export default function AIChatWidget() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
 
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [openExpanded, setOpenExpanded] = useState(false)
   const [view, setView] = useState<'chat' | 'history'>('chat')
   const [accountId, setAccountId] = useState<string | null>(null)
@@ -52,6 +52,16 @@ export default function AIChatWidget() {
     const handleOpen = () => setOpen(true)
     window.addEventListener('open-ai-widget', handleOpen)
     return () => window.removeEventListener('open-ai-widget', handleOpen)
+  }, [])
+
+  // Sync sessionId from sidebar agent message
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { sessionId: sid } = (e as CustomEvent<{ message: string; sessionId: string }>).detail
+      if (sid) setSessionId(sid)
+    }
+    window.addEventListener('sidebar-agent-message', handler)
+    return () => window.removeEventListener('sidebar-agent-message', handler)
   }, [])
 
   // Garante uma sessionId ao abrir o chat
