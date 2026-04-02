@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSupabase } from '@/components/supabase-provider'
 import { useSession } from '@/components/supabase-provider'
 import { v4 as uuidv4 } from 'uuid'
@@ -9,6 +9,10 @@ import AIExpertChat from '@/components/ai/AIExpertChat'
 import ChatHistoryList from '@/components/ai/ChatHistoryList'
 
 export default function AIChatWidget() {
+
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
+
   const [open, setOpen] = useState(false)
   const [openExpanded, setOpenExpanded] = useState(false)
   const [view, setView] = useState<'chat' | 'history'>('chat')
@@ -78,6 +82,18 @@ export default function AIChatWidget() {
     setView('chat')
   }
 
+  const stopSpeaking = () => {
+    if (audioRef && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+
+    if (audioUrlRef && audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
+    }
+  }
+
   // Overlay fecha ao clicar fora (só área escura)
   return open ? (
     <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-t-[16px]' : 'fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-t-[16px]'} style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }}
@@ -99,7 +115,7 @@ export default function AIChatWidget() {
             <button onClick={() => setOpenExpanded(!openExpanded)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
               <ExpandIcon className="w-4 h-4" />
             </button>
-            <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('close-ai-widget')) }} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
+            <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('close-ai-widget')); stopSpeaking() }} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -119,6 +135,8 @@ export default function AIChatWidget() {
               user_id={user.id}
               account_id={accountId}
               user_type={userType}
+              audioRef={audioRef}
+              audioUrlRef={audioUrlRef}
               session_id={sessionId || ''}
             />
           )}

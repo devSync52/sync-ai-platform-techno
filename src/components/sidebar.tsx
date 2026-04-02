@@ -340,7 +340,11 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   useEffect(() => {
     const handler = () => stopSpeaking()
     window.addEventListener('close-ai-widget', handler)
-    return () => window.removeEventListener('close-ai-widget', handler)
+    window.addEventListener('open-ai-widget', handler)
+    return () => {
+      window.removeEventListener('close-ai-widget', handler)
+      window.removeEventListener('open-ai-widget', handler)
+    }
   }, [])
 
   useEffect(() => {

@@ -192,9 +192,11 @@ interface AIExpertChatProps {
   user_type: 'owner' | 'client' | 'end_client'
   session_id: string
   apiUrl: string
+  audioRef: React.MutableRefObject<HTMLAudioElement | null>
+  audioUrlRef: React.MutableRefObject<string | null>
 }
 
-export default function AIExpertChat({ user_id, account_id, user_type, session_id, apiUrl, }: AIExpertChatProps) {
+export default function AIExpertChat({ user_id, account_id, user_type, session_id, apiUrl, audioRef, audioUrlRef }: AIExpertChatProps) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [listening, setListening] = useState(false)
@@ -210,8 +212,6 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
 
   const chatRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const audioUrlRef = useRef<string | null>(null)
   const showVoiceModeRef = useRef(false)
   const isSpeakingRef = useRef(false)
 
@@ -242,29 +242,16 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
   }
 
   const stopSpeaking = () => {
-    const currentAudio: any = audioRef.current
+    if (audioRef && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
 
-    try {
-      if (currentAudio && currentAudio._mode === 'webaudio' && currentAudio._node) {
-        try {
-          currentAudio._node.stop()
-          currentAudio._node.disconnect()
-        } catch { }
-      } else if (audioRef.current instanceof HTMLAudioElement) {
-        try {
-          currentAudio?._cleanup?.()
-        } catch { }
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-    } catch { }
-
-    if (audioUrlRef.current) {
+    if (audioUrlRef && audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current)
       audioUrlRef.current = null
     }
 
-    audioRef.current = null
     setIsSpeaking(false)
     resetVoicePhase()
   }
@@ -294,13 +281,7 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
 
       const playWithMediaSource = async () => {
         const mimeType = mime.split(';')[0].trim()
-        if (
-          isIOS ||
-          !res.body ||
-          typeof window === 'undefined' ||
-          typeof MediaSource === 'undefined' ||
-          !MediaSource.isTypeSupported(mimeType)
-        ) {
+        if (isIOS || !res.body || typeof window === 'undefined' || typeof MediaSource === 'undefined' || !MediaSource.isTypeSupported(mimeType)) {
           throw new Error('MediaSource streaming is not supported for this response.')
         }
 
