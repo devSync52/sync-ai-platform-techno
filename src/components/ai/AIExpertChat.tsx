@@ -98,7 +98,7 @@ function VoiceModeOverlay({ open, phase, onClose, onToggleMic, listening, isSpea
         </button>
       </div>
 
-      <div className="flex flex-col items-center justify-center" style={{ minHeight: '62vh' }}>
+      <div className="flex flex-col items-center justify-center">
         <div className="relative h-56 w-56 overflow-visible" key={`phase-${phase}`}>
           {(isListening || isStreaming) && [0, 1, 2].map((i) => (
             <motion.span

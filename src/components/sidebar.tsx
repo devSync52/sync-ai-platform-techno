@@ -338,7 +338,12 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   }
 
   useEffect(() => {
-    if (!pathname || !accountId || !sessionId || !userType || initialAskHandledRef.current) return
+    const handler = () => stopSpeaking()
+    window.addEventListener('close-ai-widget', handler)
+    return () => window.removeEventListener('close-ai-widget', handler)
+  }, [])
+
+  useEffect(() => {
 
     const page = resolvePageFromPath(pathname)
     if (!page) return

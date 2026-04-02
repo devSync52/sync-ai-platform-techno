@@ -99,7 +99,7 @@ export default function AIChatWidget() {
             <button onClick={() => setOpenExpanded(!openExpanded)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
               <ExpandIcon className="w-4 h-4" />
             </button>
-            <button onClick={() => setOpen(false)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
+            <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('close-ai-widget')) }} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
               <X className="w-4 h-4" />
             </button>
           </div>
