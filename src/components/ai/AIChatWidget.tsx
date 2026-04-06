@@ -106,9 +106,8 @@ export default function AIChatWidget() {
 
   // Overlay fecha ao clicar fora (só área escura)
   return open ? (
-    <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-t-[16px]' : 'fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-t-[16px]'} style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }}
-      onClick={() => setOpen(false)}>
-      <div className={`w-full overflow-hidden rounded-t-[16px] rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
+    <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-t-[16px]' : 'fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-t-[16px]'} style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }} onClick={() => setOpen(false)}>
+      <div className={`w-full overflow-hidden rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
         {/* Topbar */}
         <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px] ">
           <div className="flex items-center gap-2">

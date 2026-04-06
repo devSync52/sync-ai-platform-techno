@@ -419,14 +419,14 @@ function getExtensivGrandTotal(row: any): number | null {
 
     const detailsTotal = Array.isArray(charge?.details)
       ? charge.details.reduce((innerAcc: number, detail: any) => {
-          const detailSubtotal = toNumber(detail?.subtotal);
-          if (detailSubtotal !== null) return innerAcc + detailSubtotal;
+        const detailSubtotal = toNumber(detail?.subtotal);
+        if (detailSubtotal !== null) return innerAcc + detailSubtotal;
 
-          const perUnit = toNumber(detail?.chargePerUnit);
-          const units = toNumber(detail?.numUnits) ?? 1;
-          if (perUnit !== null && units > 0) return innerAcc + perUnit * units;
-          return innerAcc;
-        }, 0)
+        const perUnit = toNumber(detail?.chargePerUnit);
+        const units = toNumber(detail?.numUnits) ?? 1;
+        if (perUnit !== null && units > 0) return innerAcc + perUnit * units;
+        return innerAcc;
+      }, 0)
       : 0;
 
     return acc + detailsTotal;
@@ -469,8 +469,8 @@ function normalizeOrderRow(
       order_date: row.creation_date ?? row.process_date ?? null,
       order_status: row.last_event_name
         ? normalizeExtensivStatus(row.last_event_name, {
-            statusFullyAllocated: row.status_fully_allocated,
-          })
+          statusFullyAllocated: row.status_fully_allocated,
+        })
         : row.status_closed === true
           ? "Shipped"
           : "—",
@@ -592,15 +592,7 @@ function OrderProgress({ status, show }: { status: unknown; show: boolean }) {
   );
 }
 
-export default function OrdersClient({
-  userId,
-  isParentOnlyExtensiv = false,
-  isParentOnlyMagaya = false,
-}: {
-  userId: string;
-  isParentOnlyExtensiv?: boolean;
-  isParentOnlyMagaya?: boolean;
-}) {
+export default function OrdersClient({ userId, isParentOnlyExtensiv = false, isParentOnlyMagaya = false, }: { userId: string; isParentOnlyExtensiv?: boolean; isParentOnlyMagaya?: boolean; }) {
   const supabase = useSupabase();
   const searchParams = useSearchParams();
   const [orders, setOrders] = useState<any[]>([]);
@@ -610,9 +602,7 @@ export default function OrdersClient({
   const [allStatusOptions, setAllStatusOptions] = useState<string[]>([]);
   const [allWarehouseOptions, setAllWarehouseOptions] = useState<string[]>([]);
   const [availableSources, setAvailableSources] = useState<string[]>([]);
-  const [sourceOverride, setSourceOverride] = useState<
-    "auto" | "sellercloud" | "extensiv" | "magaya"
-  >("extensiv");
+  const [sourceOverride, setSourceOverride] = useState<"auto" | "sellercloud" | "extensiv" | "magaya">("extensiv");
 
   const initialSearchTerm = String(searchParams.get("q") ?? "").trim();
   const initialStatusFilter = (() => {
@@ -777,10 +767,10 @@ export default function OrdersClient({
           warehouseFilter === "all"
             ? normalized
             : normalized.filter(
-                (row) =>
-                  String(row.warehouse_name || "").toLowerCase() ===
-                  String(warehouseFilter).toLowerCase(),
-              );
+              (row) =>
+                String(row.warehouse_name || "").toLowerCase() ===
+                String(warehouseFilter).toLowerCase(),
+            );
 
         const statusOptions = Array.isArray(json?.statuses)
           ? json.statuses
@@ -893,8 +883,8 @@ export default function OrdersClient({
       statusQuery =
         sourceMode === "magaya"
           ? applyMagayaAccountScope(statusQuery.select(statusSelect), [
-              accountId || "",
-            ])
+            accountId || "",
+          ])
           : statusQuery.select(statusSelect).eq(statusFilterField, accountId);
 
       const { data: statusRows } = await statusQuery;
@@ -1008,8 +998,8 @@ export default function OrdersClient({
       if (endDate) {
         query = query[
           sourceMode === "extensiv" ||
-          sourceMode === "magaya" ||
-          sourceMode === "sellercloud"
+            sourceMode === "magaya" ||
+            sourceMode === "sellercloud"
             ? "lte"
             : "lt"
         ](
@@ -1159,11 +1149,10 @@ export default function OrdersClient({
         {[10, 25, 50].map((count) => (
           <button
             key={count}
-            className={`px-1 py-1 rounded ${
-              itemsPerPage === count
-                ? "bg-primary/10 text-primary font-bold"
-                : "text-gray-600"
-            }`}
+            className={`px-1 py-1 rounded ${itemsPerPage === count
+              ? "bg-primary/10 text-primary font-bold"
+              : "text-gray-600"
+              }`}
             onClick={() => {
               setItemsPerPage(count);
               setCurrentPage(1);
@@ -1215,9 +1204,9 @@ export default function OrdersClient({
                         : isMagayaView
                           ? "/logos/unknown.png"
                           : getMarketplaceLogoSrc(
-                              order.marketplace_name,
-                              order.order_source_order_id,
-                            );
+                            order.marketplace_name,
+                            order.order_source_order_id,
+                          );
                       return (
                         <Image
                           src={logo}
@@ -1231,8 +1220,8 @@ export default function OrdersClient({
                     <div className="text-sm text-gray-700">
                       {isExtensivView
                         ? order.warehouse_name ||
-                          order.marketplace_name ||
-                          "extensiv"
+                        order.marketplace_name ||
+                        "extensiv"
                         : isMagayaView
                           ? order.customer_name || "magaya"
                           : order.marketplace_name || "—"}
