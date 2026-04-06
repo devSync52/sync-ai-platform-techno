@@ -72,7 +72,7 @@ export default function SellerCloudOrderProgress({ statusCode, paymentStatus, sh
     }
 
     return (
-        <div className="flex items-center justify-center w-full px-10 py-6">
+        <div className="flex items-center justify-center w-full">
             <div className="flex items-center w-full max-w-2xl">
                 {
                     sellerCloudOrderSteps.map((step, index) => {
@@ -111,3 +111,107 @@ export default function SellerCloudOrderProgress({ statusCode, paymentStatus, sh
         </div>
     );
 }
+
+const sellerCloudStatus = Object.freeze({
+    0: {
+        name: "Cart",
+        style: {
+            backgroundColor: "rgba(59, 130, 246, 0.16)",
+            color: "#1d4ed8",
+            borderColor: "rgba(59, 130, 246, 0.82)",
+        }
+    },
+    1: {
+        name: "New",
+        style: {
+            backgroundColor: "rgba(99, 102, 241, 0.16)",
+            color: "#4338ca",
+            borderColor: "rgba(99, 102, 241, 0.82)",
+        }
+    },
+    2: {
+        name: "Processing",
+        style: {
+            backgroundColor: "rgba(251, 191, 36, 0.18)",
+            color: "#b45309",
+            borderColor: "rgba(251, 191, 36, 0.85)",
+        }
+    },
+    3: {
+        name: "In Process",
+        style: {
+            backgroundColor: "rgba(59, 130, 246, 0.18)",
+            color: "#1e40af",
+            borderColor: "rgba(59, 130, 246, 0.9)",
+        }
+    },
+    4: {
+        name: "Partially Shipped",
+        style: {
+            backgroundColor: "rgba(251, 146, 60, 0.18)",
+            color: "#c2410c",
+            borderColor: "rgba(251, 146, 60, 0.9)",
+        }
+    },
+    5: {
+        name: "Shipped",
+        style: {
+            backgroundColor: "rgba(34, 197, 94, 0.18)",
+            color: "#166534",
+            borderColor: "rgba(34, 197, 94, 0.9)",
+        }
+    },
+    6: {
+        name: "Cancelled",
+        style: {
+            backgroundColor: "rgba(239, 68, 68, 0.18)",
+            color: "#991b1b",
+            borderColor: "rgba(239, 68, 68, 0.9)",
+        }
+    },
+    7: {
+        name: "On Hold",
+        style: {
+            backgroundColor: "rgba(168, 85, 247, 0.18)",
+            color: "#6b21a8",
+            borderColor: "rgba(168, 85, 247, 0.9)",
+        }
+    },
+    8: {
+        name: "Problem",
+        style: {
+            backgroundColor: "rgba(220, 38, 38, 0.2)",
+            color: "#7f1d1d",
+            borderColor: "rgba(220, 38, 38, 0.95)",
+        }
+    },
+    9: {
+        name: "Returned",
+        style: {
+            backgroundColor: "rgba(244, 63, 94, 0.18)",
+            color: "#9f1239",
+            borderColor: "rgba(244, 63, 94, 0.9)",
+        }
+    },
+    10: {
+        name: "Completed",
+        style: {
+            backgroundColor: "rgba(16, 185, 129, 0.18)",
+            color: "#065f46",
+            borderColor: "rgba(16, 185, 129, 0.9)",
+        }
+    },
+});
+
+type SellerCloudStatusType = typeof sellerCloudStatus[keyof typeof sellerCloudStatus];
+
+export const getSellerCloudStatus = (code: number): SellerCloudStatusType => {
+    return sellerCloudStatus[code as keyof typeof sellerCloudStatus] || {
+        name: "Unknown",
+        style: {
+            backgroundColor: "rgba(107, 114, 128, 0.2)",
+            color: "#374151",
+            borderColor: "rgba(107, 114, 128, 0.8)",
+        }
+    };
+};

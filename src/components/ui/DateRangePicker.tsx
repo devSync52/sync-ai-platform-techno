@@ -1,125 +1,81 @@
 'use client'
 
-import * as React from 'react'
-import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { CalendarIcon } from 'lucide-react'
-import { DayPicker, DateRange } from 'react-day-picker'
+import { DateRangePicker as ReactDateRangePicker } from 'react-date-range';
+import { DateRange } from 'react-day-picker'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Button } from '@/components/ui/button'
+
+import 'react-date-range/dist/styles.css'; // main style file
+import 'react-date-range/dist/theme/default.css'; // theme css file
+import { Button } from './button';
+import { useEffect, useMemo, useState } from 'react';
+import moment from 'moment-timezone';
 
 interface DateRangePickerProps {
   date: DateRange | undefined
   setDate: (range: DateRange | undefined) => void
 }
 
-const predefinedRanges = [
-    {
-      label: 'Last 7 days',
-      range: {
-        from: subDays(new Date(), 6),
-        to: new Date(),
-      },
-    },
-    {
-      label: 'Last 15 days',
-      range: {
-        from: subDays(new Date(), 14),
-        to: new Date(),
-      },
-    },
-    {
-      label: 'Last 30 days',
-      range: {
-        from: subDays(new Date(), 29),
-        to: new Date(),
-      },
-    },
-    {
-      label: 'This month',
-      range: {
-        from: startOfMonth(new Date()),
-        to: endOfMonth(new Date()),
-      },
-    },
-    {
-      label: 'Last month',
-      range: {
-        from: startOfMonth(subMonths(new Date(), 1)),
-        to: endOfMonth(subMonths(new Date(), 1)),
-      },
-    },
-  ]
+const PRIMARY = '#3f2d90'
 
 export function DateRangePicker({ date, setDate }: DateRangePickerProps) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = useState(false)
+  const [internal, setInternal] = useState<DateRange | undefined>(date)
 
-  function formatLabel(range: DateRange | undefined) {
-    if (!range?.from || !range?.to) return 'Select a date range'
-    return `${format(range.from, 'dd MMM yyyy')} – ${format(range.to, 'dd MMM yyyy')}`
+  useEffect(() => {
+    setInternal(date)
+  }, [date])
+
+  const label = date?.from && date?.to ? `${moment(date.from).format('MMM DD, YYYY')} - ${moment(date.to).format('MMM DD, YYYY')}` : 'Select date range'
+
+  const selectionRange = useMemo(() => ({
+    startDate: new Date(internal?.from || new Date()),
+    endDate: new Date(internal?.to || new Date()),
+    key: 'selection',
+  }), [internal])
+
+  const handleApply = () => {
+    setDate(internal);
+    setOpen(false)
+  }
+  const handleCancel = () => {
+    setInternal(date);
+    setOpen(false)
   }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-  <Button
-    variant="outline"
-    className="w-full md:w-auto  text-center font-normal text-sm"
-  >
-    <p className="hidden md:block">Selected period</p>
-    <CalendarIcon className="mr-2 h-4 w-4" />
-    <span>{formatLabel(date)}</span>
-  </Button>
-</PopoverTrigger>
-      <PopoverContent className="w-[95vw] md:w-full max-w-[700px] flex flex-col md:flex-row md:space-x-6 space-y-4 md:space-y-0 px-2 py-4 md:p-4 rounded-xl shadow-xl border bg-white z-[9999] mr-4 overflow-x-auto max-h-[90vh] overflow-y-auto">
-        {/* Botões laterais */}
-        <div className="w-full md:w-44 border-r md:pr-4">
-          <div className="flex flex-row flex-wrap gap-2 md:flex-col md:gap-2 md:mb-0 mb-2 md:justify-start justify-center">
-            {predefinedRanges.map((item) => (
-              <Button
-                key={item.label}
-                variant="ghost"
-                className="text-xs md:text-sm whitespace-nowrap px-3 py-1 border border-muted rounded-full text-primary hover:bg-muted"
-                onClick={() => {
-                  setDate(item.range)
-                  setOpen(false)
-                }}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </div>
+        <button className='inline-flex items-center gap-2 h-[36px] px-4 rounded-[4px] border border-gray-400 bg-white font-[13px] leading-[20px]'>
+          <CalendarIcon style={{ width: 15, height: 15, color: '#757575', flexShrink: 0 }} />
+          {label}
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent align="end" sideOffset={6} className='p-0 w-auto rounded-md border border-gray-400 overflow-hidden z-50 bg-white shadow-lg shadow-slate-200'>
+        {/* Calendar */}
+        <div style={{ padding: '12px 16px' }}>
+          <ReactDateRangePicker
+            ranges={[selectionRange]}
+            onChange={(ranges) => setInternal({ from: ranges.selection.startDate, to: ranges.selection.endDate })}
+            maxDate={new Date()}
+            moveRangeOnFirstSelection={false}
+            months={2}
+            direction="horizontal"
+            rangeColors={[PRIMARY]}
+          />
         </div>
 
-        {/* Calendário e ações */}
-        <div className="w-full flex flex-col items-center space-y-3 text-xs">
-          <DayPicker
-            initialFocus
-            mode="range"
-            numberOfMonths={2}
-            selected={date}
-            onSelect={setDate}
-            showOutsideDays={false}
-            modifiersClassNames={{
-              selected: 'bg-primary text-white',
-              range_start: 'bg-primary text-white',
-              range_end: 'bg-primary text-white',
-              range_middle: 'bg-primary/10 text-black',
-              today: '',
-            }}
-            className="flex justify-center flex-col md:flex-row text-sm"
-            classNames={{
-              months: 'flex flex-col md:flex-row md:space-x-6 space-y-6 md:space-y-0 text-primary font-bold',
-              month: 'space-y-2',
-              caption: 'text-center font-medium',
-              head_cell: 'text-muted-foreground w-8 text-[12px]',
-              cell: 'w-8 h-8 text-center text-sm p-0',
-              day: 'h-8 w-8 p-0 font-normal text-center aria-selected:opacity-100',
-            }}
-          />
-          <div className="flex justify-end gap-2 w-full pt-2 border-t">
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={() => setOpen(false)}>Apply</Button>
-          </div>
+        <div style={{ height: 1, background: '#e0e0e0' }} />
+
+        {/* Actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '10px 16px' }}>
+          <Button variant="outline" onClick={handleCancel}>
+            Cancel
+          </Button>
+          <Button onClick={handleApply}>
+            Apply
+          </Button>
         </div>
       </PopoverContent>
     </Popover>
