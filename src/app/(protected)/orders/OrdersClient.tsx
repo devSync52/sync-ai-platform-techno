@@ -249,15 +249,15 @@ export default function OrdersClient({ integrations, warehouses }: { warehouses:
                     {
                       element?.orders?.provider?.slug == "extensiv" ? (
                         <SellerCloudOrderProgress
-                          statusCode={element?.orders?.status}
-                          paymentStatus={element?.orders?.payment_status}
-                          shipmentStatus={element?.orders?.shipment_status}
+                          orderStatusCode={element?.orders?.status}
+                          paymentStatusCode={element?.orders?.payment_status}
+                          shippingStatusCode={element?.orders?.shipment_status}
                         />
                       ) : (
                         <SellerCloudOrderProgress
-                          statusCode={element?.orders?.status}
-                          paymentStatus={element?.orders?.payment_status}
-                          shipmentStatus={element?.orders?.shipment_status}
+                          orderStatusCode={element?.orders?.status}
+                          paymentStatusCode={element?.orders?.payment_status}
+                          shippingStatusCode={element?.orders?.shipment_status}
                         />
                       )
                     }

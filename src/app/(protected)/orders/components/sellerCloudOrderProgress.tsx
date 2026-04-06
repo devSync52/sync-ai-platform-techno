@@ -1,113 +1,206 @@
-import { Box, CreditCard, CreditCardIcon, Home, HomeIcon, Package, RefreshCw, SettingsIcon, Truck, TruckIcon } from "lucide-react";
+"use client";
 
-type SellerCloudOrderProgressType = {
-    statusCode: number;
-    paymentStatus?: number;
-    shipmentStatus?: number;
+import { Package, CreditCard, RefreshCw, Truck, Home, AlertTriangle, CheckCircle, } from "lucide-react";
+
+// ─── SellerCloud numeric status codes ────────────────────────────────────────
+
+export const ORDER_STATUS = {
+    "-1": "Canceled",
+    "1": "ShoppingCart",
+    "2": "InProcess",
+    "3": "Completed",
+    "100": "ProblemOrder",
+    "200": "OnHold",
+    "300": "Quote",
+    "999": "Void",
+} as const;
+
+export const PAYMENT_STATUS = {
+    "10": "NoPayment",
+    "11": "NoPaymentOrPartialPayment",
+    "20": "Authorized",
+    "30": "Charged",
+    "40": "Uncleared",
+    "50": "PartialRefund",
+    "60": "FullRefund",
+    "61": "PartialOrFullRefund",
+    "70": "PartiallyPaid",
+    "71": "ChargedOrPartialRefund",
+    "80": "EbayPaid",
+    "81": "EbayPaidOrPartialPayment",
+    "99": "PaymentError",
+} as const;
+
+export const SHIPPING_STATUS = {
+    "0": "Unknown",
+    "1": "Unshipped",
+    "2": "PartiallyShipped",
+    "3": "FullyShipped",
+    "4": "InTransit",
+    "5": "OutForDelivery",
+    "6": "Delivered",
+    "7": "ReturnToSender",
+    "8": "Undeliverable",
+} as const;
+
+type OrderCode = keyof typeof ORDER_STATUS;
+type PaymentCode = keyof typeof PAYMENT_STATUS;
+type ShipCode = keyof typeof SHIPPING_STATUS;
+
+type OrderName = typeof ORDER_STATUS[OrderCode];
+type PaymentName = typeof PAYMENT_STATUS[PaymentCode];
+type ShipName = typeof SHIPPING_STATUS[ShipCode];
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface OrderStepperProps {
+    /** Raw numeric code from SellerCloud API  e.g. 2 */
+    orderStatusCode: number;
+    /** Raw numeric code from SellerCloud API  e.g. 30 */
+    paymentStatusCode: number;
+    /** Raw numeric code from SellerCloud API  e.g. 4 */
+    shippingStatusCode: number;
 }
 
-const sellerCloudOrderSteps = [
-    { id: 1, label: "Order", icon: Package },
-    { id: 2, label: "Payment", icon: CreditCard },
-    { id: 3, label: "Processing", icon: RefreshCw },
-    { id: 4, label: "Shipped", icon: Truck },
-    { id: 5, label: "Delivered", icon: Home },
-];
+// ─── Step state type ──────────────────────────────────────────────────────────
 
-// export const sellerCloudOrderSteps = [
-//     { key: "placed", label: "Order Placed", icon: <Box size={15} /> },
-//     { key: "paid", label: "Payment", icon: <CreditCardIcon size={15} /> },
-//     { key: "processing", label: "Processing", icon: <SettingsIcon size={15} /> },
-//     { key: "shipped", label: "Shipped", icon: <TruckIcon size={15} /> },
-//     { key: "delivered", label: "Delivered", icon: <HomeIcon size={15} /> },
-// ];
+type StepState = "done" | "active" | "error" | "pending";
 
-export const sellerCloudOrderState = ["Order", "Payment", "Processing", "Shipped", "Delivered",];
-
-export function getOrderStepIndex({ statusCode, paymentStatus, shipmentStatus, }: { statusCode: number; paymentStatus?: number; shipmentStatus?: number; }) {
-    if (statusCode == 6) return -1; // Cancelled
-    if (statusCode == 8) return -2; // Problem
-
-    // ✅ Delivered
-    if (shipmentStatus == 4) return 4;
-
-    // 🚚 Shipped / In Transit
-    if (shipmentStatus == 2 || shipmentStatus == 3 || statusCode == 5) {
-        return 3;
-    }
-
-    // ⚙️ Processing
-    if (statusCode == 2 || statusCode == 3) {
-        return 2;
-    }
-
-    // 💳 Payment done
-    if (paymentStatus == 1 || paymentStatus == 2) {
-        return 1;
-    }
-
-    // 📦 Order placed
-    return 0;
+interface Step {
+    id: string;
+    label: string;
+    sublabel: string;
+    icon: React.ElementType;
+    state: StepState;
 }
 
-export default function SellerCloudOrderProgress({ statusCode, paymentStatus, shipmentStatus, }: SellerCloudOrderProgressType) {
-    const currentStep = getOrderStepIndex({ statusCode, paymentStatus, shipmentStatus, });
+// ─── Resolve logic ────────────────────────────────────────────────────────────
 
-    const isCancelled = currentStep == -1, isProblem = currentStep == -2;
+function resolve(
+    orderCode: number,
+    paymentCode: number,
+    shipCode: number
+): { steps: Step[]; connectors: boolean[] } {
+    const order = ORDER_STATUS[String(orderCode) as OrderCode] ?? "InProcess";
+    const payment = PAYMENT_STATUS[String(paymentCode) as PaymentCode] ?? "NoPayment";
+    const ship = SHIPPING_STATUS[String(shipCode) as ShipCode] ?? "Unknown";
 
-    // Prevent negative width
-    const safeStep = Math.max(0, currentStep);
+    const isOrderError = (["Canceled", "ProblemOrder", "OnHold", "Void"] as OrderName[]).includes(order);
+    const isPaymentError = (["PaymentError", "FullRefund", "PartialOrFullRefund"] as PaymentName[]).includes(payment);
+    const isShipError = (["ReturnToSender", "Undeliverable"] as ShipName[]).includes(ship);
 
-    const progressWidth = (safeStep / (sellerCloudOrderState.length - 1)) * 100;
+    const orderDone = !isOrderError && (["InProcess", "Completed"] as OrderName[]).includes(order);
+    const paymentDone = !isPaymentError && (["Charged", "EbayPaid", "ChargedOrPartialRefund", "EbayPaidOrPartialPayment"] as PaymentName[]).includes(payment);
+    const processingDone = orderDone && paymentDone;
+    const shipStarted = !isShipError && (["PartiallyShipped", "FullyShipped", "InTransit", "OutForDelivery", "Delivered"] as ShipName[]).includes(ship);
+    const delivered = !isShipError && ship === "Delivered";
 
-    // ❌ Special states UI
-    if (isCancelled || isProblem) {
+    const orderState: StepState = isOrderError ? "error" : orderDone ? "done" : "active";
+    const paymentState: StepState = isOrderError ? "pending" : isPaymentError ? "error" : paymentDone ? "done" : (["Authorized", "Uncleared", "PartiallyPaid", "NoPaymentOrPartialPayment"] as PaymentName[]).includes(payment) ? "active" : "pending";
+    const processingState: StepState = (isOrderError || isPaymentError) ? "pending" : processingDone ? "done" : paymentDone ? "active" : "pending";
+    const shipState: StepState = !processingDone ? "pending" : isShipError ? "error" : shipStarted ? (delivered ? "done" : "active") : "active";
+    const deliveredState: StepState = delivered ? "done" : "pending";
+
+    const friendlyLabel = (name: string) => name.replace(/([A-Z])/g, " $1").trim();
+
+    const steps: Step[] = [
+        { id: "order", label: "Order", sublabel: friendlyLabel(order), icon: Package, state: orderState },
+        { id: "payment", label: "Payment", sublabel: friendlyLabel(payment), icon: CreditCard, state: paymentState },
+        { id: "processing", label: "Processing", sublabel: processingDone ? "Done" : "Pending", icon: RefreshCw, state: processingState },
+        { id: "shipping", label: "Shipping", sublabel: friendlyLabel(ship), icon: Truck, state: shipState },
+        { id: "delivered", label: "Delivered", sublabel: delivered ? "Done" : "Pending", icon: Home, state: deliveredState },
+    ];
+
+    const connectors = [
+        orderDone,
+        processingDone,
+        processingDone && !isShipError,
+        delivered,
+    ];
+
+    return { steps, connectors };
+}
+
+// ─── Circle ───────────────────────────────────────────────────────────────────
+
+function Circle({ state, Icon }: { state: StepState; Icon: React.ElementType }) {
+    const base = "w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300";
+
+    if (state == "done") {
         return (
-            <div className="w-full p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-center">
-                <p className="text-red-400 font-medium">
-                    {isCancelled ? "Order Cancelled" : "Problem with Order"}
-                </p>
+            <div className={base} style={{ background: "linear-gradient(135deg,#4a3adb,#9b3abf)" }}>
+                <CheckCircle size={18} className="text-white" strokeWidth={2} />
+            </div>
+        );
+    }
+
+    if (state == "active") {
+        return (
+            <div className={base} style={{ background: "linear-gradient(135deg,#4a3adb,#9b3abf)", boxShadow: "0 0 0 3px rgba(123,63,196,0.3)" }}>
+                <Icon size={18} className="text-white" strokeWidth={1.8} />
+            </div>
+        );
+    }
+
+    if (state == "error") {
+        return (
+            <div className={`${base} bg-red-50 border border-red-300`}>
+                <AlertTriangle size={18} className="text-red-500" strokeWidth={1.8} />
             </div>
         );
     }
 
     return (
-        <div className="flex items-center justify-center w-full">
-            <div className="flex items-center w-full max-w-2xl">
-                {
-                    sellerCloudOrderSteps.map((step, index) => {
-                        const isActive = index == currentStep, isCompleted = index < currentStep, isLast = index == sellerCloudOrderSteps.length - 1;
-                        const Icon = step.icon;
+        <div className={`${base} border border-purple-200 bg-transparent`}>
+            <Icon size={18} className="text-purple-300" strokeWidth={1.8} />
+        </div>
+    );
+}
 
-                        return (
-                            <div key={step.id} className="flex items-center flex-1 last:flex-none">
-                                <div className="relative flex flex-col items-center">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${isActive ? "shadow-[0_0_0_3px_rgba(123,63,196,0.35),0_0_16px_rgba(139,47,201,0.4)]" : "border border-purple-500/35"}`} style={isActive || isCompleted ? { background: "linear-gradient(135deg, #4a3adb, #9b3abf)" } : {}}>
-                                        <Icon
-                                            size={15}
-                                            className={isActive || isCompleted ? "text-white" : "text-purple-300/70"}
-                                            strokeWidth={1.8}
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function SellerCloudOrderProgress({ orderStatusCode, paymentStatusCode, shippingStatusCode, }: OrderStepperProps) {
+    const { steps, connectors } = resolve(orderStatusCode, paymentStatusCode, shippingStatusCode);
+
+    return (
+        <div className="flex items-start w-full px-4 py-3">
+            {
+                steps.map((step, index) => {
+                    const Icon = step.icon;
+                    const isLast = index == steps.length - 1;
+
+                    return (
+                        <div key={step.id} className="flex items-center flex-1 last:flex-none">
+                            <div className="flex flex-col items-center gap-1">
+                                <Circle state={step.state} Icon={Icon} />
+                                <span className={`text-[10px] font-medium whitespace-nowrap ${step.state == "active" ? "text-purple-600" : step.state == "done" ? "text-purple-500" : step.state == "error" ? "text-red-500" : "text-gray-400"}`}>
+                                    {step.label}
+                                </span>
+                                <span className="text-[9px] text-gray-400 whitespace-nowrap">
+                                    {step.sublabel}
+                                </span>
+                            </div>
+
+                            {
+                                !isLast && (
+                                    <div className="flex-1 h-[3px] top-[-11px] relative mx-[-1px] mb-7 transition-all duration-500">
+                                        <div
+                                            className="h-full w-full"
+                                            style={
+                                                connectors[index] ? {
+                                                    background: "linear-gradient(90deg,#4a3adb,#9b3abf)"
+                                                } : {
+                                                    background: "rgba(139,47,201,0.15)"
+                                                }
+                                            }
                                         />
                                     </div>
-                                </div>
-                                {
-                                    !isLast && (
-                                        <div className="flex-1 h-[3px] mx-[-1px]">
-                                            <div className="h-full w-full transition-all duration-500" style={
-                                                isCompleted ? {
-                                                    background: "linear-gradient(90deg, #4a3adb, #9b3abf)"
-                                                } : {
-                                                    background: "rgba(139, 47, 201, 0.2)"
-                                                }
-                                            } />
-                                        </div>
-                                    )
-                                }
-                            </div>
-                        );
-                    })
-                }
-            </div>
+                                )
+                            }
+                        </div>
+                    );
+                })
+            }
         </div>
     );
 }

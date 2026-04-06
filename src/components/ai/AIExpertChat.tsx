@@ -33,38 +33,15 @@ async function unlockAudioContext() {
   } catch { }
 }
 
-function BotMessageWithCopy({ content }: { content: string }) {
-  const [isExpanded, setIsExpanded] = useState(false)
-
-  return (
-    <>
-      <div className="flex items-start w-full">
-        <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
-          <button type="button" onClick={() => setIsExpanded(true)} className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-white hover:text-gray-700" title="Expand message" aria-label="Expand message">
-            <Expand className="h-4 w-4" />
-          </button>
-          <div className='overflow-x-auto'>
-            <div className="chat_box" dangerouslySetInnerHTML={{ __html: content }} />
-          </div>
-        </div>
+const BotMessageWithCopy = ({ content }: { content: string }) => (
+  <div className="flex items-start w-full">
+    <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
+      <div className='overflow-x-auto'>
+        <div className="chat_box" dangerouslySetInnerHTML={{ __html: content }} />
       </div>
-      {isExpanded && (
-        <Dialog open={isExpanded} onOpenChange={setIsExpanded}>
-          <DialogContent className="w-[calc(100%-1.5rem)] max-w-5xl max-h-[85vh] overflow-hidden bg-white">
-            <DialogHeader>
-              <DialogTitle>Full Response</DialogTitle>
-            </DialogHeader>
-            <div
-              className="overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 chat_box"
-              style={{ maxHeight: 'calc(85vh - 6rem)' }}
-              dangerouslySetInnerHTML={{ __html: content }}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
-    </>
-  )
-}
+    </div>
+  </div>
+)
 
 type VoicePhase = 'initial' | 'listening' | 'thinking' | 'streaming'
 
