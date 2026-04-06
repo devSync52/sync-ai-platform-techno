@@ -6,19 +6,121 @@ import { Button } from "@/components/ui/button";
 import OrderDetailsSc from "@/components/modals/OrderDetailsSc";
 import { SyncOrdersButton } from "@/components/buttons/SyncOrdersButton";
 import FilterBar from "@/components/FilterBar";
-import {
-  Circle,
-  CheckCircle2,
-  Package,
-  PackageCheck,
-  Truck,
-} from "lucide-react";
+import { Circle, CheckCircle2, Package, PackageCheck, Truck, } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { DateRange } from "react-day-picker";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { subDays } from "date-fns";
 import Image from "next/image";
+import moment from "moment-timezone";
 import "@/styles/daypicker-custom.css";
+import SellerCloudOrderProgress from "./components/sellerCloudOrderProgress";
+
+const sellerCloudStatus = Object.freeze({
+  0: {
+    name: "Cart",
+    style: {
+      backgroundColor: "rgba(59, 130, 246, 0.16)",
+      color: "#1d4ed8",
+      borderColor: "rgba(59, 130, 246, 0.82)",
+    }
+  },
+  1: {
+    name: "New",
+    style: {
+      backgroundColor: "rgba(99, 102, 241, 0.16)",
+      color: "#4338ca",
+      borderColor: "rgba(99, 102, 241, 0.82)",
+    }
+  },
+  2: {
+    name: "Processing",
+    style: {
+      backgroundColor: "rgba(251, 191, 36, 0.18)",
+      color: "#b45309",
+      borderColor: "rgba(251, 191, 36, 0.85)",
+    }
+  },
+  3: {
+    name: "In Process",
+    style: {
+      backgroundColor: "rgba(59, 130, 246, 0.18)",
+      color: "#1e40af",
+      borderColor: "rgba(59, 130, 246, 0.9)",
+    }
+  },
+  4: {
+    name: "Partially Shipped",
+    style: {
+      backgroundColor: "rgba(251, 146, 60, 0.18)",
+      color: "#c2410c",
+      borderColor: "rgba(251, 146, 60, 0.9)",
+    }
+  },
+  5: {
+    name: "Shipped",
+    style: {
+      backgroundColor: "rgba(34, 197, 94, 0.18)",
+      color: "#166534",
+      borderColor: "rgba(34, 197, 94, 0.9)",
+    }
+  },
+  6: {
+    name: "Cancelled",
+    style: {
+      backgroundColor: "rgba(239, 68, 68, 0.18)",
+      color: "#991b1b",
+      borderColor: "rgba(239, 68, 68, 0.9)",
+    }
+  },
+  7: {
+    name: "On Hold",
+    style: {
+      backgroundColor: "rgba(168, 85, 247, 0.18)",
+      color: "#6b21a8",
+      borderColor: "rgba(168, 85, 247, 0.9)",
+    }
+  },
+  8: {
+    name: "Problem",
+    style: {
+      backgroundColor: "rgba(220, 38, 38, 0.2)",
+      color: "#7f1d1d",
+      borderColor: "rgba(220, 38, 38, 0.95)",
+    }
+  },
+  9: {
+    name: "Returned",
+    style: {
+      backgroundColor: "rgba(244, 63, 94, 0.18)",
+      color: "#9f1239",
+      borderColor: "rgba(244, 63, 94, 0.9)",
+    }
+  },
+  10: {
+    name: "Completed",
+    style: {
+      backgroundColor: "rgba(16, 185, 129, 0.18)",
+      color: "#065f46",
+      borderColor: "rgba(16, 185, 129, 0.9)",
+    }
+  },
+});
+
+type SellerCloudStatusType = typeof sellerCloudStatus[keyof typeof sellerCloudStatus];
+
+export const getSellerCloudStatus = (code: number): SellerCloudStatusType => {
+  return sellerCloudStatus[code as keyof typeof sellerCloudStatus] || {
+    name: "Unknown",
+    style: {
+      backgroundColor: "rgba(107, 114, 128, 0.2)",
+      color: "#374151",
+      borderColor: "rgba(107, 114, 128, 0.8)",
+    }
+  };
+};
+
+
 
 const PARTIAL_ALLOCATED_STATUS = "Partial Allocated";
 const EXTENSIV_STATUS_ORDER = [
@@ -131,20 +233,12 @@ function toExtensivStatusKey(status: unknown): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function normalizeExtensivStatus(
-  status: unknown,
-  options?: {
-    statusFullyAllocated?: unknown;
-  },
-): string {
+function normalizeExtensivStatus(status: unknown, options?: { statusFullyAllocated?: unknown; },): string {
   const raw = String(status ?? "").trim();
   const normalized = toExtensivStatusKey(raw);
 
   if (normalized === "partialallocated") return PARTIAL_ALLOCATED_STATUS;
-  if (
-    options?.statusFullyAllocated === false &&
-    (normalized === "ordercomplete" || normalized === "completed")
-  ) {
+  if (options?.statusFullyAllocated === false && (normalized === "ordercomplete" || normalized === "completed")) {
     return PARTIAL_ALLOCATED_STATUS;
   }
   if (normalized === "created") return "Created";
@@ -319,63 +413,6 @@ function getStatusBadgeStyle(status: unknown): {
   };
 }
 
-function getStandardStatusBadgeStyle(status: unknown): {
-  backgroundColor: string;
-  color: string;
-  border: string;
-} {
-  const normalized = toExtensivStatusKey(status);
-
-  if (normalized === "processing") {
-    return {
-      backgroundColor: "rgba(99, 102, 241, 0.16)",
-      color: "#4338ca",
-      border: "1px solid rgba(99, 102, 241, 0.35)",
-    };
-  }
-
-  if (normalized === "shipped") {
-    return {
-      backgroundColor: "rgba(16, 185, 129, 0.18)",
-      color: "#047857",
-      border: "1px solid rgba(16, 185, 129, 0.38)",
-    };
-  }
-
-  if (["cancelled", "canceled"].includes(normalized)) {
-    return {
-      backgroundColor: "rgba(239, 68, 68, 0.14)",
-      color: "#b91c1c",
-      border: "1px solid rgba(239, 68, 68, 0.4)",
-    };
-  }
-
-  return {
-    backgroundColor: "rgba(148, 163, 184, 0.16)",
-    color: "#475569",
-    border: "1px solid rgba(148, 163, 184, 0.35)",
-  };
-}
-
-function formatOrderDate(value: unknown): string {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "—";
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("en-US");
-}
-
-function formatOrderTime(value: unknown): string {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "—";
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function formatOrderTotal(value: unknown): string {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "—";
@@ -453,10 +490,7 @@ function getMarketplaceLogoSrc(
   return MARKETPLACE_LOGOS[normalized] ?? MARKETPLACE_LOGOS.unknown;
 }
 
-function normalizeOrderRow(
-  row: any,
-  sourceMode: "standard" | "extensiv" | "magaya" | "sellercloud",
-) {
+function normalizeOrderRow(row: any, sourceMode: "standard" | "extensiv" | "magaya" | "sellercloud",) {
   if (sourceMode === "extensiv") {
     const grandTotal = getExtensivGrandTotal(row);
     return {
@@ -534,13 +568,8 @@ function OrderProgress({ status, show }: { status: unknown; show: boolean }) {
   }
 
   const normalizedStatus = normalizeExtensivStatus(status);
-  const progressStatus =
-    normalizedStatus === PARTIAL_ALLOCATED_STATUS
-      ? "Allocated"
-      : normalizedStatus;
-  const currentStepIndex = EXTENSIV_STATUS_ORDER.indexOf(
-    progressStatus as (typeof EXTENSIV_STATUS_ORDER)[number],
-  );
+  const progressStatus = normalizedStatus === PARTIAL_ALLOCATED_STATUS ? "Allocated" : normalizedStatus;
+  const currentStepIndex = EXTENSIV_STATUS_ORDER.indexOf(progressStatus as (typeof EXTENSIV_STATUS_ORDER)[number],);
 
   if (currentStepIndex < 0) {
     return <span className="text-gray-400">—</span>;
@@ -637,7 +666,7 @@ export default function OrdersClient({ userId, isParentOnlyExtensiv = false, isP
   const startDate = toISODateFromCalendar(selectedRange?.from);
   const endDate = toISODateFromCalendar(selectedRange?.to);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -672,13 +701,11 @@ export default function OrdersClient({ userId, isParentOnlyExtensiv = false, isP
     return query.eq("account_id", accountIds[0] ?? "");
   };
 
+  const [viewOperation, setViewOperation] = useState({ show: false, details: null })
+
   useEffect(() => {
     async function fetchData() {
-      const { data: userRecord } = await supabase
-        .from("users")
-        .select("account_id, role")
-        .eq("id", userId)
-        .maybeSingle();
+      const { data: userRecord } = await supabase.from("users").select("account_id, role").eq("id", userId).maybeSingle();
 
       if (!userRecord) return;
 
@@ -689,32 +716,14 @@ export default function OrdersClient({ userId, isParentOnlyExtensiv = false, isP
       setUserRole(userRecord.role);
 
       // Load account integrations for dropdown
-      const { data: integrations } = await supabase
-        .from("account_integrations")
-        .select("type,status")
-        .eq("account_id", userAccountId);
+      const { data: integrations } = await supabase.from("account_integrations").select("type,status").eq("account_id", userAccountId);
 
-      const integrationTypes = new Set(
-        (integrations || [])
-          .map((r: any) =>
-            String(r?.type ?? "")
-              .trim()
-              .toLowerCase(),
-          )
-          .filter(Boolean),
-      );
+      const integrationTypes = new Set((integrations || []).map((r: any) => String(r?.type ?? "").trim().toLowerCase(),).filter(Boolean),);
       setAvailableSources(Array.from(integrationTypes));
 
-      if (
-        !hasDateRangeInQuery &&
-        !hasUserAdjustedRangeRef.current &&
-        !hasAppliedSourceDefaultRangeRef.current
-      ) {
-        const defaultRange = buildDefaultOrdersRange(
-          sourceOverride === "extensiv" || sourceOverride === "magaya",
-        );
-        const defaultStart = toISODateFromCalendar(defaultRange.from);
-        const defaultEnd = toISODateFromCalendar(defaultRange.to);
+      if (!hasDateRangeInQuery && !hasUserAdjustedRangeRef.current && !hasAppliedSourceDefaultRangeRef.current) {
+        const defaultRange = buildDefaultOrdersRange(sourceOverride === "extensiv" || sourceOverride === "magaya",);
+        const defaultStart = toISODateFromCalendar(defaultRange.from), defaultEnd = toISODateFromCalendar(defaultRange.to);
 
         hasAppliedSourceDefaultRangeRef.current = true;
 
@@ -727,92 +736,58 @@ export default function OrdersClient({ userId, isParentOnlyExtensiv = false, isP
 
       // Unified fetch through /api/orders/list for any source
       try {
-        const params = new URLSearchParams({
-          page: String(currentPage),
-          pageSize: String(itemsPerPage),
-          source: sourceOverride === "auto" ? "all" : sourceOverride,
-        });
+        const params = new URLSearchParams({ page: String(currentPage), pageSize: String(itemsPerPage), source: sourceOverride === "auto" ? "all" : sourceOverride, });
 
         if (statusFilter) params.set("status", statusFilter);
         if (searchTerm.trim()) params.set("search", searchTerm.trim());
         if (startDate) params.set("startDate", startDate);
         if (endDate) params.set("endDate", endDate);
 
-        const res = await fetch(`/api/orders/list?${params.toString()}`, {
-          credentials: "include",
-          cache: "no-store",
-        });
+        const response = await fetch(`/api/orders/list?${params.toString()}`, { credentials: "include", cache: "no-store" }).then((res) => res.json()).catch(() => null);
 
-        const json = await res.json().catch(() => null);
+        if (!response) return
 
-        if (!res.ok || !json) {
-          console.error("❌ Error fetching orders:", json);
-          return;
-        }
+        const orders: any[] = Array.isArray(response?.rows) ? response.rows : [];
 
-        const rows: any[] = Array.isArray(json?.rows) ? json.rows : [];
-        const normalized = rows.map((row) => ({
-          ...row,
-          order_uuid:
-            row.order_uuid ??
-            row.id ??
-            row.order_id ??
-            row.order_source_order_id ??
-            row.external_id,
-          warehouse_name:
-            row.warehouse_name ?? row.marketplace_name ?? row.source ?? "—",
-        }));
+        // const normalized = rows.map((row) => ({
+        //   ...row,
+        //   order_uuid: row.order_uuid ?? row.id ?? row.order_id ?? row.order_source_order_id ?? row.external_id,
+        //   warehouse_name:
+        //     row.warehouse_name ?? row.marketplace_name ?? row.source ?? "—",
+        // }));
 
-        const filteredByWarehouse =
-          warehouseFilter === "all"
-            ? normalized
-            : normalized.filter(
-              (row) =>
-                String(row.warehouse_name || "").toLowerCase() ===
-                String(warehouseFilter).toLowerCase(),
-            );
+        // const filteredByWarehouse =
+        //   warehouseFilter === "all"
+        //     ? normalized
+        //     : normalized.filter(
+        //       (row) =>
+        //         String(row.warehouse_name || "").toLowerCase() ===
+        //         String(warehouseFilter).toLowerCase(),
+        //     );
 
-        const statusOptions = Array.isArray(json?.statuses)
-          ? json.statuses
-          : [];
-        if (statusOptions.length) setAllStatusOptions(statusOptions);
+        // const statusOptions = Array.isArray(json?.statuses)
+        //   ? json.statuses
+        //   : [];
+        // if (statusOptions.length) setAllStatusOptions(statusOptions);
 
-        const warehouses = Array.from(
-          new Set(
-            normalized
-              .map((row) => row.warehouse_name)
-              .filter((val): val is string => Boolean(val)),
-          ),
-        ).sort((a, b) => a.localeCompare(b));
-        setAllWarehouseOptions(warehouses);
+        // const warehouses = Array.from(
+        //   new Set(
+        //     normalized
+        //       .map((row) => row.warehouse_name)
+        //       .filter((val): val is string => Boolean(val)),
+        //   ),
+        // ).sort((a, b) => a.localeCompare(b));
+        // setAllWarehouseOptions(warehouses);
 
-        setOrders(filteredByWarehouse);
-        setTotalCount(
-          Number.isFinite(json?.totalCount)
-            ? json.totalCount
-            : normalized.length,
-        );
+        setOrders(orders);
+        setTotalCount(response?.totalCount ?? 0);
       } catch (error) {
         console.error("❌ Unexpected orders fetch error:", error);
       }
     }
 
     fetchData();
-  }, [
-    userId,
-    currentPage,
-    itemsPerPage,
-    supabase,
-    warehouseFilter,
-    statusFilter,
-    startDate,
-    endDate,
-    searchTerm,
-    isParentOnlyExtensiv,
-    isParentOnlyMagaya,
-    hasDateRangeInQuery,
-    sourceOverride,
-  ]);
+  }, [userId, currentPage, itemsPerPage, supabase, warehouseFilter, statusFilter, startDate, endDate, searchTerm, isParentOnlyExtensiv, isParentOnlyMagaya, hasDateRangeInQuery, sourceOverride,]);
 
   useEffect(() => {
     hasUserAdjustedRangeRef.current = true;
@@ -1168,118 +1143,89 @@ export default function OrdersClient({ userId, isParentOnlyExtensiv = false, isP
           <thead className="bg-gray-100 text-gray-600">
             <tr>
               <th className="py-3 px-4 text-left font-medium">Order ID</th>
-              <th className="py-3 px-4 text-left font-medium">
-                {isExtensivView
-                  ? "Warehouse"
-                  : isMagayaView
-                    ? "Customer"
-                    : "Marketplace"}
-              </th>
-              <th className="py-3 px-4 text-left font-medium">
-                Order Marketplace ID
-              </th>
+              <th className="py-3 px-4 text-left font-medium">Provider</th>
+              <th className="py-3 px-4 text-left font-medium">Warehouse</th>
+              {/* <th className="py-3 px-4 text-left font-medium">{isExtensivView ? "Warehouse" : isMagayaView ? "Customer" : "Marketplace"}</th> */}
+              <th className="py-3 px-4 text-left font-medium">Order Marketplace ID</th>
               <th className="py-3 px-4 text-left font-medium">Order Date</th>
               <th className="py-3 px-4 text-left font-medium">Status</th>
-              {isExtensivView && (
-                <th className="py-3 px-4 text-left font-medium">Progress</th>
-              )}
+              {isExtensivView && <th className="py-3 px-4 text-left font-medium">Progress</th>}
               <th className="py-3 px-4 text-left font-medium">Total</th>
               <th className="py-3 px-4 text-left font-medium">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {orders.map((order, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="py-3 px-4 font-medium text-gray-800">
-                  {order.order_id}
-                  <div className="text-xs text-gray-500">
-                    {order.client_name || "—"}
-                  </div>
-                </td>
-                <td className="py-3 px-4">
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const logo = isExtensivView
-                        ? "/logos/extensiv.png"
-                        : isMagayaView
-                          ? "/logos/unknown.png"
-                          : getMarketplaceLogoSrc(
-                            order.marketplace_name,
-                            order.order_source_order_id,
-                          );
-                      return (
-                        <Image
-                          src={logo}
-                          alt={order.marketplace_name || "marketplace"}
-                          width={28}
-                          height={28}
-                          className="rounded object-contain"
-                        />
-                      );
-                    })()}
-                    <div className="text-sm text-gray-700">
-                      {isExtensivView
-                        ? order.warehouse_name ||
-                        order.marketplace_name ||
-                        "extensiv"
-                        : isMagayaView
-                          ? order.customer_name || "magaya"
-                          : order.marketplace_name || "—"}
+            {
+              orders.map((element, index) => (
+                <tr key={index} className="hover:bg-gray-50">
+                  <td className="py-3 px-4 font-medium text-gray-800">
+                    {element?.orders?.order_number}
+                    <div className="text-xs text-gray-500">
+                      {element?.orders?.client_name || "—"}
                     </div>
-                  </div>
-                </td>
-                <td className="py-3 px-4 text-gray-700">
-                  {order.order_source_order_id || "—"}
-                </td>
-                <td className="py-3 px-4 text-gray-500">
-                  {order.order_date ? formatOrderDate(order.order_date) : "—"}
-                  <div className="text-xs text-gray-400">
-                    {order.order_date ? formatOrderTime(order.order_date) : ""}
-                  </div>
-                </td>
-                <td className="py-3 px-4">
-                  {isExtensivView ? (
-                    <span
-                      className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-                      style={getStatusBadgeStyle(order.order_status)}
-                    >
-                      {order.order_status}
-                    </span>
-                  ) : (
-                    <span
-                      className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-                      style={getStandardStatusBadgeStyle(order.order_status)}
-                    >
-                      {order.order_status}
-                    </span>
-                  )}
-                </td>
-                {isExtensivView && (
-                  <td className="py-3 px-4">
-                    <OrderProgress
-                      status={order.order_status}
-                      show={isExtensivView}
-                    />
                   </td>
-                )}
-                <td className="py-3 px-4 text-gray-800">
-                  {order.grand_total !== null && order.grand_total !== undefined
-                    ? formatOrderTotal(order.grand_total)
-                    : "—"}
-                </td>
-                <td className="py-3 px-4 text-sm">
-                  <button
-                    onClick={() => {
-                      setSelectedOrder({ ...order, id: order.order_uuid });
-                      setModalOpen(true);
-                    }}
-                    className="text-white px-1 py-1 rounded-md text-sm bg-primary hover:bg-primary/90 transition min-w-[80px]"
-                  >
-                    Details
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2">
+                      <Image
+                        src={element?.orders?.provider?.provider_icon}
+                        alt={element?.orders?.provider?.name}
+                        width={28} height={28} className="rounded object-contain"
+                      />
+                      <div className="text-sm text-gray-700">
+                        {element?.orders?.provider?.name}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-gray-700">
+                    {element?.orders?.warehouse_names || "—"}
+                  </td>
+                  <td className="py-3 px-4 text-gray-700">
+                    {element?.orders?.order_source_order_id || "—"}
+                  </td>
+                  <td className="py-3 px-4 text-gray-500">
+                    {element?.orders?.created_at ? moment(element?.orders?.created_at).format("LLLL") : "—"}
+                    <div className="text-xs text-gray-400">
+                      {element?.orders?.expected_shipping_date ? `Expected Shipping: ${moment(element?.orders?.expected_shipping_date).format("LLLL")}` : ""}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    {element?.orders?.provider?.slug == "extensiv" ? (
+                      <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium" style={getStatusBadgeStyle(element?.orders?.status)}>
+                        {element?.orders?.status}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium" style={getSellerCloudStatus(element?.orders?.status).style}>
+                        {getSellerCloudStatus(element?.orders?.status).name}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {
+                      element?.orders?.provider?.slug == "extensiv" ? (
+                        <OrderProgress
+                          status={element?.orders?.shipping_status}
+                          show={true}
+                        />
+                      ) : (
+                        <SellerCloudOrderProgress
+                          statusCode={element?.orders?.status}
+                          paymentStatus={element?.orders?.payment_status}
+                          shipmentStatus={element?.orders?.shipment_status}
+                        />
+                      )
+                    }
+                  </td>
+                  <td className="py-3 px-4 text-gray-800">
+                    {element?.orders?.total ? formatOrderTotal(element?.orders?.total) : "—"}
+                  </td>
+                  <td className="py-3 px-4 text-sm">
+                    <button onClick={() => setViewOperation({ show: true, details: element?.orders })} className="text-white px-1 py-1 rounded-md text-sm bg-primary hover:bg-primary/90 transition min-w-[80px]">
+                      Details
+                    </button>
+                  </td>
+                </tr>
+              ))
+            }
           </tbody>
         </table>
 
@@ -1289,20 +1235,10 @@ export default function OrdersClient({ userId, isParentOnlyExtensiv = false, isP
             {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
           </span>
           <div className="space-x-2">
-            <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border rounded disabled:opacity-50"
-            >
+            <button onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage == 1} className="px-3 py-1 border rounded disabled:opacity-50">
               Prev
             </button>
-            <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-              }
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded disabled:opacity-50"
-            >
+            <button onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage == totalPages} className="px-3 py-1 border rounded disabled:opacity-50">
               Next
             </button>
           </div>
