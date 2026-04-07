@@ -188,7 +188,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
 
     return (
         <div className="relative flex flex-col h-full">
-            <div className="absolute top-2 left-2 z-[999]">
+            <div className="absolute top-1 right-2 z-[999]">
                 {
                     audioConfig && (
                         <div className="mt-2 w-64 bg-white border rounded-lg p-3 shadow-md">
@@ -235,10 +235,10 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                     />
                 ) : (
                     <>
-                        <div className="absolute top-[50px] left-2 z-40">
+                        <div className="absolute top-0 left-0 z-40 h-[413px]">
                             {
                                 quickPrompt && (
-                                    <div className="mt-2 w-80 bg-white border rounded-lg p-2 shadow-md">
+                                    <div className="w-[100%] bg-white border-b p-2 h-full">
                                         <QuickPrompts onPrompt={handleQuickPrompt} isClient={false} />
                                     </div>
                                 )

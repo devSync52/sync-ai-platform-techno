@@ -1,5 +1,6 @@
 'use client'
 
+import { ArrowBigLeft, ArrowDownLeft, ArrowLeft, ExpandIcon, SendToBack, StepBack } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 
 type PromptCategory = {
@@ -149,12 +150,18 @@ export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
   }, [openCategory])
 
   return (
-    <div className="w-full bg-white" ref={containerRef} style={{ position: 'sticky', bottom: 0, zIndex: 30 }}>
-      <div className="flex gap-2 px-2 py-2 flex-wrap">
+    <div className="w-full bg-white animate-fade-in" ref={containerRef} style={{ position: 'sticky', bottom: 0, zIndex: 30 }}>
+      <div className='flex items-center gap-2 pb-2 border-b mb-2'>
+        <button className="text-xl font-extrabold ml-2" title="Back">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <h6 className='font-bold'>All Prompts</h6>
+      </div>
+      <div className="flex gap-2 w-[383px] pb-2 overflow-x-auto">
         {(isClient ? CATEGORIES_CLIENT : CATEGORIES).map((cat) => (
           <button
             key={cat.key}
-            className={`px-3 py-1 text-sm rounded font-semibold transition ${cat.color} ${openCategory === cat.key ? 'ring-1 ring-primary' : ''}`}
+            className={`px-3 py-1 text-sm rounded font-semibold transition ${cat.color} ${openCategory === cat.key ? 'border border-primary' : ''}`}
             onClick={() => setOpenCategory(openCategory === cat.key ? null : cat.key)}
             type="button"
           >
@@ -164,8 +171,8 @@ export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
       </div>
       {/* Prompts da categoria aberta */}
       {openCategory && (
-        <div className="px-2 pb-2 pt-1 animate-fade-in">
-          <div className="rounded bg-gray-50 border p-2 shadow max-h-36 overflow-y-auto flex flex-col gap-2">
+        <div className="mt-2">
+          <div className="max-h-[300px] overflow-y-auto flex flex-col gap-2 pr-1">
             {(isClient ? CATEGORIES_CLIENT : CATEGORIES).find((cat) => cat.key === openCategory)?.prompts.map((prompt) => (
               <button
                 key={prompt}
