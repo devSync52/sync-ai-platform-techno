@@ -51,6 +51,11 @@ const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, startplay = fals
         }
     }
 
+    const handleStop = () => {
+        setIsPlaying(false)
+        setStartPlay(false)
+    }
+
     return (
         <div className="flex items-start w-full flex-col gap-2">
             <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
@@ -60,7 +65,7 @@ const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, startplay = fals
                             <>
                                 <Speech
                                     id="unique-id"
-                                    onStart={() => setIsPlaying(true)} onStop={() => setIsPlaying(false)}
+                                    onStart={() => setIsPlaying(true)} onStop={handleStop}
                                     text={stripHtmlForSpeech(content)} pitch={1} rate={1} volume={1} lang='en-US' autoPlay={true}
                                     highlightText={true} showOnlyHighlightedText={false} highlightMode={"word"} enableDirectives={false}
                                 />
