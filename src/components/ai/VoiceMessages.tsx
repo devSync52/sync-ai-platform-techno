@@ -1,6 +1,6 @@
 import { Loader2, Mic, MicOff, MoreHorizontal, X } from "lucide-react"
 import { motion } from 'framer-motion'
-import { Dispatch, SetStateAction, useEffect, useMemo } from "react";
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef } from "react";
 import { useSpeech } from "react-text-to-speech";
 
 interface VoiceModeOverlayProps {
@@ -19,14 +19,32 @@ interface VoiceModeOverlayProps {
     onSpeakingChange?: (isSpeaking: boolean) => void;
 }
 
+function stripHtmlForSpeech(value: string) {
+    return value
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+        .replace(/<li>/gi, '- ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/\r/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim()
+}
+
 export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, setIsSpeaking, transcript, isThinking, spokenText = '', language = 'en-US' }: VoiceModeOverlayProps) {
     if (!open) return null
 
+    const plainSpokenText = useMemo(() => stripHtmlForSpeech(spokenText), [spokenText])
     const subtitle = useMemo(() => isSpeaking ? 'Speaking...' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Tap the mic to start', [isSpeaking, isListening, isThinking])
     const base = useMemo(() => isSpeaking ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8', [isSpeaking, isListening])
     const soft = useMemo(() => isSpeaking ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1', [isSpeaking, isListening])
 
-    const { Text, speechStatus, stop } = useSpeech({ text: spokenText, pitch: 1, rate: 1, volume: 1, lang: language, voiceURI: "", autoPlay: true, highlightText: true, showOnlyHighlightedText: false, highlightMode: "word", enableDirectives: false, });
+    const { Text, speechStatus, stop } = useSpeech({ text: plainSpokenText, pitch: 1, rate: 1, volume: 1, lang: language, voiceURI: "", autoPlay: true, highlightText: true, showOnlyHighlightedText: false, highlightMode: "word", enableDirectives: false, });
+    const previousSpeechStatusRef = useRef(speechStatus)
 
     useEffect(() => {
         if (isListening) {
@@ -35,11 +53,16 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
     }, [isListening])
 
     useEffect(() => {
-        if (speechStatus == 'stopped' && isSpeaking) {
+        const previousSpeechStatus = previousSpeechStatusRef.current
+        const speechJustFinished = speechStatus == 'stopped' && (previousSpeechStatus == 'started' || previousSpeechStatus == 'paused') && isSpeaking
+
+        if (speechJustFinished) {
             console.log('Speech finished');
             setIsSpeaking(false)
             onToggleMic()
         }
+
+        previousSpeechStatusRef.current = speechStatus
     }, [speechStatus, isSpeaking])
 
     const handleClose = () => {
