@@ -1,6 +1,6 @@
 "use client"
 
-import { ExpandIcon, HistoryIcon, Plus, X } from 'lucide-react';
+import { ExpandIcon, HistoryIcon, List, Plus, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react'
 import { v4 as uuid } from 'uuid'
@@ -119,7 +119,7 @@ export default function ChatWidget() {
     }
 
     return viewOperation.open ? (
-        <div className={`fixed bottom-[100px] z-50 flex rounded-[16px] rounded-br-none right-[30px] ${viewOperation.expanded ? 'w-[calc(100%_-_60px)]' : 'w-full sm:w-[400px] shadow-lg shadow-blue-400'}`} onClick={() => toggleViewOperation('open')}>
+        <div className={`fixed bottom-[100px] z-50 flex rounded-[16px] right-[30px] ${viewOperation.expanded ? 'w-[calc(100%_-_60px)]' : 'w-full sm:w-[400px] shadow-lg shadow-grey-400'}`} onClick={() => toggleViewOperation('open')}>
             <div className={`w-full overflow-hidden rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px]">
                     <div className="flex items-center gap-2">
@@ -136,8 +136,11 @@ export default function ChatWidget() {
                         <button onClick={() => toggleViewOperation('expanded')} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
                             <ExpandIcon className="w-4 h-4" />
                         </button>
-                        <button onClick={handleClose} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
+                        {/* <button onClick={handleClose} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
                             <X className="w-4 h-4" />
+                        </button> */}
+                        <button className="text-white hover:text-white text-xl font-extrabold ml-2" title="Quick Prompts">
+                            <List className="h-5 w-5" />
                         </button>
                     </div>
                 </div>
