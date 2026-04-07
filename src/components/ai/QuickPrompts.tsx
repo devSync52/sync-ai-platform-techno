@@ -130,17 +130,13 @@ interface QuickPromptsProps {
 }
 
 export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
-  const [openCategory, setOpenCategory] = useState<string | null>(null)
+  const [openCategory, setOpenCategory] = useState<string | null>(CATEGORIES[0].key)
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Fecha prompts ao clicar fora
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (
-        openCategory &&
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+      if (openCategory && containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpenCategory(null)
       }
     }
@@ -151,37 +147,29 @@ export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
   return (
     <div className="w-full bg-white" ref={containerRef} style={{ position: 'sticky', bottom: 0, zIndex: 30 }}>
       <div className="flex gap-2 px-2 py-2 flex-wrap">
-        {(isClient ? CATEGORIES_CLIENT : CATEGORIES).map((cat) => (
-          <button
-            key={cat.key}
-            className={`px-3 py-1 text-sm rounded font-semibold transition ${cat.color} ${openCategory === cat.key ? 'ring-1 ring-primary' : ''}`}
-            onClick={() => setOpenCategory(openCategory === cat.key ? null : cat.key)}
-            type="button"
-          >
-            {cat.label}
-          </button>
-        ))}
+        {
+          CATEGORIES.map((cat) => (
+            <button key={cat.key} className={`px-3 py-1 text-sm rounded font-semibold transition ${cat.color} ${openCategory == cat.key ? 'ring-1 ring-primary' : ''}`} onClick={() => setOpenCategory(openCategory == cat.key ? null : cat.key)} type="button">
+              {cat.label}
+            </button>
+          ))
+        }
       </div>
-      {/* Prompts da categoria aberta */}
-      {openCategory && (
-        <div className="px-2 pb-2 pt-1 animate-fade-in">
-          <div className="rounded bg-gray-50 border p-2 shadow max-h-36 overflow-y-auto flex flex-col gap-2">
-            {(isClient ? CATEGORIES_CLIENT : CATEGORIES).find((cat) => cat.key === openCategory)?.prompts.map((prompt) => (
-              <button
-                key={prompt}
-                className="text-left w-full px-3 py-2 bg-white rounded hover:bg-primary/10 border border-gray-200 text-sm transition"
-                onClick={() => {
-                  onPrompt(prompt)
-                  setOpenCategory(null)
-                }}
-                type="button"
-              >
-                {prompt}
-              </button>
-            ))}
+      {
+        openCategory && (
+          <div className="px-2 pb-2 pt-1 animate-fade-in">
+            <div className="rounded bg-gray-50 border p-2 shadow max-h-36 overflow-y-auto flex flex-col gap-2">
+              {
+                (isClient ? CATEGORIES_CLIENT : CATEGORIES).find((cat) => cat.key === openCategory)?.prompts.map((prompt) => (
+                  <button key={prompt} className="text-left w-full px-3 py-2 bg-white rounded hover:bg-primary/10 border border-gray-200 text-sm transition" onClick={() => onPrompt(prompt)} type="button">
+                    {prompt}
+                  </button>
+                ))
+              }
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </div>
   )
 }

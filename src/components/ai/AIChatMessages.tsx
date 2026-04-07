@@ -11,6 +11,7 @@ interface AIChatMessagesType {
     messages: ChatMessage[];
     setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
     stopSpeaking: () => void;
+    closeQuickPrompt: () => void;
     audioConfig: boolean;
     quickPrompt: boolean;
     accountId: string;
@@ -30,7 +31,7 @@ const BotMessageWithCopy = ({ content }: { content: string }) => (
     </div>
 )
 
-export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, stopSpeaking, audioConfig, quickPrompt }: AIChatMessagesType) {
+export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, stopSpeaking, audioConfig, quickPrompt, closeQuickPrompt }: AIChatMessagesType) {
 
     const { transcript, listening, resetTranscript } = useSpeechRecognition();
 
@@ -38,7 +39,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
         return <span>Browser doesn't support speech recognition.</span>;
     }
 
-    const [viewOperation, setViewOperation] = useState({ audioConfig: false, quickPrompt: false, voice: false })
+    const [viewOperation, setViewOperation] = useState({ voice: false })
     const [audioConfigSettings, setAudioConfigSettings] = useState({ speechEnabled: false, voiceFirst: false })
 
     const [voicePhase, setVoicePhase] = useState<VoicePhase>('initial')
@@ -136,6 +137,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     const handleQuickPrompt = async (prompt: string) => {
         setInput(prompt)
         await processQuestion(prompt, false)
+        closeQuickPrompt()
         setInput('')
     }
 

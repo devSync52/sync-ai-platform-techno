@@ -167,6 +167,7 @@ export default function ChatWidget() {
                                                 <AIChatMessages
                                                     currentSessionId={sessionId ?? ''} userId={user.id} quickPrompt={viewOperation.quickPrompt}
                                                     accountId={accountId} userType={userType} stopSpeaking={stopSpeaking}
+                                                    closeQuickPrompt={() => setViewOperation(prev => ({ ...prev, quickPrompt: !prev.quickPrompt }))}
                                                     messages={messages} setMessages={setMessages} audioConfig={viewOperation.audioConfig}
                                                 />
                                             )
