@@ -172,33 +172,6 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     }, [transcript, listening])
 
     useEffect(() => {
-        if (!listening) {
-            clearSilenceTimeout()
-            return
-        }
-
-        const trimmedTranscript = transcript.trim()
-        if (!trimmedTranscript || isLoading) return
-
-        clearSilenceTimeout()
-
-        silenceTimeoutRef.current = setTimeout(async () => {
-            silenceTimeoutRef.current = null
-            const question = transcript.trim()
-
-            if (!question || !listening || isLoading) return
-
-            setInput(question)
-            await processQuestion(question, true)
-            setInput('')
-        }, SILENCE_DELAY_MS)
-
-        return () => {
-            clearSilenceTimeout()
-        }
-    }, [audioConfig.voiceFirst, isLoading, listening, processQuestion, transcript])
-
-    useEffect(() => {
         return () => {
             clearSilenceTimeout()
         }
