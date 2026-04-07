@@ -21,7 +21,7 @@ export default function ChatWidget() {
 
     const user = session?.user
 
-    const [viewOperation, setViewOperation] = useState({ open: false, expanded: false, history: false })
+    const [viewOperation, setViewOperation] = useState({ open: false, expanded: false, history: false, audioConfig: false, quickPrompt: false })
     const [sessionId, setSessionId] = useState<string>('')
 
     const [accountId, setAccountId] = useState<string | null>(null)
@@ -70,8 +70,7 @@ export default function ChatWidget() {
 
     useEffect(() => {
         if (pathname) {
-            setViewOperation({ open: true, expanded: false, history: false })
-            window.dispatchEvent(new Event('open-ai-widget'))
+            setViewOperation({ open: true, expanded: false, history: false, audioConfig: false, quickPrompt: false })
             if (sessionStorage.getItem('sessionId')) {
                 setSessionId(sessionStorage.getItem('sessionId') as string)
                 fetchHistory(sessionStorage.getItem('sessionId') as string)
@@ -91,7 +90,7 @@ export default function ChatWidget() {
     }, [])
 
     const handleNewSession = () => {
-        setViewOperation({ open: true, expanded: false, history: false })
+        setViewOperation({ open: true, expanded: false, history: false, audioConfig: false, quickPrompt: false })
         window.dispatchEvent(new Event('new-ai-session'))
         const sessionId = uuid()
         sessionStorage.setItem('sessionId', sessionId)
@@ -107,10 +106,10 @@ export default function ChatWidget() {
 
     const handleClose = () => {
         if (viewOperation.open) {
-            setViewOperation({ open: false, expanded: false, history: false })
+            setViewOperation({ open: false, expanded: false, history: false, audioConfig: false, quickPrompt: false })
             stopSpeaking()
         } else {
-            setViewOperation({ open: true, expanded: false, history: false })
+            setViewOperation({ open: true, expanded: false, history: false, audioConfig: false, quickPrompt: false })
         }
     }
 
@@ -123,11 +122,11 @@ export default function ChatWidget() {
 
     return (
         <div>
-            <button onClick={handleClose} className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-full text-base shadow transition w-[60px] h-[60px] justify-center fixed bottom-4 right-4 z-50">
+            <button onClick={handleClose} className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-full text-base shadow transition w-[60px] h-[60px] justify-center fixed bottom-4 right-4">
                 {viewOperation.open ? <X className="w-6 h-6" /> : <Bot className="w-6 h-6" />}
             </button>
             {
-                viewOperation.open ? (
+                viewOperation.open && (
                     <div className={`fixed bottom-[100px] z-50 flex rounded-[16px] right-[30px] ${viewOperation.expanded ? 'w-[calc(100%_-_60px)]' : 'w-full sm:w-[400px] shadow-lg shadow-grey-400'}`} onClick={() => toggleViewOperation('open')}>
                         <div className={`w-full overflow-hidden rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px]">
@@ -145,10 +144,7 @@ export default function ChatWidget() {
                                     <button onClick={() => toggleViewOperation('expanded')} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
                                         <ExpandIcon className="w-4 h-4" />
                                     </button>
-                                    {/* <button onClick={handleClose} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
-                                  <X className="w-4 h-4" />
-                              </button> */}
-                                    <button className="text-white hover:text-white text-xl font-extrabold ml-2" title="Quick Prompts">
+                                    <button className="text-white hover:text-white text-xl font-extrabold ml-2" title="Quick Prompts" onClick={() => toggleViewOperation('quickPrompt')}>
                                         <List className="h-5 w-5" />
                                     </button>
                                 </div>
@@ -166,9 +162,9 @@ export default function ChatWidget() {
                                                 />
                                             ) : (
                                                 <AIChatMessages
-                                                    currentSessionId={sessionId ?? ''} userId={user.id}
+                                                    currentSessionId={sessionId ?? ''} userId={user.id} quickPrompt={viewOperation.quickPrompt}
                                                     accountId={accountId} userType={userType} stopSpeaking={stopSpeaking}
-                                                    messages={messages} setMessages={setMessages}
+                                                    messages={messages} setMessages={setMessages} audioConfig={viewOperation.audioConfig}
                                                 />
                                             )
                                         }
@@ -177,7 +173,7 @@ export default function ChatWidget() {
                             }
                         </div>
                     </div>
-                ) : ''
+                )
             }
         </div>
     )
