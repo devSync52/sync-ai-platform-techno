@@ -276,7 +276,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                         </div>
 
                         <div className="border-t p-4 pb-[calc(env(safe-area-inset-bottom)+12px)] flex items-center gap-3">
-                            <button className="border rounded-full p-3 md:p-2.5 bg-white shadow-sm hover:bg-gray-50" title="Open Voice Mode" onClick={() => handleToggleVoice()}>
+                            <button className="border rounded-full p-3 md:p-2.5 bg-white shadow-sm hover:bg-gray-50" title="Open Voice Mode" onClick={() => onToggleMic()}>
                                 <Mic className="h-6 w-6 md:h-5 md:w-5" />
                             </button>
 
