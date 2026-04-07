@@ -264,7 +264,10 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                             {
                                 quickPrompt && (
                                     <div className="w-[100%] bg-white border-b p-2 h-full">
-                                        <QuickPrompts onPrompt={handleQuickPrompt} isClient={false} />
+                                        <QuickPrompts
+                                            onPrompt={handleQuickPrompt} isClient={false}
+                                            closeQuickPrompt={closeQuickPrompt}
+                                        />
                                     </div>
                                 )
                             }

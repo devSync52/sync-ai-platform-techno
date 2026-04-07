@@ -128,9 +128,10 @@ const CATEGORIES_CLIENT: PromptCategory[] = [
 interface QuickPromptsProps {
   onPrompt: (prompt: string) => void
   isClient?: boolean
+  closeQuickPrompt?: () => void
 }
 
-export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
+export function QuickPrompts({ onPrompt, isClient, closeQuickPrompt }: QuickPromptsProps) {
   const [openCategory, setOpenCategory] = useState<string | null>(CATEGORIES[0].key)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -148,7 +149,7 @@ export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
   return (
     <div className="w-full bg-white animate-fade-in" ref={containerRef} style={{ position: 'sticky', bottom: 0, zIndex: 30 }}>
       <div className='flex items-center gap-2 pb-2 border-b mb-2'>
-        <button className="text-xl font-extrabold ml-2" title="Back">
+        <button className="text-xl font-extrabold ml-2" title="Back" onClick={closeQuickPrompt}>
           <ArrowLeft className="w-4 h-4" />
         </button>
         <h6 className='font-bold'>All Prompts</h6>
