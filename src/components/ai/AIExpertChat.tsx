@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Expand, List, Loader2, Mic, MicOff, MoreHorizontal, Settings2, VolumeX, X } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { List, Loader2, Mic, MicOff, MoreHorizontal, Settings2, VolumeX, X } from 'lucide-react'
 import { useSyncAgent, ChatMessage } from '@/hooks/useSyncAgent'
 import { QuickPrompts } from './QuickPrompts'
 import { ChatChart } from './charts/chatChart'
@@ -662,7 +661,7 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
       </div>
 
       <div className="absolute top-[50px] left-2 z-40">
-        <button onClick={()=> setShowPromptConfig(!showPromptConfig)} className="border px-2 py-2 rounded bg-white shadow-sm hover:bg-gray-50" title="Quick Prompts">
+        <button onClick={() => setShowPromptConfig(!showPromptConfig)} className="border px-2 py-2 rounded bg-white shadow-sm hover:bg-gray-50" title="Quick Prompts">
           <List className="h-4 w-4" />
         </button>
         {showPromptConfig && (

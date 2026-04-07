@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 import HeaderTopBar from '@/components/HeaderTopBar'
 import AIChatWidget from '@/components/ai/AIChatWidget'
+import ChatWidget from '@/components/ai/Widget'
 
 interface ProtectedLayoutClientProps extends PropsWithChildren {
   user: {
@@ -64,10 +65,7 @@ export default function ProtectedLayoutClient({ children, user, hideLayout = fal
       <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
         {/* Topbar Mobile */}
         <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-primary flex items-center justify-between px-4 shadow">
-          <button
-            onClick={() => setShowSidebar(true)}
-            className="p-2 rounded-md hover:bg-white/20 transition"
-          >
+          <button onClick={() => setShowSidebar(true)} className="p-2 rounded-md hover:bg-white/20 transition">
             <Menu size={24} className="text-white" />
           </button>
 
@@ -97,7 +95,9 @@ export default function ProtectedLayoutClient({ children, user, hideLayout = fal
           {children}
         </main>
 
-        <AIChatWidget />
+        <ChatWidget />
+
+        {/* <AIChatWidget /> */}
       </div>
     </div>
   )
