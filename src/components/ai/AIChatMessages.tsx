@@ -1,6 +1,6 @@
 import { ChatMessage } from '@/hooks/useSyncAgent';
-import { List, Loader2, Mic, Settings2 } from 'lucide-react';
-import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, Mic } from 'lucide-react';
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 import QuickPrompts from './QuickPrompts';
 import { ChatChart } from './charts/chatChart';
 import { VoiceModeOverlay } from './VoiceMessages';
@@ -149,6 +149,8 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
         toggleViewOperation('voice')
         if (listening) {
             await stopVoiceListening()
+        } else {
+            await onToggleMic()
         }
     }
 
