@@ -1,5 +1,5 @@
 import { ChatMessage } from '@/hooks/useSyncAgent';
-import { Loader2, Mic } from 'lucide-react';
+import { Loader2, Mic, Volume2, VolumeX } from 'lucide-react';
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 import QuickPrompts from './QuickPrompts';
 import { ChatChart } from './charts/chatChart';
@@ -21,12 +21,16 @@ interface AIChatMessagesType {
 type VoicePhase = 'initial' | 'listening' | 'thinking' | 'streaming'
 
 const BotMessageWithCopy = ({ content }: { content: string }) => (
-    <div className="flex items-start w-full">
+    <div className="flex items-start w-full flex-col gap-2">
         <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
             <div className='overflow-x-auto'>
                 <div className="chat_box" dangerouslySetInnerHTML={{ __html: content }} />
             </div>
         </div>
+        <button className='border rounded p-2'>
+            <Volume2 width={16} height={16} />
+            {/* <VolumeX width={16} height={16} /> */}
+        </button>
     </div>
 )
 
