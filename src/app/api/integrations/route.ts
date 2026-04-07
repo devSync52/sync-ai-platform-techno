@@ -14,79 +14,48 @@ export async function GET(req: Request) {
 
     const supabase = await createServerSupabaseClient();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError, } = await supabase.auth.getUser();
 
     if (userError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+
     if (params.searchParams.get("type") == "connected") {
-      const { data: integrations, error } = await supabase
-        .from("account_integrations")
-        .select("*, integrations!inner(*)")
-        .eq("user_id", user.id)
-        .eq("integrations.is_active", true);
+      const { data: integrations, error } = await supabase.from("account_integrations").select("*, provider:integrations!inner(*)").eq("user_id", user.id).eq("integrations.is_active", true);
 
       if (error) throw error;
 
+      if (params.searchParams.get("order") == "true") {
+        return NextResponse.json(integrations.filter(integration => integration.provider?.orders));
+      }
+
       return NextResponse.json(integrations);
     } else {
-      const { data: integrations, error } = await supabase
-        .from("integrations")
-        .select("*, account_integrations:account_integrations(*)")
-        .eq("is_active", true)
-        .order("created_at", { ascending: true });
+      const { data: integrations, error } = await supabase.from("integrations").select("*, account_integrations:account_integrations(*)").eq("is_active", true).order("created_at", { ascending: true });
 
       if (error) throw error;
 
       const data = integrations.map((integration) => {
-        const accountIntegration =
-          integration.account_integrations?.[0] ?? null;
-        return {
-          ...integration,
-          account_integrations: undefined,
-          account_integration: accountIntegration,
-          connected: !!accountIntegration,
-        };
+        const accountIntegration = integration.account_integrations?.[0] ?? null;
+        return { ...integration, account_integrations: undefined, account_integration: accountIntegration, connected: !!accountIntegration, };
       });
 
       return NextResponse.json({ data });
     }
   } catch (error) {
     console.log(error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch integrations",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to fetch integrations", }, { status: 500 },);
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const {
-      type,
-      headers,
-      body,
-      domain,
-      checkingURL,
-      provider_id,
-      content_type,
-    } = await req.json();
+    const { type, headers, body, domain, checkingURL, provider_id, content_type, } = await req.json();
 
     const supabase = await createServerSupabaseClient();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError, } = await supabase.auth.getUser();
 
     if (userError) throw userError;
 
@@ -96,46 +65,18 @@ export async function POST(req: Request) {
 
     switch (type) {
       case "STORE_CONFIGURATION": {
-        const { data: details, error: fetchError } = await supabaseAdmin
-          .from("account_integrations")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("provider_id", provider_id)
-          .maybeSingle();
+        const { data: details, error: fetchError } = await supabaseAdmin.from("account_integrations").select("id").eq("user_id", user.id).eq("provider_id", provider_id).maybeSingle();
 
         if (fetchError) throw fetchError;
 
         if (details) {
-          const { data, error } = await supabaseAdmin
-            .from("account_integrations")
-            .update({
-              credentials: {
-                headers,
-                body,
-              },
-              domain: domain,
-            })
-            .eq("id", details.id)
-            .select()
-            .single();
+          const { data, error } = await supabaseAdmin.from("account_integrations").update({ credentials: { headers, body, }, domain: domain, }).eq("id", details.id).select().single();
 
           if (error) throw error;
 
           return NextResponse.json(data);
         } else {
-          const { data, error } = await supabaseAdmin
-            .from("account_integrations")
-            .insert({
-              credentials: {
-                headers,
-                body,
-              },
-              domain: domain,
-              provider_id: provider_id,
-              user_id: user.id,
-            })
-            .select()
-            .maybeSingle();
+          const { data, error } = await supabaseAdmin.from("account_integrations").insert({ credentials: { headers, body, }, domain: domain, provider_id: provider_id, user_id: user.id, }).select().maybeSingle();
 
           if (error) throw error;
 
@@ -169,26 +110,14 @@ export async function POST(req: Request) {
           requestBody = urlencoded;
         }
 
-        const response = await fetch(checkingURL, {
-          method: "POST",
-          headers: requestHeaders,
-          body: requestBody,
-        }).then((res) => res.json());
+        const response = await fetch(checkingURL, { method: "POST", headers: requestHeaders, body: requestBody, }).then((res) => res.json());
 
         return NextResponse.json(response);
       }
     }
   } catch (error) {
     console.log(error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to test integrations",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to test integrations", }, { status: 500 },);
   }
 }
 
@@ -198,10 +127,7 @@ export async function DELETE(req: Request) {
 
     const supabase = await createServerSupabaseClient();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError, } = await supabase.auth.getUser();
 
     if (userError) throw userError;
 
@@ -209,35 +135,18 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from("account_integrations")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("id", id)
-      .select("*")
-      .maybeSingle();
+    const { data, error } = await supabase.from("account_integrations").delete().eq("user_id", user.id).eq("id", id).select("*").maybeSingle();
 
     if (error) throw error;
 
     if (!data) {
-      return NextResponse.json(
-        { error: "Configuration not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Configuration not found" }, { status: 404 },);
     }
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.log(error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to delete integration configuration",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to delete integration configuration", }, { status: 500 },);
   }
 }
 
@@ -247,10 +156,7 @@ export async function PATCH(req: Request) {
 
     const supabase = await createServerSupabaseClient();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError, } = await supabase.auth.getUser();
 
     if (userError) throw userError;
 
@@ -258,39 +164,19 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await supabase
-      .from("account_integrations")
-      .update({ is_default: false })
-      .eq("user_id", user.id);
+    await supabase.from("account_integrations").update({ is_default: false }).eq("user_id", user.id);
 
-    const { data, error } = await supabase
-      .from("account_integrations")
-      .update({ is_default: true })
-      .eq("user_id", user.id)
-      .eq("id", id)
-      .select("*")
-      .maybeSingle();
+    const { data, error } = await supabase.from("account_integrations").update({ is_default: true }).eq("user_id", user.id).eq("id", id).select("*").maybeSingle();
 
     if (error) throw error;
 
     if (!data) {
-      return NextResponse.json(
-        { error: "Configuration is not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Configuration is not found" }, { status: 404 },);
     }
 
     return NextResponse.json(data);
   } catch (error) {
     console.log(error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to make default integration configuration",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to make default integration configuration", }, { status: 500 },);
   }
 }

@@ -33,38 +33,15 @@ async function unlockAudioContext() {
   } catch { }
 }
 
-function BotMessageWithCopy({ content }: { content: string }) {
-  const [isExpanded, setIsExpanded] = useState(false)
-
-  return (
-    <>
-      <div className="flex items-start w-full">
-        <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
-          <button type="button" onClick={() => setIsExpanded(true)} className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-white hover:text-gray-700" title="Expand message" aria-label="Expand message">
-            <Expand className="h-4 w-4" />
-          </button>
-          <div className='overflow-x-auto'>
-            <div className="chat_box" dangerouslySetInnerHTML={{ __html: content }} />
-          </div>
-        </div>
+const BotMessageWithCopy = ({ content }: { content: string }) => (
+  <div className="flex items-start w-full">
+    <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
+      <div className='overflow-x-auto'>
+        <div className="chat_box" dangerouslySetInnerHTML={{ __html: content }} />
       </div>
-      {isExpanded && (
-        <Dialog open={isExpanded} onOpenChange={setIsExpanded}>
-          <DialogContent className="w-[calc(100%-1.5rem)] max-w-5xl max-h-[85vh] overflow-hidden bg-white">
-            <DialogHeader>
-              <DialogTitle>Full Response</DialogTitle>
-            </DialogHeader>
-            <div
-              className="overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 chat_box"
-              style={{ maxHeight: 'calc(85vh - 6rem)' }}
-              dangerouslySetInnerHTML={{ __html: content }}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
-    </>
-  )
-}
+    </div>
+  </div>
+)
 
 type VoicePhase = 'initial' | 'listening' | 'thinking' | 'streaming'
 
@@ -194,9 +171,11 @@ interface AIExpertChatProps {
   user_type: 'owner' | 'client' | 'end_client'
   session_id: string
   apiUrl: string
+  audioRef: React.MutableRefObject<HTMLAudioElement | null>
+  audioUrlRef: React.MutableRefObject<string | null>
 }
 
-export default function AIExpertChat({ user_id, account_id, user_type, session_id, apiUrl, }: AIExpertChatProps) {
+export default function AIExpertChat({ user_id, account_id, user_type, session_id, apiUrl, audioRef, audioUrlRef }: AIExpertChatProps) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [listening, setListening] = useState(false)
@@ -213,8 +192,6 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
 
   const chatRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const audioUrlRef = useRef<string | null>(null)
   const showVoiceModeRef = useRef(false)
   const isSpeakingRef = useRef(false)
 
@@ -245,29 +222,16 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
   }
 
   const stopSpeaking = () => {
-    const currentAudio: any = audioRef.current
+    if (audioRef && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
 
-    try {
-      if (currentAudio && currentAudio._mode === 'webaudio' && currentAudio._node) {
-        try {
-          currentAudio._node.stop()
-          currentAudio._node.disconnect()
-        } catch { }
-      } else if (audioRef.current instanceof HTMLAudioElement) {
-        try {
-          currentAudio?._cleanup?.()
-        } catch { }
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-    } catch { }
-
-    if (audioUrlRef.current) {
+    if (audioUrlRef && audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current)
       audioUrlRef.current = null
     }
 
-    audioRef.current = null
     setIsSpeaking(false)
     resetVoicePhase()
   }
@@ -297,13 +261,7 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
 
       const playWithMediaSource = async () => {
         const mimeType = mime.split(';')[0].trim()
-        if (
-          isIOS ||
-          !res.body ||
-          typeof window === 'undefined' ||
-          typeof MediaSource === 'undefined' ||
-          !MediaSource.isTypeSupported(mimeType)
-        ) {
+        if (isIOS || !res.body || typeof window === 'undefined' || typeof MediaSource === 'undefined' || !MediaSource.isTypeSupported(mimeType)) {
           throw new Error('MediaSource streaming is not supported for this response.')
         }
 
@@ -632,6 +590,15 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
   useEffect(() => {
     isSpeakingRef.current = isSpeaking
   }, [isSpeaking])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const message = (e as CustomEvent<{ message: string }>).detail.message
+      if (message) setMessages([{ role: 'assistant', content: message }])
+    }
+    window.addEventListener('sidebar-agent-message', handler)
+    return () => window.removeEventListener('sidebar-agent-message', handler)
+  }, [])
 
   useEffect(() => {
     if (session_id) {

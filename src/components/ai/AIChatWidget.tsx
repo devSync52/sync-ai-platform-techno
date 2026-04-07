@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSupabase } from '@/components/supabase-provider'
 import { useSession } from '@/components/supabase-provider'
 import { v4 as uuidv4 } from 'uuid'
@@ -9,7 +9,11 @@ import AIExpertChat from '@/components/ai/AIExpertChat'
 import ChatHistoryList from '@/components/ai/ChatHistoryList'
 
 export default function AIChatWidget() {
-  const [open, setOpen] = useState(false)
+
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
+
+  const [open, setOpen] = useState(true)
   const [openExpanded, setOpenExpanded] = useState(false)
   const [view, setView] = useState<'chat' | 'history'>('chat')
   const [accountId, setAccountId] = useState<string | null>(null)
@@ -50,6 +54,16 @@ export default function AIChatWidget() {
     return () => window.removeEventListener('open-ai-widget', handleOpen)
   }, [])
 
+  // Sync sessionId from sidebar agent message
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { sessionId: sid } = (e as CustomEvent<{ message: string; sessionId: string }>).detail
+      if (sid) setSessionId(sid)
+    }
+    window.addEventListener('sidebar-agent-message', handler)
+    return () => window.removeEventListener('sidebar-agent-message', handler)
+  }, [])
+
   // Garante uma sessionId ao abrir o chat
   useEffect(() => {
     if (open && !sessionId) setSessionId(uuidv4())
@@ -78,11 +92,22 @@ export default function AIChatWidget() {
     setView('chat')
   }
 
+  const stopSpeaking = () => {
+    if (audioRef && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+
+    if (audioUrlRef && audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
+    }
+  }
+
   // Overlay fecha ao clicar fora (só área escura)
   return open ? (
-    <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-[16px] bg-white' : 'bg-white fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-[16px]'} style={{ boxShadow: 'rgba(0, 0, 0, 0.10) 0px 6px 20px 0px' }}
-      onClick={() => setOpen(false)}>
-      <div className={`w-full overflow-hidden rounded-t-[16px] rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
+    <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-[16px] bg-white' : 'bg-white fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-[16px]'} style={{ boxShadow: 'rgba(0, 0, 0, 0.10) 0px 6px 20px 0px' }} onClick={() => setOpen(false)}>
+      <div className={`w-full overflow-hidden rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
         {/* Topbar */}
         <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px] ">
           <div className="flex items-center gap-2">
@@ -99,7 +124,7 @@ export default function AIChatWidget() {
             <button onClick={() => setOpenExpanded(!openExpanded)} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
               <ExpandIcon className="w-4 h-4" />
             </button>
-            <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('close-ai-widget')) }} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
+            <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('close-ai-widget')); stopSpeaking() }} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -119,6 +144,8 @@ export default function AIChatWidget() {
               user_id={user.id}
               account_id={accountId}
               user_type={userType}
+              audioRef={audioRef}
+              audioUrlRef={audioUrlRef}
               session_id={sessionId || ''}
             />
           )}

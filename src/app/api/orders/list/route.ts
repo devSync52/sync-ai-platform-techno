@@ -2,166 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-function pick<T = any>(obj: any, keys: string[], fallback: T = null as T): T {
-  for (const key of keys) {
-    if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key] as T;
-  }
-  return fallback;
-}
-
-function deriveCustomerName(primary: any, metadata: any): string {
-  const first = String(
-    pick(
-      metadata,
-      ["FirstName", "ShippingAddressFirstName", "BillingAddressFirstName"],
-      "",
-    ),
-  ).trim();
-  const last = String(
-    pick(
-      metadata,
-      ["LastName", "ShippingAddressLastName", "BillingAddressLastName"],
-      "",
-    ),
-  ).trim();
-  const full = `${first} ${last}`.trim();
-  if (full) return full;
-
-  const company = String(pick(metadata, ["CompanyName"], "")).trim();
-  if (company) return company;
-
-  const fromPrimary = String(primary || "").trim();
-  if (fromPrimary) return fromPrimary;
-
-  const email = String(pick(metadata, ["CustomerEmail", "Email"], "")).trim();
-  return email || "—";
-}
-
-function normalizeOrderRow(row: any) {
-  const metadata =
-    row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
-
-  const orderSourceOrderId =
-    row.order_source_order_id ||
-    pick(
-      metadata,
-      [
-        "OrderSourceOrderID",
-        "OrderSourceOrderId",
-        "SourceOrderID",
-        "SourceOrderId",
-        "order_source_order_id",
-      ],
-      null,
-    );
-
-  const marketplaceName =
-    row.marketplace_name ||
-    pick(
-      metadata,
-      ["MarketplaceName", "ChannelName", "marketplace_name", "Marketplace"],
-      null,
-    ) ||
-    row.origin ||
-    "—";
-
-  return {
-    order_uuid: row.id,
-    _client_id: row.client_id || null,
-    order_id: row.order_number || row.id,
-    order_source_order_id: orderSourceOrderId || "—",
-    client_name: deriveCustomerName(row.client_name, metadata),
-    grand_total: row.total,
-    order_date: row.created_at,
-    order_status: row.status || "—",
-    payment_status: row.payment_status || "—",
-    shipping_status: row.shipping_status || "—",
-    source: row.origin || "manual",
-    marketplace_name: marketplaceName,
-    _metadata: metadata,
-    shipping_address: row.shipping_address || null,
-    billing_address: row.billing_address || null,
-  };
-}
-
-function matchesCustomerIdentity(params: {
-  row: any;
-  customerEmail: string;
-  customerWmsId: string;
-  customerName: string;
-  customerCompanyName: string;
-}): boolean {
-  const {
-    row,
-    customerEmail,
-    customerWmsId,
-    customerName,
-    customerCompanyName,
-  } = params;
-  const metadata = row?._metadata || {};
-  const rowEmail = String(
-    pick(metadata, ["CustomerEmail", "Email", "customer_email"], ""),
-  )
-    .trim()
-    .toLowerCase();
-  const rowWmsId = String(
-    pick(metadata, ["CustomerID", "customer_id", "WmsUserIdentifier"], ""),
-  ).trim();
-  const rowName = String(row?.client_name || "")
-    .trim()
-    .toLowerCase();
-  const rowCompany = String(
-    pick(metadata, ["CompanyName", "company_name"], row?.client_name || ""),
-  )
-    .trim()
-    .toLowerCase();
-
-  if (customerWmsId && rowWmsId && customerWmsId === rowWmsId) return true;
-  if (customerEmail && rowEmail && customerEmail === rowEmail) return true;
-  if (customerName && rowName && customerName === rowName) return true;
-  if (customerCompanyName && rowCompany && customerCompanyName === rowCompany)
-    return true;
-  return false;
-}
-
-async function hydrateAddresses(rows: any[]) {
-  const addressIds = new Set<string>();
-  for (const row of rows) {
-    if (row.shipping_address) addressIds.add(String(row.shipping_address));
-    if (row.billing_address) addressIds.add(String(row.billing_address));
-  }
-
-  const ids = Array.from(addressIds).filter(Boolean);
-  if (!ids.length) return rows;
-
-  const { data: addressRows, error } = await supabaseAdmin
-    .from("address")
-    .select("*")
-    .in("id", ids);
-
-  if (error) {
-    console.error("❌ Error hydrating addresses:", error.message);
-    return rows;
-  }
-
-  const byId = new Map<string, any>();
-  for (const addr of addressRows || []) {
-    if (addr?.id) byId.set(String(addr.id), addr);
-  }
-
-  return rows.map((row) => ({
-    ...row,
-    shipping_address_data: row.shipping_address ? byId.get(String(row.shipping_address)) || null : null,
-    billing_address_data: row.billing_address ? byId.get(String(row.billing_address)) || null : null,
-  }));
-}
-
 export async function GET(req: NextRequest) {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: authError, } = await supabase.auth.getUser();
 
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -170,310 +13,59 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const page = Math.max(Number(searchParams.get("page") || "1"), 1);
   const pageSize = Math.max(Number(searchParams.get("pageSize") || "10"), 1);
-  const source = String(searchParams.get("source") || "all");
-  const status = searchParams.get("status");
-  const search = String(searchParams.get("search") || "").trim();
+  const providerId = searchParams.get("providerId");
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
+  const warehouseId = searchParams.get("warehouseId");
+  const search = searchParams.get("search")?.trim() || "";
 
-  const { data: userRecord, error: userError } = await supabaseAdmin
-    .from("users")
-    .select("account_id, role, name, email")
-    .eq("id", user.id)
-    .maybeSingle();
+  const offset = (page - 1) * pageSize;
 
-  if (userError || !userRecord?.account_id) {
-    return NextResponse.json(
-      { error: userError?.message || "User account not found" },
-      { status: 400 },
-    );
+  const ordersJoin = `*,orders!inner(*,provider:integrations!orders_provider_id_fkey(*),ordered_products(*,product:products!ordered_products_product_id_fkey(*,warehouse:warehouses!products_warehouse_id_fkey(*))))`;
+
+  let countQuery = supabaseAdmin.from("order_relation").select(ordersJoin, { count: "exact", head: true }).eq("user_id", user.id).not("order_id", "is", null);
+  let relationQuery = supabaseAdmin.from("order_relation").select(ordersJoin).eq("user_id", user.id).not("order_id", "is", null).order("created_at", { ascending: false });
+
+  if (providerId) {
+    countQuery = countQuery.eq("orders.provider_id", providerId);
+    relationQuery = relationQuery.eq("orders.provider_id", providerId);
   }
 
-  const isCustomerUser =
-    userRecord.role === "client" ||
-    userRecord.role === "staff-client" ||
-    userRecord.role === "staff-user" ||
-    userRecord.role === "client-user";
+  if (startDate) {
+    countQuery = countQuery.gte("orders.created_at", `${startDate}T00:00:00.000Z`);
+    relationQuery = relationQuery.gte("orders.created_at", `${startDate}T00:00:00.000Z`);
+  }
 
-  const { data: accountRecord } = await supabaseAdmin
-    .from("accounts")
-    .select("parent_account_id")
-    .eq("id", userRecord.account_id)
-    .maybeSingle();
+  if (endDate) {
+    countQuery = countQuery.lte("orders.created_at", `${endDate}T23:59:59.999Z`);
+    relationQuery = relationQuery.lte("orders.created_at", `${endDate}T23:59:59.999Z`);
+  }
 
-  const effectiveAccountId =
-    accountRecord?.parent_account_id || userRecord.account_id;
-  const customerAccountScope = Array.from(
-    new Set([effectiveAccountId, userRecord.account_id].filter(Boolean)),
-  );
+  if (search) {
+    const filter = `order_number.ilike.%${search}%,order_source_order_id.ilike.%${search}%`;
+    countQuery = countQuery.or(filter, { referencedTable: "orders" });
+    relationQuery = relationQuery.or(filter, { referencedTable: "orders" });
+  }
 
-  // Resolve which orders belong to the logged-in user via order_relation
-  const { data: relationRows, error: relationError } = await supabaseAdmin
-    .from("order_relation")
-    .select("order_id")
-    .eq("user_id", user.id);
+  const { count } = await countQuery;
+  const { data: relationData, error: relationError } = await relationQuery.range(offset, offset + pageSize - 1);
 
   if (relationError) {
-    return NextResponse.json(
-      { error: relationError.message },
-      { status: 500 },
-    );
+    console.log("Error fetching relation data:", relationError);
+    return NextResponse.json({ error: relationError.message }, { status: 500 });
   }
 
-  const orderIds = Array.from(
-    new Set(
-      (relationRows || [])
-        .map((r) => r.order_id)
-        .filter((v): v is string => !!v),
-    ),
-  );
-
-  if (!orderIds.length) {
-    return NextResponse.json({
-      role: userRecord.role,
-      accountId: effectiveAccountId,
-      totalCount: 0,
-      statuses: [],
-      rows: [],
+  const formattedData = relationData?.map((relation) => {
+    const order = relation.orders;
+    const warehouses = new Set<string>();
+    (order?.ordered_products || []).forEach((op: any) => {
+      const warehouse = op?.product?.warehouse;
+      if (warehouse) warehouses.add(warehouse.name);
     });
-  }
-
-  const start = (page - 1) * pageSize;
-  const end = start + pageSize - 1;
-
-  if (isCustomerUser) {
-    let strictQuery = supabaseAdmin
-      .from("orders")
-      .select("*", { count: "exact" })
-      .in("id", orderIds);
-
-    if (source !== "all") strictQuery = strictQuery.eq("origin", source);
-    if (status) strictQuery = strictQuery.eq("status", status);
-    // if (startDate)
-    //   strictQuery = strictQuery.gte("created_at", `${startDate}T00:00:00.000Z`);
-    // if (endDate)
-    //   strictQuery = strictQuery.lte("created_at", `${endDate}T23:59:59.999Z`);
-
-    const {
-      data: strictRows,
-      error: strictError,
-      count: strictCount,
-    } = await strictQuery
-      .order("created_at", { ascending: false })
-      .range(start, end);
-
-    if (strictError) {
-      return NextResponse.json({ error: strictError.message }, { status: 500 });
-    }
-
-    let mapped = (strictRows || []).map(normalizeOrderRow);
-    mapped = await hydrateAddresses(mapped);
-    if (search) {
-      const term = search.toLowerCase();
-      mapped = mapped.filter(
-        (row: any) =>
-          String(row.order_id || "")
-            .toLowerCase()
-            .includes(term) ||
-          String(row.order_source_order_id || "")
-            .toLowerCase()
-            .includes(term) ||
-          String(row.marketplace_name || "")
-            .toLowerCase()
-            .includes(term) ||
-          String(row.client_name || "")
-            .toLowerCase()
-            .includes(term),
-      );
-    }
-
-    if (mapped.length > 0) {
-      const allStatuses = Array.from(
-        new Set(
-          mapped
-            .map((row: any) => row?.order_status)
-            .filter((v: any) => v !== null && v !== undefined)
-            .map((v: any) => String(v)),
-        ),
-      );
-      const pagedRows = mapped.map(
-        ({ _metadata, _client_id, ...rest }) => rest,
-      );
-      return NextResponse.json({
-        role: userRecord.role,
-        accountId: effectiveAccountId,
-        totalCount: strictCount ?? mapped.length,
-        statuses: allStatuses,
-        rows: pagedRows,
-      });
-    }
-
-    // Backward-compatible fallback for old rows where client_id was not set.
-    let customerQuery = supabaseAdmin
-      .from("orders")
-      .select("*")
-      .in("id", orderIds)
-      .in("account_id", customerAccountScope);
-    if (source !== "all") customerQuery = customerQuery.eq("origin", source);
-    if (status) customerQuery = customerQuery.eq("status", status);
-    if (startDate)
-      customerQuery = customerQuery.gte(
-        "created_at",
-        `${startDate}T00:00:00.000Z`,
-      );
-    if (endDate)
-      customerQuery = customerQuery.lte(
-        "created_at",
-        `${endDate}T23:59:59.999Z`,
-      );
-
-    const {
-      data: allRows,
-      error,
-      count: allRowsCount,
-    } = await customerQuery
-      .order("created_at", { ascending: false })
-      .range(start, end);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    const legacyMapped = await hydrateAddresses((allRows || []).map(normalizeOrderRow));
-    const { data: customerAccount } = await supabaseAdmin
-      .from("accounts")
-      .select("name")
-      .eq("id", userRecord.account_id)
-      .maybeSingle();
-    const customerEmail = String(user.email || userRecord.email || "")
-      .trim()
-      .toLowerCase();
-    const customerWmsId = String(
-      (user.user_metadata as any)?.wms_user_identifier ||
-        (user.app_metadata as any)?.wms_user_identifier ||
-        "",
-    ).trim();
-    const customerName = String(userRecord.name || "")
-      .trim()
-      .toLowerCase();
-    const customerCompanyName = String(customerAccount?.name || "")
-      .trim()
-      .toLowerCase();
-
-    let ownRows = legacyMapped.filter(
-      (row: any) =>
-        String((row as any)?._client_id || "").trim() ===
-          String(userRecord.account_id || "").trim() ||
-        matchesCustomerIdentity({
-          row,
-          customerEmail,
-          customerWmsId,
-          customerName,
-          customerCompanyName,
-        }),
-    );
-
-    if (search) {
-      const term = search.toLowerCase();
-      ownRows = ownRows.filter(
-        (row: any) =>
-          String(row.order_id || "")
-            .toLowerCase()
-            .includes(term) ||
-          String(row.order_source_order_id || "")
-            .toLowerCase()
-            .includes(term) ||
-          String(row.marketplace_name || "")
-            .toLowerCase()
-            .includes(term) ||
-          String(row.client_name || "")
-            .toLowerCase()
-            .includes(term),
-      );
-    }
-
-    const allStatuses = Array.from(
-      new Set(
-        ownRows
-          .map((row: any) => row?.order_status)
-          .filter((v: any) => v !== null && v !== undefined)
-          .map((v: any) => String(v)),
-      ),
-    );
-
-    const pagedRows = ownRows
-      .slice(0, pageSize)
-      .map(({ _metadata, _client_id, ...rest }) => rest);
-    return NextResponse.json({
-      role: userRecord.role,
-      accountId: effectiveAccountId,
-      totalCount: allRowsCount ?? ownRows.length,
-      statuses: allStatuses,
-      rows: pagedRows,
-    });
-  }
-
-  let statusQuery = supabaseAdmin.from("orders").select("status");
-  statusQuery = statusQuery.in("id", orderIds);
-  // if (source !== "all") statusQuery = statusQuery.eq("origin", source);
-  // if (startDate)
-  //   statusQuery = statusQuery.gte("created_at", `${startDate}T00:00:00.000Z`);
-  // if (endDate)
-  //   statusQuery = statusQuery.lte("created_at", `${endDate}T23:59:59.999Z`);
-  if (search) {
-    statusQuery = statusQuery.or(
-      `order_number.ilike.%${search}%,origin.ilike.%${search}%,status.ilike.%${search}%`,
-    );
-  }
-
-  const { data: statusRows } = await statusQuery;
-  const allStatuses = Array.from(
-    new Set(
-      (statusRows || [])
-        .map((row: any) => row?.status)
-        .filter((v: any) => v !== null && v !== undefined)
-        .map((v: any) => String(v)),
-    ),
-  );
-
-  let query = supabaseAdmin
-    .from("orders")
-    .select("*", {
-      count: "exact",
-    })
-    .in("id", orderIds);
-
-  // if (source !== "all") query = query.eq("origin", source);
-  // if (status) query = query.eq("status", status);
-  // if (startDate) query = query.gte("created_at", `${startDate}T00:00:00.000Z`);
-  // if (endDate) query = query.lte("created_at", `${endDate}T23:59:59.999Z`);
-  if (search) {
-    query = query.or(
-      `order_number.ilike.%${search}%,origin.ilike.%${search}%,status.ilike.%${search}%`,
-    );
-  }
-
-  const { data, count, error } = await query
-    .order("created_at", { ascending: false })
-    .range(start, end);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  console.log("data", data);
-
-  const rows = await hydrateAddresses(
-    (data || []).map((row: any) => {
-      const { _metadata, ...rest } = normalizeOrderRow(row);
-      return rest;
-    })
-  );
-
-  return NextResponse.json({
-    role: userRecord.role,
-    accountId: effectiveAccountId,
-    totalCount: count || 0,
-    statuses: allStatuses,
-    rows,
+    return { ...relation, orders: { ...order, warehouse_names: Array.from(warehouses).join(", ") } };
   });
+
+  const filteredData = warehouseId ? formattedData?.filter((relation) => (relation.orders?.ordered_products || []).some((op: any) => String(op?.product?.warehouse?.id) == warehouseId)) : formattedData;
+
+  return NextResponse.json({ rows: filteredData, totalCount: warehouseId ? (filteredData?.length ?? 0) : (count || 0) });
 }
