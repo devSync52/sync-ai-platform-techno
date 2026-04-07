@@ -1,6 +1,6 @@
 "use client"
 
-import { Bot, ExpandIcon, HistoryIcon, List, Plus, X } from 'lucide-react';
+import { Bot, ExpandIcon, HistoryIcon, List, Plus, Settings2, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react'
 import { v4 as uuid } from 'uuid'
@@ -143,6 +143,9 @@ export default function ChatWidget() {
                                     </button>
                                     <button onClick={() => toggleViewOperation('expanded')} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
                                         <ExpandIcon className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => toggleViewOperation('audioConfig')} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Audio settings">
+                                        <Settings2 className="h-4 w-4" />
                                     </button>
                                     <button className="text-white hover:text-white text-xl font-extrabold ml-2" title="Quick Prompts" onClick={() => toggleViewOperation('quickPrompt')}>
                                         <List className="h-5 w-5" />
