@@ -139,10 +139,8 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     }, [accountId, currentSessionId, isLoading, listening, setMessages, stopVoiceListening, userId, userType])
 
     const handleQuickPrompt = async (prompt: string) => {
-        setInput(prompt)
-        await processQuestion(prompt, false)
         closeQuickPrompt()
-        setInput('')
+        await processQuestion(prompt, false)
     }
 
     const sendMessage = async () => {
