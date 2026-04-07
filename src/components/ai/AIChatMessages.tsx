@@ -5,6 +5,7 @@ import QuickPrompts from './QuickPrompts';
 import { ChatChart } from './charts/chatChart';
 import { VoiceModeOverlay } from './VoiceMessages';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+import Speech, { HighlightedText, useSpeech } from 'react-text-to-speech';
 
 interface AIChatMessagesType {
     currentSessionId: string;
@@ -21,19 +22,66 @@ interface AIChatMessagesType {
 
 type VoicePhase = 'initial' | 'listening' | 'thinking' | 'streaming'
 
-const BotMessageWithCopy = ({ content }: { content: string }) => (
-    <div className="flex items-start w-full flex-col gap-2">
-        <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
-            <div className='overflow-x-auto'>
-                <div className="chat_box" dangerouslySetInnerHTML={{ __html: content }} />
+function stripHtmlForSpeech(value: string) {
+    return value
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+        .replace(/<li>/gi, '- ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/\r/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim()
+}
+
+const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, startplay = false }: { content: string; isPlaying: boolean; setIsPlaying: Dispatch<SetStateAction<boolean>>; startplay: boolean }) => {
+    const [startPlay, setStartPlay] = useState(startplay)
+
+    const handlePlayVoice = () => {
+        if (!startPlay) {
+            if (!isPlaying) {
+                setStartPlay(true)
+            }
+        } else {
+            setStartPlay(false)
+        }
+    }
+
+    return (
+        <div className="flex items-start w-full flex-col gap-2">
+            <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
+                <div className='overflow-x-auto'>
+                    {
+                        startPlay ? (
+                            <>
+                                <Speech
+                                    id="unique-id"
+                                    onStart={() => setIsPlaying(true)} onStop={() => setIsPlaying(false)}
+                                    text={stripHtmlForSpeech(content)} pitch={1} rate={1} volume={1} lang='en-US' autoPlay={true}
+                                    highlightText={true} showOnlyHighlightedText={false} highlightMode={"word"} enableDirectives={false}
+                                />
+                                <HighlightedText id="unique-id" />
+                            </>
+                        ) : (
+                            <div
+                                className="chat_box"
+                                dangerouslySetInnerHTML={{ __html: content }}
+                            />
+                        )
+                    }
+                </div>
             </div>
+            <button className='border rounded p-2' onClick={handlePlayVoice}>
+                {/* {startPlay ? <VolumeX width={16} height={16} /> : <Volume2 width={16} height={16} />} */}
+                {!startPlay && <Volume2 width={16} height={16} />}
+            </button>
         </div>
-        <button className='border rounded p-2'>
-            <Volume2 width={16} height={16} />
-            {/* <VolumeX width={16} height={16} /> */}
-        </button>
-    </div>
-)
+    )
+}
 
 export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, stopSpeaking, audioConfig, quickPrompt, closeQuickPrompt }: AIChatMessagesType) {
 
@@ -51,6 +99,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     const [currentSpeakingAnswer, setCurrentSpeakingAnswer] = useState('')
 
     const [isLoading, setIsLoading] = useState(false)
+    const [isPlaying, setIsPlaying] = useState(false)
     const [isSpeaking, setIsSpeaking] = useState(false)
 
     const toggleViewOperation = (field: keyof typeof viewOperation) => setViewOperation((prev) => ({ ...prev, [field]: !viewOperation[field] }))
@@ -288,7 +337,12 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                                                 msg.metadata?.type == 'chart' ? (
                                                     <ChatChart metadata={msg.metadata} />
                                                 ) : (
-                                                    <BotMessageWithCopy content={msg.content} />
+                                                    <BotMessageWithCopy
+                                                        startplay={false}
+                                                        content={msg.content}
+                                                        isPlaying={isPlaying}
+                                                        setIsPlaying={setIsPlaying}
+                                                    />
                                                 )
                                             ) : (
                                                 <div className="rounded-lg px-4 py-2 text-sm whitespace-pre-wrap max-w-[85%] bg-primary text-white">
