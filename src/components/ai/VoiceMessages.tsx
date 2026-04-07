@@ -7,18 +7,17 @@ interface VoiceModeOverlayProps {
     phase: 'initial' | 'listening' | 'thinking' | 'streaming';
     onClose: () => void;
     onToggleMic: () => void;
-    listening: boolean;
+    isListening: boolean;
     isSpeaking: boolean;
+    isThinking: boolean;
     stopSpeaking: () => void;
     transcript: string;
 }
 
-export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, listening, isSpeaking, stopSpeaking, transcript }: VoiceModeOverlayProps) {
+export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, stopSpeaking, transcript, isThinking }: VoiceModeOverlayProps) {
     if (!open) return null
 
     const isInitial = useMemo(() => phase == 'initial', [phase])
-    const isListening = useMemo(() => phase == 'listening', [phase])
-    const isThinking = useMemo(() => phase == 'thinking', [phase])
     const isStreaming = useMemo(() => phase == 'streaming', [phase])
 
     const subtitle = useMemo(() => isInitial ? 'Tap the mic to start' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Speaking...', [isInitial, isListening, isThinking])
@@ -130,8 +129,8 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, listening,
                     <MoreHorizontal className="h-5 w-5" />
                 </button>
 
-                <button onClick={onToggleMic} className={`rounded-full p-4 hover:opacity-90 ${listening ? 'bg-gray-100' : 'bg-red-500 text-white'}`} title={listening ? 'Stop recording' : 'Start recording'}>
-                    {listening ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+                <button onClick={onToggleMic} className={`rounded-full p-4 hover:opacity-90 ${isListening ? 'bg-gray-100' : 'bg-red-500 text-white'}`} title={isListening ? 'Stop recording' : 'Start recording'}>
+                    {isListening ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
                 </button>
 
                 <button className="rounded-full bg-gray-100 p-4 hover:bg-gray-200" title="Close" onClick={handleClose}>

@@ -153,19 +153,25 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
 
     useEffect(() => {
         if (listening) {
-            clearTimeout(silenceTimer.current);
+            if (silenceTimer.current) {
+                clearTimeout(silenceTimer.current);
+            }
 
             if (transcript.trim() == "stop" || transcript.trim().toLowerCase() == "end chat") {
                 stopVoiceListening()
             } else if (transcript && transcript.length > 0) {
                 silenceTimer.current = setTimeout(() => {
                     processQuestion(transcript, true)
-                    clearTimeout(silenceTimer.current);
+                    if (silenceTimer.current) {
+                        clearTimeout(silenceTimer.current);
+                    }
                 }, 1000);
             } else {
                 silenceTimer.current = setTimeout(() => {
                     stopVoiceListening()
-                    clearTimeout(silenceTimer.current);
+                    if (silenceTimer.current) {
+                        clearTimeout(silenceTimer.current);
+                    }
                 }, 120000);
             }
         }
@@ -225,7 +231,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                     <VoiceModeOverlay
                         open={viewOperation.voice} phase={voicePhase}
                         onClose={handleToggleVoice} onToggleMic={onToggleMic}
-                        listening={listening} isSpeaking={isSpeaking}
+                        isListening={listening} isSpeaking={isSpeaking} isThinking={isLoading}
                         stopSpeaking={stopSpeaking} transcript={isSpeaking ? currentSpeakingAnswer : transcript}
                     />
                 ) : (

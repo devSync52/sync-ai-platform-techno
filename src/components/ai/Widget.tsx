@@ -1,6 +1,6 @@
 "use client"
 
-import { ExpandIcon, HistoryIcon, List, Plus, X } from 'lucide-react';
+import { Bot, ExpandIcon, HistoryIcon, List, Plus, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react'
 import { v4 as uuid } from 'uuid'
@@ -106,9 +106,12 @@ export default function ChatWidget() {
     }
 
     const handleClose = () => {
-        setViewOperation({ open: false, expanded: false, history: false })
-        window.dispatchEvent(new Event('close-ai-widget'))
-        stopSpeaking()
+        if (viewOperation.open) {
+            setViewOperation({ open: false, expanded: false, history: false })
+            stopSpeaking()
+        } else {
+            setViewOperation({ open: true, expanded: false, history: false })
+        }
     }
 
     const handleSelectSession = (sid: string) => {
@@ -118,55 +121,64 @@ export default function ChatWidget() {
         fetchHistory(sid)
     }
 
-    return viewOperation.open ? (
-        <div className={`fixed bottom-[100px] z-50 flex rounded-[16px] right-[30px] ${viewOperation.expanded ? 'w-[calc(100%_-_60px)]' : 'w-full sm:w-[400px] shadow-lg shadow-grey-400'}`} onClick={() => toggleViewOperation('open')}>
-            <div className={`w-full overflow-hidden rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px]">
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-semibold ml-2 text-white">SynC AI Expert</h2>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <button onClick={fetchChatHistoryList} className="text-white hover:text-white transition p-1" title="Chat history">
-                            <HistoryIcon className="w-5 h-5" />
-                        </button>
-                        <button onClick={handleNewSession} className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90" title="Start new conversation">
-                            <Plus className="w-4 h-4" />
-                            <span className="hidden sm:inline">New Chat</span>
-                        </button>
-                        <button onClick={() => toggleViewOperation('expanded')} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
-                            <ExpandIcon className="w-4 h-4" />
-                        </button>
-                        {/* <button onClick={handleClose} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
-                            <X className="w-4 h-4" />
-                        </button> */}
-                        <button className="text-white hover:text-white text-xl font-extrabold ml-2" title="Quick Prompts">
-                            <List className="h-5 w-5" />
-                        </button>
-                    </div>
-                </div>
-                {
-                    (accountId && userType && user) && (
-                        <div className={`overflow-hidden flex flex-col rounded-b-[16px] bg-white ${viewOperation.expanded ? 'h-[calc(100vh_-_200px)]' : 'h-[500px]'}`}>
+    return (
+        <div>
+            <button onClick={handleClose} className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-full text-base shadow transition w-[60px] h-[60px] justify-center fixed bottom-4 right-4">
+                <Bot className="w-6 h-6" />
+            </button>
+            {
+                viewOperation.open ? (
+                    <div className={`fixed bottom-[100px] z-50 flex rounded-[16px] right-[30px] ${viewOperation.expanded ? 'w-[calc(100%_-_60px)]' : 'w-full sm:w-[400px] shadow-lg shadow-grey-400'}`} onClick={() => toggleViewOperation('open')}>
+                        <div className={`w-full overflow-hidden rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-700 sticky top-0 z-10 rounded-t-[16px]">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-lg font-semibold ml-2 text-white">SynC AI Expert</h2>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={fetchChatHistoryList} className="text-white hover:text-white transition p-1" title="Chat history">
+                                        <HistoryIcon className="w-5 h-5" />
+                                    </button>
+                                    <button onClick={handleNewSession} className="flex items-center gap-1 px-2 py-1 text-sm h-7 bg-primary text-white rounded hover:bg-primary/90" title="Start new conversation">
+                                        <Plus className="w-4 h-4" />
+                                        <span className="hidden sm:inline">New Chat</span>
+                                    </button>
+                                    <button onClick={() => toggleViewOperation('expanded')} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Expand chat">
+                                        <ExpandIcon className="w-4 h-4" />
+                                    </button>
+                                    {/* <button onClick={handleClose} className="text-white hover:text-white text-xl font-extrabold ml-2" title="Fechar chat">
+                                  <X className="w-4 h-4" />
+                              </button> */}
+                                    <button className="text-white hover:text-white text-xl font-extrabold ml-2" title="Quick Prompts">
+                                        <List className="h-5 w-5" />
+                                    </button>
+                                </div>
+                            </div>
                             {
-                                viewOperation.history ? (
-                                    <ChatHistoryList
-                                        sessions={sessions}
-                                        currentSessionId={sessionId ?? ''}
-                                        onSelectSession={handleSelectSession}
-                                        onClose={() => toggleViewOperation('history')}
-                                    />
-                                ) : (
-                                    <AIChatMessages
-                                        currentSessionId={sessionId ?? ''} userId={user.id}
-                                        accountId={accountId} userType={userType} stopSpeaking={stopSpeaking}
-                                        messages={messages} setMessages={setMessages}
-                                    />
+                                (accountId && userType && user) && (
+                                    <div className={`overflow-hidden flex flex-col rounded-b-[16px] bg-white ${viewOperation.expanded ? 'h-[calc(100vh_-_200px)]' : 'h-[500px]'}`}>
+                                        {
+                                            viewOperation.history ? (
+                                                <ChatHistoryList
+                                                    sessions={sessions}
+                                                    currentSessionId={sessionId ?? ''}
+                                                    onSelectSession={handleSelectSession}
+                                                    onClose={() => toggleViewOperation('history')}
+                                                />
+                                            ) : (
+                                                <AIChatMessages
+                                                    currentSessionId={sessionId ?? ''} userId={user.id}
+                                                    accountId={accountId} userType={userType} stopSpeaking={stopSpeaking}
+                                                    messages={messages} setMessages={setMessages}
+                                                />
+                                            )
+                                        }
+                                    </div>
                                 )
                             }
                         </div>
-                    )
-                }
-            </div>
+                    </div>
+                ) : ''
+            }
         </div>
-    ) : ''
+    )
 }

@@ -124,9 +124,9 @@ export default function HeaderTopBar({ title = '', user }: HeaderProps) {
         {/* Ações */}
         <div className="flex items-center gap-4 relative" ref={dropdownRef}>
           {/* Botão Chat */}
-          <button onClick={() => window.dispatchEvent(new Event('toggle-ai-widget'))} className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-full text-base shadow transition w-[60px] h-[60px] justify-center fixed bottom-4 right-4">
+          {/* <button onClick={() => window.dispatchEvent(new Event('toggle-ai-widget'))} className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-full text-base shadow transition w-[60px] h-[60px] justify-center fixed bottom-4 right-4">
             <Bot className="w-6 h-6" />
-          </button>
+          </button> */}
 
           {/* Engrenagem */}
           <button
