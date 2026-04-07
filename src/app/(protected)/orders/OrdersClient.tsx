@@ -20,7 +20,15 @@ function formatOrderTotal(value: unknown): string {
   return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+function asArray<T = any>(value: unknown): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
 export default function OrdersClient({ integrations, warehouses }: { warehouses: any[]; integrations: any[]; }) {
+  const safeIntegrations = asArray(integrations);
+  const safeWarehouses = asArray(warehouses);
+
+
   const [orders, setOrders] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -135,7 +143,7 @@ export default function OrdersClient({ integrations, warehouses }: { warehouses:
           <select className="border rounded-md px-2 py-1 text-sm h-9" value={provider} onChange={chooseProvider}>
             <option value={''}>All Source</option>
             {
-              integrations.map((integration: any) => (
+              safeIntegrations.map((integration: any) => (
                 <option key={integration?.provider?.id} value={integration?.provider?.id || ''}>
                   {integration?.provider?.name || "Unknown Source"}
                 </option>
@@ -162,7 +170,7 @@ export default function OrdersClient({ integrations, warehouses }: { warehouses:
           <select className="border rounded-md px-2 py-1 text-sm h-9" value={warehouse} onChange={(e) => setWarehouse(e.target.value)}>
             <option value="">All warehouses</option>
             {
-              warehouses?.map((element) => (
+              safeWarehouses.map((element) => (
                 <option key={element?.warehouse?.id} value={element?.warehouse?.id}>
                   {element?.warehouse?.name}
                 </option>
