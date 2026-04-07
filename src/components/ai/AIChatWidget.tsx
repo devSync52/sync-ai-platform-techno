@@ -80,7 +80,7 @@ export default function AIChatWidget() {
 
   // Overlay fecha ao clicar fora (só área escura)
   return open ? (
-    <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-t-[16px]' : 'fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-t-[16px]'} style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }}
+    <div className={openExpanded ? 'fixed bottom-[100px] right-[30px] w-[calc(100%_-_60px)] z-50 flex rounded-[16px] bg-white' : 'bg-white fixed w-full bottom-[100px] right-[30px] sm:w-[400px] z-50 flex rounded-[16px]'} style={{ boxShadow: 'rgba(0, 0, 0, 0.10) 0px 6px 20px 0px' }}
       onClick={() => setOpen(false)}>
       <div className={`w-full overflow-hidden rounded-t-[16px] rounded-t-2xl sm:rounded-none px-2 sm:px-0 transition-all duration-300 flex flex-col`} onClick={e => e.stopPropagation()}>
         {/* Topbar */}
@@ -104,7 +104,7 @@ export default function AIChatWidget() {
             </button>
           </div>
         </div>
-        <div className={openExpanded ? 'overflow-hidden flex flex-col h-[calc(100vh_-_200px)] rounded-b-[16px] bg-white' : 'overflow-hidden flex flex-col h-[500px] rounded-b-[16px] bg-white'}>
+        <div className={openExpanded ? 'overflow-hidden flex flex-col h-[calc(100vh_-_200px)] rounded-b-[16px] bg-white' : 'overflow-hidden flex flex-col h-[500px] rounded-b-[16px]'}>
           {view === 'history' ? (
             <ChatHistoryList
               userId={user.id}

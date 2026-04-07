@@ -149,8 +149,8 @@ export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
   }, [openCategory])
 
   return (
-    <div className="w-full border-t bg-white" ref={containerRef} style={{ position: 'sticky', bottom: 0, zIndex: 30 }}>
-      <div className="flex gap-2 px-2 py-2 overflow-x-auto">
+    <div className="w-full bg-white" ref={containerRef} style={{ position: 'sticky', bottom: 0, zIndex: 30 }}>
+      <div className="flex gap-2 px-2 py-2 flex-wrap">
         {(isClient ? CATEGORIES_CLIENT : CATEGORIES).map((cat) => (
           <button
             key={cat.key}

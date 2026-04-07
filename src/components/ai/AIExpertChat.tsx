@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Expand, Loader2, Mic, MicOff, MoreHorizontal, Settings2, VolumeX, X } from 'lucide-react'
+import { Expand, List, Loader2, Mic, MicOff, MoreHorizontal, Settings2, VolumeX, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useSyncAgent, ChatMessage } from '@/hooks/useSyncAgent'
 import { QuickPrompts } from './QuickPrompts'
@@ -203,6 +203,7 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
   const [speechEnabled, setSpeechEnabled] = useState(true)
   const [voiceFirstMode, setVoiceFirstMode] = useState(true)
   const [showAudioConfig, setShowAudioConfig] = useState(false)
+  const [showPromptConfig, setShowPromptConfig] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [language, setLanguage] = useState<'en' | 'pt' | 'es'>('en')
   const [showVoiceMode, setShowVoiceMode] = useState(false)
@@ -653,7 +654,7 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
 
   return (
     <div className="relative flex flex-col h-full">
-      <div className="absolute top-2 left-2 z-40">
+      <div className="absolute top-2 left-2 z-[999]">
         <button onClick={() => setShowAudioConfig((v) => !v)} className="border px-2 py-2 rounded bg-white shadow-sm hover:bg-gray-50" title="Audio settings">
           <Settings2 className="h-4 w-4" />
         </button>
@@ -689,6 +690,17 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
                 </select>
               </label>
             </div>
+          </div>
+        )}
+      </div>
+
+      <div className="absolute top-[50px] left-2 z-40">
+        <button onClick={()=> setShowPromptConfig(!showPromptConfig)} className="border px-2 py-2 rounded bg-white shadow-sm hover:bg-gray-50" title="Quick Prompts">
+          <List className="h-4 w-4" />
+        </button>
+        {showPromptConfig && (
+          <div className="mt-2 w-80 bg-white border rounded-lg p-2 shadow-md">
+            <QuickPrompts onPrompt={handleQuickPrompt} isClient={user_type === 'client'} />
           </div>
         )}
       </div>
@@ -758,7 +770,7 @@ export default function AIExpertChat({ user_id, account_id, user_type, session_i
         </div>
       )}
 
-      <QuickPrompts onPrompt={handleQuickPrompt} isClient={user_type === 'client'} />
+
 
       <div className="border-t p-4 pb-[calc(env(safe-area-inset-bottom)+12px)] flex items-center gap-3">
         <button
