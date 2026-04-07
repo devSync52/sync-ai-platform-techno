@@ -122,7 +122,7 @@ export default function ChatWidget() {
 
     return (
         <div>
-            <button onClick={handleClose} className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-full text-base shadow transition w-[60px] h-[60px] justify-center fixed bottom-4 right-4">
+            <button onClick={handleClose} className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-full text-base shadow transition w-[60px] h-[60px] justify-center fixed bottom-4 right-4 z-50">
                 {viewOperation.open ? <X className="w-6 h-6" /> : <Bot className="w-6 h-6" />}
             </button>
             {
