@@ -1,6 +1,6 @@
 import { ChatMessage } from '@/hooks/useSyncAgent';
 import { Loader2, Mic, Volume2, VolumeX } from 'lucide-react';
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
+import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 import QuickPrompts from './QuickPrompts';
 import { ChatChart } from './charts/chatChart';
 import { VoiceModeOverlay } from './VoiceMessages';
@@ -11,6 +11,7 @@ interface AIChatMessagesType {
     messages: ChatMessage[];
     setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
     stopSpeaking: () => void;
+    closeQuickPrompt: () => void;
     audioConfig: boolean;
     quickPrompt: boolean;
     accountId: string;
@@ -34,7 +35,7 @@ const BotMessageWithCopy = ({ content }: { content: string }) => (
     </div>
 )
 
-export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, stopSpeaking, audioConfig, quickPrompt }: AIChatMessagesType) {
+export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, stopSpeaking, audioConfig, quickPrompt, closeQuickPrompt }: AIChatMessagesType) {
 
     const { transcript, listening, resetTranscript } = useSpeechRecognition();
 
@@ -42,7 +43,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
         return <span>Browser doesn't support speech recognition.</span>;
     }
 
-    const [viewOperation, setViewOperation] = useState({ audioConfig: false, quickPrompt: false, voice: false })
+    const [viewOperation, setViewOperation] = useState({ voice: false })
     const [audioConfigSettings, setAudioConfigSettings] = useState({ speechEnabled: false, voiceFirst: false })
 
     const [voicePhase, setVoicePhase] = useState<VoicePhase>('initial')
@@ -68,21 +69,27 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
         })
     }, [messages])
 
-    const clearSilenceTimeout = () => {
+    const clearSilenceTimeout = useCallback(() => {
         if (silenceTimer.current) {
             clearTimeout(silenceTimer.current)
             silenceTimer.current = null
         }
-    }
+    }, [])
 
-    const stopVoiceListening = async () => {
+    const stopVoiceListening = useCallback(async () => {
         await SpeechRecognition.stopListening()
         resetTranscript()
         setVoicePhase('initial')
         clearSilenceTimeout()
-    }
+    }, [clearSilenceTimeout, resetTranscript])
 
-    const processQuestion = async (question: string, voice: boolean = false) => {
+    const handleStopSpeaking = useCallback(() => {
+        setIsSpeaking(false)
+        setCurrentSpeakingAnswer('')
+        stopSpeaking()
+    }, [stopSpeaking])
+
+    const processQuestion = useCallback(async (question: string, voice: boolean = false) => {
         if (!question.trim() || isLoading) return
 
         if (listening) {
@@ -120,15 +127,21 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
 
         if (voice) {
             setCurrentSpeakingAnswer(result)
+            setVoicePhase('streaming')
+        } else {
+            setCurrentSpeakingAnswer('')
+            setIsSpeaking(false)
+            setVoicePhase('initial')
         }
 
         setMessages((msgs) => [...msgs, { role: 'assistant', content: result }])
         setIsLoading(false)
-    }
+    }, [accountId, currentSessionId, isLoading, listening, setMessages, stopVoiceListening, userId, userType])
 
     const handleQuickPrompt = async (prompt: string) => {
         setInput(prompt)
         await processQuestion(prompt, false)
+        closeQuickPrompt()
         setInput('')
     }
 
@@ -235,7 +248,15 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                         open={viewOperation.voice} phase={voicePhase}
                         onClose={handleToggleVoice} onToggleMic={onToggleMic}
                         isListening={listening} isSpeaking={isSpeaking} isThinking={isLoading}
-                        stopSpeaking={stopSpeaking} transcript={isSpeaking ? currentSpeakingAnswer : transcript}
+                        stopSpeaking={handleStopSpeaking} spokenText={currentSpeakingAnswer}
+                        transcript={isSpeaking ? currentSpeakingAnswer : transcript}
+                        language={languageList[language]} onSpeakingChange={(speaking) => {
+                            setIsSpeaking(speaking)
+                            if (!speaking && voicePhase == 'streaming') {
+                                setCurrentSpeakingAnswer('')
+                                setVoicePhase('initial')
+                            }
+                        }}
                     />
                 ) : (
                     <>
@@ -243,7 +264,10 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                             {
                                 quickPrompt && (
                                     <div className="w-[100%] bg-white border-b p-2 h-full">
-                                        <QuickPrompts onPrompt={handleQuickPrompt} isClient={false} />
+                                        <QuickPrompts
+                                            onPrompt={handleQuickPrompt} isClient={false}
+                                            closeQuickPrompt={closeQuickPrompt}
+                                        />
                                     </div>
                                 )
                             }
@@ -282,7 +306,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                         </div>
 
                         <div className="border-t p-4 pb-[calc(env(safe-area-inset-bottom)+12px)] flex items-center gap-3">
-                            <button className="border rounded-full p-3 md:p-2.5 bg-white shadow-sm hover:bg-gray-50" title="Open Voice Mode" onClick={() => onToggleMic()}>
+                            <button className="border rounded-full p-3 md:p-2.5 bg-white shadow-sm hover:bg-gray-50" title="Open Voice Mode" onClick={() => handleToggleVoice()}>
                                 <Mic className="h-6 w-6 md:h-5 md:w-5" />
                             </button>
 

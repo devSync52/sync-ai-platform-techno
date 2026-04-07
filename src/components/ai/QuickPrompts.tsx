@@ -128,20 +128,17 @@ const CATEGORIES_CLIENT: PromptCategory[] = [
 interface QuickPromptsProps {
   onPrompt: (prompt: string) => void
   isClient?: boolean
+  closeQuickPrompt?: () => void
 }
 
-export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
-  const [openCategory, setOpenCategory] = useState<string | null>(null)
+export function QuickPrompts({ onPrompt, isClient, closeQuickPrompt }: QuickPromptsProps) {
+  const [openCategory, setOpenCategory] = useState<string | null>(CATEGORIES[0].key)
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Fecha prompts ao clicar fora
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (
-        openCategory &&
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+      if (openCategory && containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpenCategory(null)
       }
     }
@@ -152,7 +149,7 @@ export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
   return (
     <div className="w-full bg-white animate-fade-in" ref={containerRef} style={{ position: 'sticky', bottom: 0, zIndex: 30 }}>
       <div className='flex items-center gap-2 pb-2 border-b mb-2'>
-        <button className="text-xl font-extrabold ml-2" title="Back">
+        <button className="text-xl font-extrabold ml-2" title="Back" onClick={closeQuickPrompt}>
           <ArrowLeft className="w-4 h-4" />
         </button>
         <h6 className='font-bold'>All Prompts</h6>
@@ -170,25 +167,28 @@ export function QuickPrompts({ onPrompt, isClient }: QuickPromptsProps) {
         ))}
       </div>
       {/* Prompts da categoria aberta */}
-      {openCategory && (
-        <div className="mt-2">
-          <div className="max-h-[300px] overflow-y-auto flex flex-col gap-2 pr-1">
-            {(isClient ? CATEGORIES_CLIENT : CATEGORIES).find((cat) => cat.key === openCategory)?.prompts.map((prompt) => (
-              <button
-                key={prompt}
-                className="text-left w-full px-3 py-2 bg-white rounded hover:bg-primary/10 border border-gray-200 text-sm transition"
-                onClick={() => {
-                  onPrompt(prompt)
-                  setOpenCategory(null)
-                }}
-                type="button"
-              >
-                {prompt}
-              </button>
-            ))}
+
+      {
+        openCategory && (
+          <div className="mt-2">
+            <div className="max-h-[300px] overflow-y-auto flex flex-col gap-2 pr-1">
+              {(isClient ? CATEGORIES_CLIENT : CATEGORIES).find((cat) => cat.key === openCategory)?.prompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  className="text-left w-full px-3 py-2 bg-white rounded hover:bg-primary/10 border border-gray-200 text-sm transition"
+                  onClick={() => {
+                    onPrompt(prompt)
+                    setOpenCategory(null)
+                  }}
+                  type="button"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </div>
   )
 }

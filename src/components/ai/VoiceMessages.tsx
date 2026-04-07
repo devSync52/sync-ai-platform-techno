@@ -1,6 +1,7 @@
 import { Loader2, Mic, MicOff, MoreHorizontal, X } from "lucide-react"
 import { motion } from 'framer-motion'
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useSpeech } from "react-text-to-speech";
 
 interface VoiceModeOverlayProps {
     open: boolean;
@@ -12,21 +13,52 @@ interface VoiceModeOverlayProps {
     isThinking: boolean;
     stopSpeaking: () => void;
     transcript: string;
+    spokenText?: string;
+    language?: string;
+    onSpeakingChange?: (isSpeaking: boolean) => void;
 }
 
-export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, stopSpeaking, transcript, isThinking }: VoiceModeOverlayProps) {
+export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, stopSpeaking, transcript, isThinking, spokenText = '', language = 'en-US', onSpeakingChange }: VoiceModeOverlayProps) {
     if (!open) return null
 
     const isInitial = useMemo(() => phase == 'initial', [phase])
     const isStreaming = useMemo(() => phase == 'streaming', [phase])
+    const aiText = useMemo(() => spokenText.trim(), [spokenText])
+    const shouldSpeak = useMemo(() => open && !!aiText, [aiText, open])
 
     const subtitle = useMemo(() => isInitial ? 'Tap the mic to start' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Speaking...', [isInitial, isListening, isThinking])
     const base = useMemo(() => isStreaming ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8', [isStreaming, isListening])
     const soft = useMemo(() => isStreaming ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1', [isStreaming, isListening])
 
+    const { Text, speechStatus, start, pause, stop } = useSpeech({ text: aiText, pitch: 1, rate: 1, volume: 1, lang: language, voiceURI: "", autoPlay: shouldSpeak, highlightText: true, showOnlyHighlightedText: false, highlightMode: "word", enableDirectives: false, });
+
+    useEffect(() => {
+        onSpeakingChange?.(speechStatus == 'started' || speechStatus == 'paused')
+    }, [onSpeakingChange, speechStatus])
+
+    useEffect(() => {
+        if (!shouldSpeak && speechStatus != 'stopped') {
+            stop()
+        }
+    }, [shouldSpeak, speechStatus, stop])
+
     const handleClose = () => {
-        if (isSpeaking) stopSpeaking()
+        if (isSpeaking || speechStatus != 'stopped') {
+            stop()
+            stopSpeaking()
+        }
         onClose()
+    }
+
+    const handleSpeechToggle = () => {
+        if (!aiText) return
+
+        if (speechStatus === 'started') {
+            pause()
+            return
+        }
+
+        start()
     }
 
     return (
@@ -114,10 +146,16 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     </div>
 
                     {
-                        transcript && (
-                            <div className="text-sm text-gray-600">
-                                {transcript}
-                            </div>
+                        isSpeaking && aiText ? (
+                            <button type="button" onClick={handleSpeechToggle} className="max-w-md rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm transition hover:bg-gray-100" title={speechStatus == 'started' ? 'Pause speech' : 'Play speech'}>
+                                <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
+                            </button>
+                        ) : (
+                            (isListening || isThinking) && (
+                                <div className="text-sm text-gray-600">
+                                    {transcript}
+                                </div>
+                            )
                         )
                     }
 
