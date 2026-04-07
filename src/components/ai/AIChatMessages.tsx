@@ -1,5 +1,5 @@
 import { ChatMessage } from '@/hooks/useSyncAgent';
-import { Loader2, Mic } from 'lucide-react';
+import { Loader2, Mic, Volume2, VolumeX } from 'lucide-react';
 import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 import QuickPrompts from './QuickPrompts';
 import { ChatChart } from './charts/chatChart';
@@ -22,12 +22,16 @@ interface AIChatMessagesType {
 type VoicePhase = 'initial' | 'listening' | 'thinking' | 'streaming'
 
 const BotMessageWithCopy = ({ content }: { content: string }) => (
-    <div className="flex items-start w-full">
+    <div className="flex items-start w-full flex-col gap-2">
         <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
             <div className='overflow-x-auto'>
                 <div className="chat_box" dangerouslySetInnerHTML={{ __html: content }} />
             </div>
         </div>
+        <button className='border rounded p-2'>
+            <Volume2 width={16} height={16} />
+            {/* <VolumeX width={16} height={16} /> */}
+        </button>
     </div>
 )
 
@@ -201,7 +205,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
 
     return (
         <div className="relative flex flex-col h-full">
-            <div className="absolute top-2 left-2 z-[999]">
+            <div className="absolute top-1 right-2 z-[999]">
                 {
                     audioConfig && (
                         <div className="mt-2 w-64 bg-white border rounded-lg p-3 shadow-md">
@@ -244,11 +248,9 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                         open={viewOperation.voice} phase={voicePhase}
                         onClose={handleToggleVoice} onToggleMic={onToggleMic}
                         isListening={listening} isSpeaking={isSpeaking} isThinking={isLoading}
-                        stopSpeaking={handleStopSpeaking}
+                        stopSpeaking={handleStopSpeaking} spokenText={currentSpeakingAnswer}
                         transcript={isSpeaking ? currentSpeakingAnswer : transcript}
-                        spokenText={currentSpeakingAnswer}
-                        language={languageList[language]}
-                        onSpeakingChange={(speaking) => {
+                        language={languageList[language]} onSpeakingChange={(speaking) => {
                             setIsSpeaking(speaking)
                             if (!speaking && voicePhase == 'streaming') {
                                 setCurrentSpeakingAnswer('')
@@ -258,10 +260,10 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                     />
                 ) : (
                     <>
-                        <div className="absolute top-[50px] left-2 z-40">
+                        <div className="absolute top-0 left-0 z-40 h-[413px]">
                             {
                                 quickPrompt && (
-                                    <div className="mt-2 w-80 bg-white border rounded-lg p-2 shadow-md">
+                                    <div className="w-[100%] bg-white border-b p-2 h-full">
                                         <QuickPrompts onPrompt={handleQuickPrompt} isClient={false} />
                                     </div>
                                 )
