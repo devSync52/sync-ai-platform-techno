@@ -11,6 +11,8 @@ interface AIChatMessagesType {
     messages: ChatMessage[];
     setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
     stopSpeaking: () => void;
+    audioConfig: boolean;
+    quickPrompt: boolean;
     accountId: string;
     userType: string;
     userId: string;
@@ -28,8 +30,7 @@ const BotMessageWithCopy = ({ content }: { content: string }) => (
     </div>
 )
 
-export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, stopSpeaking }: AIChatMessagesType) {
-    const SILENCE_DELAY_MS = 500
+export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, stopSpeaking, audioConfig, quickPrompt }: AIChatMessagesType) {
 
     const { transcript, listening, resetTranscript } = useSpeechRecognition();
 
@@ -38,7 +39,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     }
 
     const [viewOperation, setViewOperation] = useState({ audioConfig: false, quickPrompt: false, voice: false })
-    const [audioConfig, setAudioConfig] = useState({ speechEnabled: false, voiceFirst: false })
+    const [audioConfigSettings, setAudioConfigSettings] = useState({ speechEnabled: false, voiceFirst: false })
 
     const [voicePhase, setVoicePhase] = useState<VoicePhase>('initial')
     const [input, setInput] = useState('')
@@ -186,20 +187,16 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     return (
         <div className="relative flex flex-col h-full">
             <div className="absolute top-2 left-2 z-[999]">
-                <button onClick={() => toggleViewOperation('audioConfig')} className="border px-2 py-2 rounded bg-white shadow-sm hover:bg-gray-50" title="Audio settings">
-                    <Settings2 className="h-4 w-4" />
-                </button>
-
                 {
-                    viewOperation.audioConfig && (
+                    audioConfig && (
                         <div className="mt-2 w-64 bg-white border rounded-lg p-3 shadow-md">
                             <div className="text-sm font-semibold mb-2">Audio Settings</div>
                             <div className="space-y-3 text-sm">
                                 <label className="flex items-center gap-2">
                                     <input
                                         type="checkbox"
-                                        checked={audioConfig.speechEnabled}
-                                        onChange={() => setAudioConfig((v) => ({ ...v, speechEnabled: !v.speechEnabled }))}
+                                        checked={audioConfigSettings.speechEnabled}
+                                        onChange={() => setAudioConfigSettings((v) => ({ ...v, speechEnabled: !v.speechEnabled }))}
                                     />
                                     Enable voice response
                                 </label>
@@ -207,8 +204,8 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                                 <label className="flex items-center gap-2">
                                     <input
                                         type="checkbox"
-                                        checked={audioConfig.voiceFirst}
-                                        onChange={() => setAudioConfig((v) => ({ ...v, voiceFirst: !v.voiceFirst }))}
+                                        checked={audioConfigSettings.voiceFirst}
+                                        onChange={() => setAudioConfigSettings((v) => ({ ...v, voiceFirst: !v.voiceFirst }))}
                                     />
                                     Voice-first (send & reply by voice)
                                 </label>
@@ -237,13 +234,10 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                 ) : (
                     <>
                         <div className="absolute top-[50px] left-2 z-40">
-                            <button onClick={() => toggleViewOperation('quickPrompt')} className="border px-2 py-2 rounded bg-white shadow-sm hover:bg-gray-50" title="Quick Prompts">
-                                <List className="h-4 w-4" />
-                            </button>
                             {
-                                viewOperation.quickPrompt && (
+                                quickPrompt && (
                                     <div className="mt-2 w-80 bg-white border rounded-lg p-2 shadow-md">
-                                        <QuickPrompts onPrompt={handleQuickPrompt} isClient={true} />
+                                        <QuickPrompts onPrompt={handleQuickPrompt} isClient={false} />
                                     </div>
                                 )
                             }
