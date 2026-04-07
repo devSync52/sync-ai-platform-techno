@@ -96,7 +96,6 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
             await stopVoiceListening()
         }
 
-        setVoicePhase('thinking')
         setIsLoading(true)
 
         const userMsg: ChatMessage = { role: 'user', content: question }
@@ -128,6 +127,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
         if (voice) {
             setCurrentSpeakingAnswer(result)
             setVoicePhase('streaming')
+            setIsSpeaking(true)
         } else {
             setCurrentSpeakingAnswer('')
             setIsSpeaking(false)
@@ -139,10 +139,8 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     }, [accountId, currentSessionId, isLoading, listening, setMessages, stopVoiceListening, userId, userType])
 
     const handleQuickPrompt = async (prompt: string) => {
-        setInput(prompt)
-        await processQuestion(prompt, false)
         closeQuickPrompt()
-        setInput('')
+        await processQuestion(prompt, false)
     }
 
     const sendMessage = async () => {
@@ -169,6 +167,15 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
         } else {
             await onToggleMic()
         }
+    }
+
+    const handleVoiceClose = async () => {
+        toggleViewOperation('voice')
+        if (listening) {
+            await stopVoiceListening()
+        }
+        setIsSpeaking(false)
+        setVoicePhase('initial')
     }
 
     useEffect(() => {
@@ -246,7 +253,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                 viewOperation.voice ? (
                     <VoiceModeOverlay
                         open={viewOperation.voice} phase={voicePhase}
-                        onClose={handleToggleVoice} onToggleMic={onToggleMic}
+                        onClose={handleVoiceClose} onToggleMic={onToggleMic} setIsSpeaking={setIsSpeaking}
                         isListening={listening} isSpeaking={isSpeaking} isThinking={isLoading}
                         stopSpeaking={handleStopSpeaking} spokenText={currentSpeakingAnswer}
                         transcript={isSpeaking ? currentSpeakingAnswer : transcript}

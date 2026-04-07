@@ -1,6 +1,6 @@
 import { Loader2, Mic, MicOff, MoreHorizontal, X } from "lucide-react"
 import { motion } from 'framer-motion'
-import { useEffect, useMemo } from "react";
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef } from "react";
 import { useSpeech } from "react-text-to-speech";
 
 interface VoiceModeOverlayProps {
@@ -11,6 +11,7 @@ interface VoiceModeOverlayProps {
     isListening: boolean;
     isSpeaking: boolean;
     isThinking: boolean;
+    setIsSpeaking: Dispatch<SetStateAction<boolean>>
     stopSpeaking: () => void;
     transcript: string;
     spokenText?: string;
@@ -18,47 +19,68 @@ interface VoiceModeOverlayProps {
     onSpeakingChange?: (isSpeaking: boolean) => void;
 }
 
-export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, stopSpeaking, transcript, isThinking, spokenText = '', language = 'en-US', onSpeakingChange }: VoiceModeOverlayProps) {
+function stripHtmlForSpeech(value: string) {
+    return value
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+        .replace(/<li>/gi, '- ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/\r/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim()
+}
+
+export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, setIsSpeaking, transcript, isThinking, spokenText = '', language = 'en-US' }: VoiceModeOverlayProps) {
     if (!open) return null
 
-    const isInitial = useMemo(() => phase == 'initial', [phase])
-    const isStreaming = useMemo(() => phase == 'streaming', [phase])
-    const aiText = useMemo(() => spokenText.trim(), [spokenText])
-    const shouldSpeak = useMemo(() => open && !!aiText, [aiText, open])
+    const plainSpokenText = useMemo(() => stripHtmlForSpeech(spokenText), [spokenText])
+    const subtitle = useMemo(() => isSpeaking ? 'Speaking...' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Tap the mic to start', [isSpeaking, isListening, isThinking])
+    const base = useMemo(() => isSpeaking ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8', [isSpeaking, isListening])
+    const soft = useMemo(() => isSpeaking ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1', [isSpeaking, isListening])
 
-    const subtitle = useMemo(() => isInitial ? 'Tap the mic to start' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Speaking...', [isInitial, isListening, isThinking])
-    const base = useMemo(() => isStreaming ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8', [isStreaming, isListening])
-    const soft = useMemo(() => isStreaming ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1', [isStreaming, isListening])
-
-    const { Text, speechStatus, start, pause, stop } = useSpeech({ text: aiText, pitch: 1, rate: 1, volume: 1, lang: language, voiceURI: "", autoPlay: shouldSpeak, highlightText: true, showOnlyHighlightedText: false, highlightMode: "word", enableDirectives: false, });
+    const { Text, speechStatus, stop } = useSpeech({ text: plainSpokenText, pitch: 1, rate: 1, volume: 1, lang: language, voiceURI: "", autoPlay: true, highlightText: true, showOnlyHighlightedText: false, highlightMode: "word", enableDirectives: false, });
+    const previousSpeechStatusRef = useRef(speechStatus)
 
     useEffect(() => {
-        onSpeakingChange?.(speechStatus == 'started' || speechStatus == 'paused')
-    }, [onSpeakingChange, speechStatus])
-
-    useEffect(() => {
-        if (!shouldSpeak && speechStatus != 'stopped') {
+        if (isListening) {
             stop()
         }
-    }, [shouldSpeak, speechStatus, stop])
+    }, [isListening])
+
+    useEffect(() => {
+        const previousSpeechStatus = previousSpeechStatusRef.current
+        const speechJustFinished = speechStatus == 'stopped' && (previousSpeechStatus == 'started' || previousSpeechStatus == 'paused') && isSpeaking
+
+        if (speechJustFinished) {
+            console.log('Speech finished');
+            setIsSpeaking(false)
+            onToggleMic()
+        }
+
+        previousSpeechStatusRef.current = speechStatus
+    }, [speechStatus, isSpeaking])
 
     const handleClose = () => {
-        if (isSpeaking || speechStatus != 'stopped') {
+        if (isSpeaking) {
             stop()
-            stopSpeaking()
         }
         onClose()
     }
 
-    const handleSpeechToggle = () => {
-        if (!aiText) return
-
-        if (speechStatus === 'started') {
-            pause()
-            return
+    const handleToggleMic = () => {
+        if (isSpeaking) {
+            stop()
         }
+        onToggleMic()
+    }
 
-        start()
+    const handleSpeechToggle = () => {
+        // 
     }
 
     return (
@@ -72,13 +94,13 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
             <div className="flex flex-col items-center justify-center">
                 <div className="relative h-56 w-56 overflow-visible" key={`phase-${phase}`}>
                     {
-                        (isListening || isStreaming) && [0, 1, 2].map((i) => (
+                        (isListening || isSpeaking) && [0, 1, 2].map((i) => (
                             <motion.span
                                 key={i}
                                 className="absolute inset-0 rounded-full pointer-events-none"
                                 style={{ border: `2px solid ${soft}` }}
                                 animate={
-                                    isStreaming ? {
+                                    isSpeaking ? {
                                         scale: [1, 1.05, 1],
                                         opacity: [0.4, 0.9, 0.4]
                                     } : {
@@ -87,7 +109,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                                     }
                                 }
                                 transition={{
-                                    duration: isStreaming ? 1.1 : 2.1,
+                                    duration: isSpeaking ? 1.1 : 2.1,
                                     repeat: Infinity,
                                     delay: i * 0.22, ease: 'easeInOut'
                                 }}
@@ -98,14 +120,14 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     <motion.div
                         className="absolute inset-3 rounded-full will-change-transform bg-[radial-gradient(circle_at_50%_42%,_#f5f5f5_8%,_#d1d5db_75%)] shadow-[0_12px_40px_rgba(0,0,0,0.12)] [transform:translateZ(0)]"
                         animate={
-                            isStreaming
-                                ? {
-                                    scale: [1, 1.06, 1],
-                                    filter: ['brightness(1)', 'brightness(1.1)', 'brightness(1)'],
-                                }
-                                : isListening
-                                    ? { scale: [1, 1.03, 1] }
-                                    : { scale: [1, 1.01, 1] }
+                            isSpeaking ? {
+                                scale: [1, 1.06, 1],
+                                filter: ['brightness(1)', 'brightness(1.1)', 'brightness(1)'],
+                            } : isListening ? {
+                                scale: [1, 1.03, 1]
+                            } : {
+                                scale: [1, 1.01, 1]
+                            }
                         }
                         transition={{
                             duration: 1.1,
@@ -123,7 +145,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
 
                     <div className="flex min-h-[28px] items-center justify-center">
                         {
-                            isStreaming ? (
+                            isSpeaking ? (
                                 <div className="flex items-end gap-1.5">
                                     {[6, 10, 16, 10, 6].map((h, idx) => (
                                         <motion.span
@@ -146,17 +168,15 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     </div>
 
                     {
-                        isSpeaking && aiText ? (
+                        isSpeaking ? (
                             <button type="button" onClick={handleSpeechToggle} className="max-w-md rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm transition hover:bg-gray-100" title={speechStatus == 'started' ? 'Pause speech' : 'Play speech'}>
                                 <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
                             </button>
-                        ) : (
-                            (isListening || isThinking) && (
-                                <div className="text-sm text-gray-600">
-                                    {transcript}
-                                </div>
-                            )
-                        )
+                        ) : (isListening || isThinking) ? (
+                            <div className="text-sm text-gray-600">
+                                {transcript}
+                            </div>
+                        ) : ''
                     }
 
                 </div>
@@ -167,7 +187,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     <MoreHorizontal className="h-5 w-5" />
                 </button>
 
-                <button onClick={onToggleMic} className={`rounded-full p-4 hover:opacity-90 ${isListening ? 'bg-gray-100' : 'bg-red-500 text-white'}`} title={isListening ? 'Stop recording' : 'Start recording'}>
+                <button onClick={handleToggleMic} className={`rounded-full p-4 hover:opacity-90 ${isListening ? 'bg-gray-100' : 'bg-red-500 text-white'}`} title={isListening ? 'Stop recording' : 'Start recording'}>
                     {isListening ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
                 </button>
 
