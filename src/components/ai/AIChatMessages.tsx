@@ -249,7 +249,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                     if (silenceTimer.current) {
                         clearTimeout(silenceTimer.current);
                     }
-                }, 1000);
+                }, 2000);
             } else {
                 silenceTimer.current = setTimeout(() => {
                     stopVoiceListening()
