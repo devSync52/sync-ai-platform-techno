@@ -129,7 +129,7 @@ export default function AIChatWidget() {
             </button>
           </div>
         </div>
-        <div className={openExpanded ? 'overflow-hidden flex flex-col h-[calc(100vh_-_200px)] rounded-b-[16px] bg-white' : 'overflow-hidden flex flex-col h-[500px] rounded-b-[16px]'}>
+        <div className={openExpanded ? 'overflow-auto flex flex-col h-[calc(100vh_-_200px)] rounded-b-[16px] bg-white' : 'overflow-auto flex flex-col h-[500px] rounded-b-[16px]'}>
           {view === 'history' ? (
             <ChatHistoryList
               userId={user.id}
