@@ -168,16 +168,24 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     </div>
 
                     {
+
                         isSpeaking ? (
-                            <button type="button" onClick={handleSpeechToggle} className="max-w-md rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm transition hover:bg-gray-100" title={speechStatus == 'started' ? 'Pause speech' : 'Play speech'}>
-                                <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
-                            </button>
+                            <div className="text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10">
+                                <button type="button" onClick={handleSpeechToggle} className="max-w-md text-sm text-gray-700 shadow-sm transition hover:bg-gray-100" title={speechStatus == 'started' ? 'Pause speech' : 'Play speech'}>
+                                    <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
+                                </button>
+                            </div>
                         ) : (isListening || isThinking) ? (
-                            <div className="text-sm text-gray-600">
+                            <div className={(isListening || isThinking) ? "text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 block" : "text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 hidden"}>
                                 {transcript}
                             </div>
                         ) : ''
+
                     }
+
+                    {/* <div className="text-sm text-gray-600 absolute bottom-20 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto">
+                        sdfd sfsd f sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdfd sfsd f sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdfd sfsd f sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf
+                    </div> */}
 
                 </div>
             </div>

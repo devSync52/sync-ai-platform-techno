@@ -87,3 +87,13 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+.stop_play_btn span[role="button"] {
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid #e5e7eb;
+}
+.stop_play_btn span[role="button"] svg{
+  width: 16px;
+  height: 16px;
+}
