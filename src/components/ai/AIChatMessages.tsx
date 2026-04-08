@@ -64,12 +64,7 @@ const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, startplay = fals
                         startPlay ? (
                             <>
                                 <HighlightedText id="unique-id" />
-                                <Speech
-                                    id="unique-id"
-                                    onStart={() => setIsPlaying(true)} onStop={handleStop}
-                                    text={stripHtmlForSpeech(content)} pitch={1} rate={1} volume={1} lang='en-US' autoPlay={true}
-                                    highlightText={true} showOnlyHighlightedText={false} highlightMode={"word"} enableDirectives={false}
-                                />
+
                             </>
                         ) : (
                             <div
@@ -81,7 +76,16 @@ const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, startplay = fals
                 </div>
             </div>
             {
-                !startPlay && (
+                startPlay ? (
+                    <div className='stop_play_btn'>
+                        <Speech
+                            id="unique-id"
+                            onStart={() => setIsPlaying(true)} onStop={handleStop}
+                            text={stripHtmlForSpeech(content)} pitch={1} rate={1} volume={1} lang='en-US' autoPlay={true}
+                            highlightText={true} showOnlyHighlightedText={false} highlightMode={"word"} enableDirectives={false}
+                        />
+                    </div>
+                ) : (
                     <button className='border rounded p-2' onClick={handlePlayVoice}>
                         <Volume2 width={16} height={16} />
                     </button>
