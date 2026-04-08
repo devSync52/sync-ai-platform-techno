@@ -38,8 +38,8 @@ function stripHtmlForSpeech(value: string) {
         .trim()
 }
 
-const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, startplay = false }: { content: string; isPlaying: boolean; setIsPlaying: Dispatch<SetStateAction<boolean>>; startplay: boolean }) => {
-    const [startPlay, setStartPlay] = useState(startplay)
+const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, instantPlayStartPlay = false }: { content: string; isPlaying: boolean; setIsPlaying: Dispatch<SetStateAction<boolean>>; instantPlayStartPlay: boolean }) => {
+    const [startPlay, setStartPlay] = useState(instantPlayStartPlay)
 
     const handlePlayVoice = () => {
         if (!startPlay) {
@@ -346,10 +346,8 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                                                     <ChatChart metadata={msg.metadata} />
                                                 ) : (
                                                     <BotMessageWithCopy
-                                                        startplay={false}
-                                                        content={msg.content}
-                                                        isPlaying={isPlaying}
-                                                        setIsPlaying={setIsPlaying}
+                                                        instantPlayStartPlay={msg.instantPlayStartPlay || false}
+                                                        content={msg.content} isPlaying={isPlaying} setIsPlaying={setIsPlaying}
                                                     />
                                                 )
                                             ) : (
