@@ -5,7 +5,7 @@ import QuickPrompts from './QuickPrompts';
 import { ChatChart } from './charts/chatChart';
 import { VoiceModeOverlay } from './VoiceMessages';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
-import Speech, { HighlightedText, useSpeech } from 'react-text-to-speech';
+import { useSpeech } from 'react-text-to-speech';
 
 interface AIChatMessagesType {
     currentSessionId: string;
