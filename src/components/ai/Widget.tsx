@@ -76,6 +76,8 @@ export default function ChatWidget() {
     const fetchPageGreeting = async (sessionId: string) => {
         try {
             setIsLoading(true)
+            setIsPlaying(true)
+
             const payloadBody = {
                 question: '', account_id: accountId, user_id: user?.id,
                 session_id: sessionId, user_type: userType, page_context: {

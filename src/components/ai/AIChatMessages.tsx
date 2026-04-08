@@ -73,12 +73,15 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     }, [clearSilenceTimeout, resetTranscript])
 
     const handleStopSpeaking = useCallback(() => {
+        setIsPlaying(false)
         setIsSpeaking(false)
         setCurrentSpeakingAnswer('')
-    }, [])
+    }, [setIsPlaying, setIsSpeaking])
 
     const processQuestion = useCallback(async (question: string, voice: boolean = false) => {
         if (!question.trim() || isLoading) return
+
+        handleStopSpeaking()
 
         if (listening) {
             await stopVoiceListening()
@@ -124,7 +127,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
 
         setMessages((msgs) => [...msgs, { role: 'assistant', content: result }])
         setIsLoading(false)
-    }, [accountId, currentSessionId, isLoading, listening, setMessages, stopVoiceListening, userId, userType])
+    }, [accountId, currentSessionId, handleStopSpeaking, isLoading, listening, setMessages, stopVoiceListening, userId, userType])
 
     const handleQuickPrompt = async (prompt: string) => {
         closeQuickPrompt()

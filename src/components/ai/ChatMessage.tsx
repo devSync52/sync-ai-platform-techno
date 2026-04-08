@@ -2,7 +2,7 @@
 
 import { stripHtmlForSpeech } from "@/lib/utils";
 import { Square, Volume2, VolumeX } from "lucide-react";
-import { Dispatch, SetStateAction, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { useSpeech } from "react-text-to-speech";
 
 interface ChatMessageComponentProps {
@@ -23,6 +23,7 @@ const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlaySta
 
     const handleStart = () => {
         setIsPlaying(true)
+        setStartPlay(true)
     }
 
     const { Text, start, stop } = useSpeech({
@@ -38,6 +39,13 @@ const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlaySta
             start()
         }
     }
+
+    useEffect(() => {
+        if (!isPlaying && startPlay) {
+            stop()
+        }
+    }, [isPlaying, startPlay])
+
 
     return (
         <div className="flex items-start w-full flex-col gap-2">
