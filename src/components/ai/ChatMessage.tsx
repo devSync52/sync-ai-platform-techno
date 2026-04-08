@@ -2,7 +2,7 @@
 
 import { stripHtmlForSpeech } from "@/lib/utils";
 import { Square, Volume2, VolumeX } from "lucide-react";
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 import { useSpeech } from "react-text-to-speech";
 
 interface ChatMessageComponentProps {
@@ -15,6 +15,7 @@ interface ChatMessageComponentProps {
 const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlayStartPlay = false }: ChatMessageComponentProps) => {
     const [startPlay, setStartPlay] = useState(instantPlayStartPlay)
     const [volume, setVolume] = useState(1)
+    const speechContainerRef = useRef<HTMLDivElement>(null)
 
     const handleStop = () => {
         setIsPlaying(false)
@@ -46,11 +47,40 @@ const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlaySta
         }
     }, [isPlaying, startPlay])
 
+    useEffect(() => {
+        const container = speechContainerRef.current
+        if (!container || !startPlay) return
+
+        const scrollHighlightedTextIntoView = () => {
+            const activeMark = container.querySelector('mark')
+            if (!(activeMark instanceof HTMLElement)) return
+
+            activeMark.scrollIntoView({
+                block: 'nearest',
+                inline: 'nearest',
+                behavior: 'smooth',
+            })
+        }
+
+        scrollHighlightedTextIntoView()
+
+        const observer = new MutationObserver(scrollHighlightedTextIntoView)
+        observer.observe(container, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['style', 'class'],
+        })
+
+        return () => observer.disconnect()
+    }, [startPlay])
+
 
     return (
         <div className="flex items-start w-full flex-col gap-2">
             <div className="relative rounded-lg px-4 py-2 pr-10 text-sm whitespace-pre-wrap w-full max-w-[85%]  bg-gray-100 text-gray-900">
-                <div className='overflow-x-auto'>
+                <div className='max-h-64 overflow-y-auto overflow-x-auto scrollbar-hidden' ref={speechContainerRef}>
                     {
                         startPlay ? (
                             <Text

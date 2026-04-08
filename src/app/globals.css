@@ -52,6 +52,15 @@ body {
     animation: fadeIn 0.2s ease-out forwards;
   }
 
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
   @keyframes fadeIn {
     0% {
       opacity: 0;

@@ -137,6 +137,15 @@ export default function ChatWidget() {
     }
 
     const handleClose = () => {
+        setIsPlaying(false)
+        setIsSpeaking(false)
+        setMessages((prev) =>
+            prev.map((msg) =>
+                msg.instantPlayStartPlay
+                    ? { ...msg, instantPlayStartPlay: false }
+                    : msg
+            )
+        )
         setViewOperation(prev => ({
             open: !prev.open, expanded: false,
             history: false, audioConfig: false,

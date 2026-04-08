@@ -42,6 +42,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
     const subtitle = useMemo(() => isSpeaking ? 'Speaking...' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Tap the mic to start', [isSpeaking, isListening, isThinking])
     const base = useMemo(() => isSpeaking ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8', [isSpeaking, isListening])
     const soft = useMemo(() => isSpeaking ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1', [isSpeaking, isListening])
+    const transcriptContainerRef = useRef<HTMLDivElement>(null)
 
     const { Text, speechStatus, stop } = useSpeech({ text: plainSpokenText, pitch: 1, rate: 1, volume: 1, lang: language, voiceURI: "", autoPlay: true, highlightText: true, showOnlyHighlightedText: false, highlightMode: "word", enableDirectives: false, });
     const previousSpeechStatusRef = useRef(speechStatus)
@@ -64,6 +65,35 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
 
         previousSpeechStatusRef.current = speechStatus
     }, [speechStatus, isSpeaking])
+
+    useEffect(() => {
+        const container = transcriptContainerRef.current
+        if (!container || !isSpeaking) return
+
+        const scrollHighlightedTextIntoView = () => {
+            const activeMark = container.querySelector('mark')
+            if (!(activeMark instanceof HTMLElement)) return
+
+            activeMark.scrollIntoView({
+                block: 'nearest',
+                inline: 'nearest',
+                behavior: 'smooth',
+            })
+        }
+
+        scrollHighlightedTextIntoView()
+
+        const observer = new MutationObserver(scrollHighlightedTextIntoView)
+        observer.observe(container, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['style', 'class'],
+        })
+
+        return () => observer.disconnect()
+    }, [isSpeaking, plainSpokenText])
 
     const handleClose = () => {
         if (isSpeaking) {
@@ -170,10 +200,8 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     {
 
                         isSpeaking ? (
-                            <div className="text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10">
-                                <button type="button" onClick={handleSpeechToggle} className="max-w-md text-sm text-gray-700 shadow-sm transition hover:bg-gray-100" title={speechStatus == 'started' ? 'Pause speech' : 'Play speech'}>
-                                    <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
-                                </button>
+                            <div ref={transcriptContainerRef} className="text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto scrollbar-hidden z-10">
+                                <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
                             </div>
                         ) : (isListening || isThinking) ? (
                             <div className={(isListening || isThinking) ? "text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 block" : "text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 hidden"}>
