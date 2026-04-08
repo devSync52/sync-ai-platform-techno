@@ -14,7 +14,7 @@ interface ChatMessageComponentProps {
 
 const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlayStartPlay = false }: ChatMessageComponentProps) => {
     const [startPlay, setStartPlay] = useState(instantPlayStartPlay)
-    const [volume, setVolume] = useState(1)
+    const [volume, setVolume] = useState(0)
     const speechContainerRef = useRef<HTMLDivElement>(null)
 
     const handleStop = () => {

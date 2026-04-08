@@ -27,7 +27,6 @@ export default function ChatWidget() {
     const [accountId, setAccountId] = useState<string | null>(null)
     const [userType, setUserType] = useState<'owner' | 'client' | 'end_client' | null>(null)
 
-    const [isInitial, setIsInitial] = useState(true)
     const [isLoading, setIsLoading] = useState(false)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isSpeaking, setIsSpeaking] = useState(false)
@@ -73,7 +72,7 @@ export default function ChatWidget() {
         fetchUserData()
     }, [user, supabase])
 
-    const fetchPageGreeting = async (sessionId: string) => {
+    const fetchPageGreeting = async (sessionId: string, greeting: boolean) => {
         try {
             setIsLoading(true)
             setIsPlaying(true)
@@ -81,7 +80,7 @@ export default function ChatWidget() {
             const payloadBody = {
                 question: '', account_id: accountId, user_id: user?.id,
                 session_id: sessionId, user_type: userType, page_context: {
-                    page: pathname, greeting: isInitial,
+                    page: pathname, greeting,
                     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 }
             }
@@ -109,7 +108,6 @@ export default function ChatWidget() {
             console.log(error)
         } finally {
             setIsLoading(false)
-            setIsInitial(false)
         }
     }
 
@@ -121,7 +119,8 @@ export default function ChatWidget() {
             setSessionId(sessionId)
             fetchHistory(sessionId)
             if (!sessionStorage.getItem(routeGreetingKey)) {
-                fetchPageGreeting(sessionId)
+                fetchPageGreeting(sessionId, sessionStorage.getItem('initialLoad') ? false : true)
+                sessionStorage.setItem('initialLoad', 'true')
                 sessionStorage.setItem(routeGreetingKey, 'true')
             }
         }
