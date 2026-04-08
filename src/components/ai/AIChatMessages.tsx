@@ -1,5 +1,5 @@
 import { ChatMessage } from '@/hooks/useSyncAgent';
-import { Loader2, Mic, Volume2, VolumeX } from 'lucide-react';
+import { Loader2, Mic, Pause, Play, Square, Volume2, VolumeX } from 'lucide-react';
 import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 import QuickPrompts from './QuickPrompts';
 import { ChatChart } from './charts/chatChart';
@@ -11,13 +11,18 @@ interface AIChatMessagesType {
     currentSessionId: string;
     messages: ChatMessage[];
     setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
-    stopSpeaking: () => void;
     closeQuickPrompt: () => void;
     audioConfig: boolean;
     quickPrompt: boolean;
     accountId: string;
     userType: string;
     userId: string;
+    isLoading: boolean;
+    setIsLoading: Dispatch<SetStateAction<boolean>>;
+    isSpeaking: boolean;
+    setIsSpeaking: Dispatch<SetStateAction<boolean>>;
+    isPlaying: boolean;
+    setIsPlaying: Dispatch<SetStateAction<boolean>>;
 }
 
 type VoicePhase = 'initial' | 'listening' | 'thinking' | 'streaming'
@@ -40,20 +45,29 @@ function stripHtmlForSpeech(value: string) {
 
 const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, instantPlayStartPlay = false }: { content: string; isPlaying: boolean; setIsPlaying: Dispatch<SetStateAction<boolean>>; instantPlayStartPlay: boolean }) => {
     const [startPlay, setStartPlay] = useState(instantPlayStartPlay)
-
-    const handlePlayVoice = () => {
-        if (!startPlay) {
-            if (!isPlaying) {
-                setStartPlay(true)
-            }
-        } else {
-            setStartPlay(false)
-        }
-    }
+    const [volume, setVolume] = useState(1)
 
     const handleStop = () => {
         setIsPlaying(false)
         setStartPlay(false)
+    }
+
+    const handleStart = () => {
+        setIsPlaying(true)
+    }
+
+    const { Text, start, stop } = useSpeech({
+        text: stripHtmlForSpeech(content), pitch: 1, rate: 1, volume: volume, lang: 'en-US',
+        autoPlay: instantPlayStartPlay, highlightText: true, showOnlyHighlightedText: false,
+        highlightMode: 'word', enableDirectives: true, onStop: handleStop, onStart: handleStart
+    })
+
+    const handlePlayVoice = () => {
+        if (startPlay) {
+            stop()
+        } else if (!isPlaying) {
+            start()
+        }
     }
 
     return (
@@ -62,10 +76,9 @@ const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, instantPlayStart
                 <div className='overflow-x-auto'>
                     {
                         startPlay ? (
-                            <>
-                                <HighlightedText id="unique-id" />
-
-                            </>
+                            <Text
+                                className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5"
+                            />
                         ) : (
                             <div
                                 className="chat_box"
@@ -77,13 +90,13 @@ const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, instantPlayStart
             </div>
             {
                 startPlay ? (
-                    <div className='stop_play_btn'>
-                        <Speech
-                            id="unique-id"
-                            onStart={() => setIsPlaying(true)} onStop={handleStop}
-                            text={stripHtmlForSpeech(content)} pitch={1} rate={1} volume={1} lang='en-US' autoPlay={true}
-                            highlightText={true} showOnlyHighlightedText={false} highlightMode={"word"} enableDirectives={false}
-                        />
+                    <div className='flex gap-2'>
+                        <button className='border rounded p-2' onClick={() => setVolume(prev => prev == 1 ? 0 : 1)}>
+                            {volume == 1 ? <Volume2 width={16} height={16} /> : <VolumeX width={16} height={16} />}
+                        </button>
+                        <button className='border rounded p-2' onClick={() => stop()}>
+                            <Square width={16} height={16} />
+                        </button>
                     </div>
                 ) : (
                     <button className='border rounded p-2' onClick={handlePlayVoice}>
@@ -95,7 +108,7 @@ const BotMessageWithCopy = ({ content, isPlaying, setIsPlaying, instantPlayStart
     )
 }
 
-export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, stopSpeaking, audioConfig, quickPrompt, closeQuickPrompt }: AIChatMessagesType) {
+export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, audioConfig, quickPrompt, closeQuickPrompt, isLoading, setIsLoading, isSpeaking, setIsSpeaking, isPlaying, setIsPlaying }: AIChatMessagesType) {
 
     const { transcript, listening, resetTranscript } = useSpeechRecognition();
 
@@ -109,10 +122,6 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     const [voicePhase, setVoicePhase] = useState<VoicePhase>('initial')
     const [input, setInput] = useState('')
     const [currentSpeakingAnswer, setCurrentSpeakingAnswer] = useState('')
-
-    const [isLoading, setIsLoading] = useState(false)
-    const [isPlaying, setIsPlaying] = useState(false)
-    const [isSpeaking, setIsSpeaking] = useState(false)
 
     const toggleViewOperation = (field: keyof typeof viewOperation) => setViewOperation((prev) => ({ ...prev, [field]: !viewOperation[field] }))
 
@@ -147,8 +156,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
     const handleStopSpeaking = useCallback(() => {
         setIsSpeaking(false)
         setCurrentSpeakingAnswer('')
-        stopSpeaking()
-    }, [stopSpeaking])
+    }, [])
 
     const processQuestion = useCallback(async (question: string, voice: boolean = false) => {
         if (!question.trim() || isLoading) return
@@ -377,7 +385,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                         </div>
 
                         <div className="border-t p-4 pb-[calc(env(safe-area-inset-bottom)+12px)] flex items-center gap-3">
-                            <button className="border rounded-full p-3 md:p-2.5 bg-white shadow-sm hover:bg-gray-50" title="Open Voice Mode" onClick={() => handleToggleVoice()}>
+                            <button disabled={isLoading} className="border rounded-full p-3 md:p-2.5 bg-white shadow-sm hover:bg-gray-50" title="Open Voice Mode" onClick={() => handleToggleVoice()}>
                                 <Mic className="h-6 w-6 md:h-5 md:w-5" />
                             </button>
 

@@ -5,10 +5,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSupabase } from "@/components/supabase-provider";
 import { useSession } from "@/components/supabase-provider";
-import { v4 as uuidv4 } from 'uuid'
 import { LayoutDashboard, Users, FileText, Settings, LogOut, Building2, Plug, ChevronDown, BoxIcon, FormInputIcon, BotIcon, User2Icon, Cog, UserCircle2, ShoppingBag, TicketPlus, Wallet, BarChart3, } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useSyncAgent } from "@/hooks/useSyncAgent";
+import { useEffect, useState } from "react";
 
 type SidebarProps = {
   onLinkClick?: () => void;
@@ -20,20 +18,11 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   const supabase = useSupabase();
   const session = useSession();
 
-  const user = session?.user
-
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [accountLogo, setAccountLogo] = useState<string | null>(null);
-
-  const [accountId, setAccountId] = useState<string | null>(null)
-  const [userType, setUserType] = useState<'owner' | 'client' | 'end_client' | null>(null)
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const initialAskHandledRef = useRef(false)
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
-  const currentTtsAbortRef = useRef<AbortController | null>(null)
+  const [accountLogo] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -45,32 +34,8 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       }
 
       setUserRole(data?.role);
-
-      // Fetch account logo (white-label) based on the user's account_id
-      if (data?.account_id) {
-        setAccountId(data?.account_id ?? null)
-
-        if (['superadmin', 'admin', 'staff-admin', 'staff-user'].includes(data?.role)) setUserType('owner')
-        if (data?.role === 'client') setUserType('client')
-        if (data?.role === 'customer') setUserType('end_client')
-
-        const { data: accountData, error: accountError } = await supabase.from("accounts").select("logo, logo_main").eq("id", data.account_id).single();
-
-        if (accountError) {
-          console.error("Error fetching account logo:", accountError.message);
-        } else {
-          const resolvedLogo =
-            (accountData as any)?.logo_main ?? (accountData as any)?.logo ?? null;
-          setAccountLogo(resolvedLogo);
-        }
-      } else {
-        setAccountLogo(null);
-      }
     };
-
-    if (session?.user) {
-      fetchUserRole();
-    }
+    fetchUserRole();
   }, [session?.user, supabase]);
 
   useEffect(() => {
@@ -89,8 +54,6 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     await supabase.auth.signOut();
     router.push("/login");
   }
-
-  const { askQuestion } = useSyncAgent(process.env.NEXT_PUBLIC_API_URL || '')
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, page: 'dashboard' },
@@ -126,122 +89,6 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: "/support", label: "Support", icon: TicketPlus },
   ];
 
-  const resolvePageFromPath = (targetPath: string) => {
-    const normalizedPath = targetPath.split('?')[0].replace(/\/$/, '') || '/'
-
-    for (const item of navItems) {
-      if (item.items) {
-        const matchedChild = item.items.find((child) => {
-          const childPath = (child.href || '').replace(/\/$/, '') || '/'
-          return childPath === normalizedPath
-        })
-        if (matchedChild) {
-          return matchedChild.page || matchedChild.href || ''
-        }
-        continue
-      }
-
-      const itemPath = (item.href || '').replace(/\/$/, '') || '/'
-      if (itemPath === normalizedPath) {
-        return item.page || item.href || ''
-      }
-    }
-
-    return ''
-  }
-
-  const stopSpeaking = () => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause()
-      currentAudioRef.current = null
-    }
-  }
-
-  const handleAskAgent = async (targetPath: string = '', initial = false, newSessionId?: string) => {
-    if (!accountId) {
-      console.error("Missing required parameters to ask the AI agent.")
-      return
-    }
-    const activeSessionId = newSessionId || sessionId
-    if (!activeSessionId) return
-    const page = resolvePageFromPath(targetPath || pathname) || targetPath || pathname || ''
-
-    let aiMessage = ''
-    const speak = async (message: string) => {
-      if (!message.trim()) return
-
-      try {
-        const res = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: message,
-            locale: 'en-US',
-            mode: 'conversational',
-          }),
-        })
-
-        if (!res.ok) {
-          throw new Error('Failed to fetch Murf audio.')
-        }
-
-        const blob = await res.blob()
-        if (!blob.size) {
-          throw new Error('Received empty Murf audio response.')
-        }
-
-        if (currentAudioRef.current) {
-          currentAudioRef.current.pause()
-          currentAudioRef.current = null
-        }
-
-        const url = URL.createObjectURL(blob)
-        const audio = new Audio(url)
-        audio.preload = 'auto'
-        currentAudioRef.current = audio
-
-        await new Promise<void>((resolve, reject) => {
-          const cleanup = () => {
-            audio.removeEventListener('ended', onEnded)
-            audio.removeEventListener('error', onError)
-            URL.revokeObjectURL(url)
-            currentAudioRef.current = null
-          }
-
-          const onEnded = () => {
-            cleanup()
-            resolve()
-          }
-
-          const onError = () => {
-            cleanup()
-            reject(new Error('Murf audio playback failed.'))
-          }
-
-          audio.addEventListener('ended', onEnded)
-          audio.addEventListener('error', onError)
-          audio.play().catch((error) => {
-            cleanup()
-            reject(error)
-          })
-        })
-      } catch (error) {
-        console.warn('Murf speech playback failed:', error)
-      }
-    }
-
-    const others = {
-      page_context: {
-        page, greeting: initial,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      }
-    };
-
-    await askQuestion('', { userId: user?.id || '', accountId, sessionId: activeSessionId, userType: userType || 'owner' }, (partial) => { aiMessage = partial }, others)
-    if (aiMessage) window.dispatchEvent(new CustomEvent('sidebar-agent-message', { detail: { message: aiMessage, sessionId: activeSessionId } }))
-    await speak(aiMessage)
-  }
-
   const filteredNavItems = navItems.filter((item) => {
     // Customer users should only see Dashboard + Orders module
     if (userRole === "client") {
@@ -257,7 +104,6 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
       return false;
     }
 
-    const clientExclusions = ["/bot-training", "/ai-settings", "/channels"];
     const staffExclusions = [
       "/bot-training",
       "/ai-settings",
@@ -327,35 +173,6 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     return true;
   });
 
-  const handleChange = (targetPath: string = '') => {
-    if (onLinkClick) onLinkClick();
-    stopSpeaking()
-    const newSessionId = uuidv4()
-    setSessionId(newSessionId)
-    window.dispatchEvent(new Event('open-ai-widget'))
-    handleAskAgent(targetPath, false, newSessionId)
-  }
-
-  useEffect(() => {
-    const handler = () => stopSpeaking()
-    window.addEventListener('close-ai-widget', handler)
-    window.addEventListener('open-ai-widget', handler)
-    return () => {
-      window.removeEventListener('close-ai-widget', handler)
-      window.removeEventListener('open-ai-widget', handler)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!accountId || !userType || initialAskHandledRef.current) return
-    const page = resolvePageFromPath(pathname)
-    if (!page) return
-    initialAskHandledRef.current = true
-    const newSessionId = uuidv4()
-    setSessionId(newSessionId)
-    handleAskAgent(pathname, true, newSessionId)
-  }, [accountId, userType])
-
   return (
     <div className="flex flex-col h-full bg-primary text-white shadow-md">
       {/* LOGO TOP */}
@@ -396,7 +213,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
                       }).map(({ href, label }) => {
                         const isActive = pathname == href;
                         return (
-                          <Link key={href} href={href} onClick={() => handleChange(href)} className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${isActive ? "bg-white text-primary font-semibold" : "text-white hover:bg-[#0000001c]"}`}>
+                          <Link key={href} href={href} onClick={onLinkClick} className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${isActive ? "bg-white text-primary font-semibold" : "text-white hover:bg-[#0000001c]"}`}>
                             <span>{label}</span>
                           </Link>
                         );
@@ -407,7 +224,7 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
               );
             } else {
               return (
-                <Link key={item.href} href={item.href!} onClick={() => handleChange(item.href!)} className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${pathname == item.href ? "bg-white text-primary font-semibold" : "text-white hover:bg-[#0000001c]"}`}>
+                <Link key={item.href} href={item.href!} onClick={onLinkClick} className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all ${pathname == item.href ? "bg-white text-primary font-semibold" : "text-white hover:bg-[#0000001c]"}`}>
                   <item.icon size={18} />
                   <span>{item.label}</span>
                 </Link>

@@ -9,9 +9,10 @@ export interface ChatMetadata {
 }
 
 export interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-  metadata?: ChatMetadata
+  role: 'user' | 'assistant';
+  content: string;
+  metadata?: ChatMetadata;
+  instantPlayStartPlay?: boolean;
 }
 
 export interface AskOptions {

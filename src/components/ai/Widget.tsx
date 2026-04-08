@@ -27,6 +27,11 @@ export default function ChatWidget() {
     const [accountId, setAccountId] = useState<string | null>(null)
     const [userType, setUserType] = useState<'owner' | 'client' | 'end_client' | null>(null)
 
+    const [isInitial, setIsInitial] = useState(true)
+    const [isLoading, setIsLoading] = useState(false)
+    const [isPlaying, setIsPlaying] = useState(false)
+    const [isSpeaking, setIsSpeaking] = useState(false)
+
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [sessions, setSessions] = useState<Session[]>([])
 
@@ -68,26 +73,57 @@ export default function ChatWidget() {
         fetchUserData()
     }, [user, supabase])
 
-    useEffect(() => {
-        if (pathname) {
-            setViewOperation({ open: true, expanded: false, history: false, audioConfig: false, quickPrompt: false })
-            if (sessionStorage.getItem('sessionId')) {
-                setSessionId(sessionStorage.getItem('sessionId') as string)
-                fetchHistory(sessionStorage.getItem('sessionId') as string)
-            } else {
-                const sessionId = uuid()
-                sessionStorage.setItem('sessionId', sessionId)
-                setSessionId(sessionId)
-                fetchHistory(sessionId)
+    const fetchPageGreeting = async (sessionId: string) => {
+        try {
+            setIsLoading(true)
+            const payloadBody = {
+                question: '', account_id: accountId, user_id: user?.id,
+                session_id: sessionId, user_type: userType, page_context: {
+                    page: pathname, greeting: isInitial,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                }
             }
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadBody),
+            })
+
+            if (!response.ok) throw new Error('API Error')
+
+            const reader = response.body?.getReader()
+            if (!reader) throw new Error('No stream reader')
+
+            let result = ''
+            const decoder = new TextDecoder('utf-8')
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                const chunk = decoder.decode(value, { stream: true })
+                result += chunk
+            }
+
+            setMessages((msgs) => [...msgs, { role: 'assistant', content: result, instantPlayStartPlay: true }])
+        } catch (error) {
+            console.log(error)
+        } finally {
+            setIsLoading(false)
+            setIsInitial(false)
         }
-    }, [pathname])
+    }
 
     useEffect(() => {
-        const handleOpen = () => toggleViewOperation('open')
-        window.addEventListener('toggle-ai-widget', handleOpen)
-        return () => window.removeEventListener('toggle-ai-widget', handleOpen)
-    }, [])
+        if (pathname && userType && accountId && user) {
+            setViewOperation({ open: true, expanded: false, history: false, audioConfig: false, quickPrompt: false })
+            const routeGreetingKey = `ai-route-greeted:${pathname}`
+            const sessionId = sessionStorage.getItem('sessionId') || uuid()
+            setSessionId(sessionId)
+            fetchHistory(sessionId)
+            if (!sessionStorage.getItem(routeGreetingKey)) {
+                fetchPageGreeting(sessionId)
+                sessionStorage.setItem(routeGreetingKey, 'true')
+            }
+        }
+    }, [pathname, userType, accountId, user])
 
     const handleNewSession = () => {
         setViewOperation({ open: true, expanded: false, history: false, audioConfig: false, quickPrompt: false })
@@ -98,19 +134,12 @@ export default function ChatWidget() {
         fetchHistory(sessionId)
     }
 
-    const stopSpeaking = () => {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel()
-        }
-    }
-
     const handleClose = () => {
-        if (viewOperation.open) {
-            setViewOperation({ open: false, expanded: false, history: false, audioConfig: false, quickPrompt: false })
-            stopSpeaking()
-        } else {
-            setViewOperation({ open: true, expanded: false, history: false, audioConfig: false, quickPrompt: false })
-        }
+        setViewOperation(prev => ({
+            open: !prev.open, expanded: false,
+            history: false, audioConfig: false,
+            quickPrompt: false
+        }))
     }
 
     const handleSelectSession = (sid: string) => {
@@ -166,9 +195,11 @@ export default function ChatWidget() {
                                             ) : (
                                                 <AIChatMessages
                                                     currentSessionId={sessionId ?? ''} userId={user.id} quickPrompt={viewOperation.quickPrompt}
-                                                    accountId={accountId} userType={userType} stopSpeaking={stopSpeaking}
+                                                    accountId={accountId} userType={userType}
                                                     closeQuickPrompt={() => setViewOperation(prev => ({ ...prev, quickPrompt: false }))}
                                                     messages={messages} setMessages={setMessages} audioConfig={viewOperation.audioConfig}
+                                                    isLoading={isLoading} setIsLoading={setIsLoading} isSpeaking={isSpeaking}
+                                                    setIsSpeaking={setIsSpeaking} isPlaying={isPlaying} setIsPlaying={setIsPlaying}
                                                 />
                                             )
                                         }
