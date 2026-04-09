@@ -168,7 +168,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
 
                 </div>
 
-                <div className="mt-8 flex flex-col items-center gap-3">
+                <div className="mt-8 flex flex-col items-center gap-3 relative">
                     <div className="text-xs font-semibold uppercase tracking-[0.28em] text-gray-400">
                         SynC AI Expert
                     </div>

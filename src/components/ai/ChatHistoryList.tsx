@@ -22,7 +22,7 @@ export default function ChatHistoryList({ currentSessionId, onSelectSession, onC
       </div>
       {
         sessions.length > 0 ? (
-          <ul className="flex-1 space-y-2 overflow-y-auto">
+          <ul className="h-[395px] space-y-2 overflow-y-auto">
             {
               sessions.map((s) => (
                 <li key={s.session_id}>
