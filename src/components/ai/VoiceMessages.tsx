@@ -16,7 +16,6 @@ interface VoiceModeOverlayProps {
     transcript: string;
     spokenText?: string;
     language?: string;
-    onSpeakingChange?: (isSpeaking: boolean) => void;
     isExpanded: boolean;
 }
 
@@ -36,7 +35,7 @@ function stripHtmlForSpeech(value: string) {
         .trim()
 }
 
-export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, setIsSpeaking, transcript, isThinking, spokenText = '', language = 'en-US', isExpanded }: VoiceModeOverlayProps) {
+export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, setIsSpeaking, transcript, isThinking, spokenText = '', language = 'en-US', isExpanded, }: VoiceModeOverlayProps) {
     if (!open) return null
 
     const plainSpokenText = useMemo(() => stripHtmlForSpeech(spokenText), [spokenText])

@@ -170,6 +170,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
         }
         setIsSpeaking(false)
         setVoicePhase('initial')
+        handleStopSpeaking()
     }
 
     useEffect(() => {
@@ -250,14 +251,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                         onClose={handleVoiceClose} onToggleMic={onToggleMic} setIsSpeaking={setIsSpeaking}
                         isListening={listening} isSpeaking={isSpeaking} isThinking={isLoading}
                         stopSpeaking={handleStopSpeaking} spokenText={currentSpeakingAnswer}
-                        transcript={isSpeaking ? currentSpeakingAnswer : transcript}
-                        language={languageList[language]} onSpeakingChange={(speaking) => {
-                            setIsSpeaking(speaking)
-                            if (!speaking && voicePhase == 'streaming') {
-                                setCurrentSpeakingAnswer('')
-                                setVoicePhase('initial')
-                            }
-                        }}
+                        transcript={isSpeaking ? currentSpeakingAnswer : transcript} language={languageList[language]}
                     />
                 ) : (
                     <>
