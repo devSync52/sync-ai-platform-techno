@@ -52,12 +52,16 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
 
     const [language, setLanguage] = useState<keyof typeof languageList>('en')
 
-    useEffect(() => {
+    const scrollChatToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
         chatRef.current?.scrollTo({
             top: chatRef.current.scrollHeight,
-            behavior: 'smooth'
+            behavior,
         })
-    }, [messages])
+    }, [])
+
+    useEffect(() => {
+        scrollChatToBottom('smooth')
+    }, [messages, scrollChatToBottom])
 
     const clearSilenceTimeout = useCallback(() => {
         if (silenceTimer.current) {
@@ -171,6 +175,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
         setIsSpeaking(false)
         setVoicePhase('initial')
         handleStopSpeaking()
+        requestAnimationFrame(() => scrollChatToBottom('auto'))
     }
 
     useEffect(() => {
