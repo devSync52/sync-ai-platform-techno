@@ -326,7 +326,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                                 }}
                             />
 
-                            <button onClick={sendMessage} className="bg-primary text-white px-4 py-2 rounded text-sm disabled:opacity-60" disabled={isLoading}>
+                            <button onClick={sendMessage} className="bg-primary text-white px-4 py-2 rounded text-sm disabled:opacity-60" title="Send message" disabled={isLoading}>
                                 {isLoading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Ask'}
                             </button>
                         </div>

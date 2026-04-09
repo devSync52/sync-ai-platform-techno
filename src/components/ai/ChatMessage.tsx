@@ -98,15 +98,15 @@ const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlaySta
             {
                 startPlay ? (
                     <div className='flex gap-2'>
-                        <button className='border rounded p-2' onClick={() => setVolume(prev => prev == 1 ? 0 : 1)}>
+                        <button title={volume == 1 ? "Unmute" : "Mute"} className='border rounded p-2' onClick={() => setVolume(prev => prev == 1 ? 0 : 1)}>
                             {volume == 1 ? <Volume2 width={16} height={16} /> : <VolumeX width={16} height={16} />}
                         </button>
-                        <button className='border rounded p-2' onClick={() => stop()}>
+                        <button title={"Stop"} className='border rounded p-2' onClick={() => stop()}>
                             <Square width={16} height={16} />
                         </button>
                     </div>
                 ) : (
-                    <button className='border rounded p-2' onClick={handlePlayVoice}>
+                    <button title={"Start"} className='border rounded p-2' onClick={handlePlayVoice}>
                         <Volume2 width={16} height={16} />
                     </button>
                 )

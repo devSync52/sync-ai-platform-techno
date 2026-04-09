@@ -118,6 +118,7 @@ export default function ChatWidget() {
             const sessionId = sessionStorage.getItem('sessionId') || uuid()
             setSessionId(sessionId)
             fetchHistory(sessionId)
+            sessionStorage.setItem('sessionId', sessionId)
             if (!sessionStorage.getItem(routeGreetingKey)) {
                 fetchPageGreeting(sessionId, sessionStorage.getItem('initialLoad') ? false : true)
                 sessionStorage.setItem('initialLoad', 'true')
