@@ -23,11 +23,12 @@ interface AIChatMessagesType {
     setIsSpeaking: Dispatch<SetStateAction<boolean>>;
     isPlaying: boolean;
     setIsPlaying: Dispatch<SetStateAction<boolean>>;
+    isExpanded: boolean;
 }
 
 type VoicePhase = 'initial' | 'listening' | 'thinking' | 'streaming'
 
-export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, audioConfig, quickPrompt, closeQuickPrompt, isLoading, setIsLoading, isSpeaking, setIsSpeaking, isPlaying, setIsPlaying }: AIChatMessagesType) {
+export default function AIChatMessages({ currentSessionId, messages, setMessages, accountId, userType, userId, audioConfig, quickPrompt, closeQuickPrompt, isLoading, setIsLoading, isSpeaking, setIsSpeaking, isPlaying, setIsPlaying, isExpanded }: AIChatMessagesType) {
 
     const { transcript, listening, resetTranscript } = useSpeechRecognition();
 
@@ -243,7 +244,7 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
             {
                 viewOperation.voice ? (
                     <VoiceModeOverlay
-                        open={viewOperation.voice} phase={voicePhase}
+                        open={viewOperation.voice} phase={voicePhase} isExpanded={isExpanded}
                         onClose={handleVoiceClose} onToggleMic={onToggleMic} setIsSpeaking={setIsSpeaking}
                         isListening={listening} isSpeaking={isSpeaking} isThinking={isLoading}
                         stopSpeaking={handleStopSpeaking} spokenText={currentSpeakingAnswer}

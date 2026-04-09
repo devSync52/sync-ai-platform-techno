@@ -17,6 +17,7 @@ interface VoiceModeOverlayProps {
     spokenText?: string;
     language?: string;
     onSpeakingChange?: (isSpeaking: boolean) => void;
+    isExpanded: boolean;
 }
 
 function stripHtmlForSpeech(value: string) {
@@ -35,7 +36,7 @@ function stripHtmlForSpeech(value: string) {
         .trim()
 }
 
-export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, setIsSpeaking, transcript, isThinking, spokenText = '', language = 'en-US' }: VoiceModeOverlayProps) {
+export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, setIsSpeaking, transcript, isThinking, spokenText = '', language = 'en-US', isExpanded }: VoiceModeOverlayProps) {
     if (!open) return null
 
     const plainSpokenText = useMemo(() => stripHtmlForSpeech(spokenText), [spokenText])
@@ -200,11 +201,11 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     {
 
                         isSpeaking ? (
-                            <div ref={transcriptContainerRef} className="text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto scrollbar-hidden z-10">
+                            <div ref={transcriptContainerRef} className={`text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl overflow-auto scrollbar-hidden z-10 ${isExpanded ? "w-[470px] h-[90px]" : "w-[370px] h-[59px]"}`}>
                                 <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
                             </div>
-                        ) : (isListening || isThinking) ? (
-                            <div className={(isListening || isThinking) ? "text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 block" : "text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 hidden"}>
+                        ) : isListening ? (
+                            <div className={`text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 ${isListening ? "block" : "hidden"} ${isExpanded ? "w-[470px] h-[90px]" : "w-[370px] h-[59px]"}`}>
                                 {transcript}
                             </div>
                         ) : ''
