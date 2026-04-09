@@ -199,7 +199,6 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     </div>
 
                     {
-
                         isSpeaking ? (
                             <div ref={transcriptContainerRef} className={`text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl overflow-auto scrollbar-hidden z-10 ${isExpanded ? "w-[470px] h-[90px]" : "w-[370px] h-[59px]"}`}>
                                 <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
@@ -209,13 +208,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                                 {transcript}
                             </div>
                         ) : ''
-
                     }
-
-                    {/* <div className="text-sm text-gray-600 absolute bottom-20 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto">
-                        sdfd sfsd f sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdfd sfsd f sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdfd sfsd f sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf sdf
-                    </div> */}
-
                 </div>
             </div>
 
