@@ -154,6 +154,8 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
 
     const handleToggleVoice = async () => {
         toggleViewOperation('voice')
+        setIsPlaying(false)
+        setMessages((prev) => prev.map((msg) => ({ ...msg, instantPlayStartPlay: false })))
         if (listening) {
             await stopVoiceListening()
         } else {
