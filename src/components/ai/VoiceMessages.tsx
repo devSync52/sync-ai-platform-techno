@@ -38,10 +38,12 @@ function stripHtmlForSpeech(value: string) {
 export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, setIsSpeaking, transcript, isThinking, spokenText = '', language = 'en-US', isExpanded, }: VoiceModeOverlayProps) {
     if (!open) return null
 
+    const showListeningState = phase == 'listening' || isListening
+    const showThinkingState = phase == 'thinking' || isThinking
     const plainSpokenText = useMemo(() => stripHtmlForSpeech(spokenText), [spokenText])
-    const subtitle = useMemo(() => isSpeaking ? 'Speaking...' : isListening ? 'Listening...' : isThinking ? 'Thinking...' : 'Tap the mic to start', [isSpeaking, isListening, isThinking])
-    const base = useMemo(() => isSpeaking ? '#7c3aed' : isListening ? '#3b82f6' : '#94a3b8', [isSpeaking, isListening])
-    const soft = useMemo(() => isSpeaking ? '#c4b5fd' : isListening ? '#bfdbfe' : '#cbd5e1', [isSpeaking, isListening])
+    const subtitle = useMemo(() => isSpeaking ? 'Speaking...' : showListeningState ? 'Listening...' : showThinkingState ? 'Thinking...' : 'Tap the mic to start', [isSpeaking, showListeningState, showThinkingState])
+    const base = useMemo(() => isSpeaking ? '#7c3aed' : showListeningState ? '#3b82f6' : '#94a3b8', [isSpeaking, showListeningState])
+    const soft = useMemo(() => isSpeaking ? '#c4b5fd' : showListeningState ? '#bfdbfe' : '#cbd5e1', [isSpeaking, showListeningState])
     const transcriptContainerRef = useRef<HTMLDivElement>(null)
 
     const { Text, speechStatus, stop } = useSpeech({ text: plainSpokenText, pitch: 1, rate: 1, volume: 1, lang: language, voiceURI: "", autoPlay: true, highlightText: true, showOnlyHighlightedText: false, highlightMode: "word", enableDirectives: false, });
@@ -124,7 +126,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
             <div className="flex flex-col items-center justify-center">
                 <div className="relative h-56 w-56 overflow-visible" key={`phase-${phase}`}>
                     {
-                        (isListening || isSpeaking) && [0, 1, 2].map((i) => (
+                        (showListeningState || isSpeaking) && [0, 1, 2].map((i) => (
                             <motion.span
                                 key={i}
                                 className="absolute inset-0 rounded-full pointer-events-none"
@@ -153,7 +155,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                             isSpeaking ? {
                                 scale: [1, 1.06, 1],
                                 filter: ['brightness(1)', 'brightness(1.1)', 'brightness(1)'],
-                            } : isListening ? {
+                            } : showListeningState ? {
                                 scale: [1, 1.03, 1]
                             } : {
                                 scale: [1, 1.01, 1]
@@ -187,7 +189,7 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                                         />
                                     ))}
                                 </div>
-                            ) : isThinking ? (
+                            ) : showThinkingState ? (
                                 <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
                             ) : null
                         }
@@ -202,9 +204,9 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                             <div ref={transcriptContainerRef} className={`text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl overflow-auto scrollbar-hidden z-10 ${isExpanded ? "w-[470px] h-[90px]" : "w-[370px] h-[59px]"}`}>
                                 <Text className="text-sm leading-6 text-gray-700 [&_mark]:rounded-sm [&_mark]:bg-amber-200 [&_mark]:px-0.5" />
                             </div>
-                        ) : isListening ? (
-                            <div className={`text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 ${isListening ? "block" : "hidden"} ${isExpanded ? "w-[470px] h-[90px]" : "w-[370px] h-[59px]"}`}>
-                                {transcript}
+                        ) : showListeningState ? (
+                            <div className={`text-sm text-gray-600 absolute bottom-22 border border-gray-200 bg-gray-50 px-4 py-3 rounded-2xl w-[370px] h-[59px] overflow-auto z-10 ${showListeningState ? "block" : "hidden"} ${isExpanded ? "w-[470px] h-[90px]" : "w-[370px] h-[59px]"}`}>
+                                {transcript || 'Listening...'}
                             </div>
                         ) : ''
                     }
@@ -216,8 +218,8 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
                     <MoreHorizontal className="h-5 w-5" />
                 </button>
 
-                <button onClick={handleToggleMic} className={`rounded-full p-4 hover:opacity-90 ${isListening ? 'bg-gray-100' : 'bg-red-500 text-white'}`} title={isListening ? 'Stop recording' : 'Start recording'}>
-                    {isListening ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+                <button onClick={handleToggleMic} className={`rounded-full p-4 hover:opacity-90 ${showListeningState ? 'bg-gray-100' : 'bg-red-500 text-white'}`} title={showListeningState ? 'Stop recording' : 'Start recording'}>
+                    {showListeningState ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
                 </button>
 
                 <button className="rounded-full bg-gray-100 p-4 hover:bg-gray-200" title="Close" onClick={handleClose}>
