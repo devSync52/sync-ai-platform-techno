@@ -35,6 +35,17 @@ function stripHtmlForSpeech(value: string) {
         .trim()
 }
 
+const getBestVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+
+    return (
+        voices.find(v => v.name.includes("David")) || // 🥇 best (Windows)
+        voices.find(v => v.name.includes("Google US English")) ||
+        voices.find(v => v.name.toLowerCase().includes("male")) ||
+        voices.find(v => v.lang === "en-US")
+    );
+};
+
 export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListening, isSpeaking, setIsSpeaking, transcript, isThinking, spokenText = '', language = 'en-US', isExpanded, }: VoiceModeOverlayProps) {
     if (!open) return null
 
@@ -46,7 +57,11 @@ export function VoiceModeOverlay({ open, phase, onClose, onToggleMic, isListenin
     const soft = useMemo(() => isSpeaking ? '#c4b5fd' : showListeningState ? '#bfdbfe' : '#cbd5e1', [isSpeaking, showListeningState])
     const transcriptContainerRef = useRef<HTMLDivElement>(null)
 
-    const { Text, speechStatus, stop } = useSpeech({ text: plainSpokenText, pitch: 1, rate: 1, volume: 1, lang: language, voiceURI: "", autoPlay: true, highlightText: true, showOnlyHighlightedText: false, highlightMode: "word", enableDirectives: false, });
+    const { Text, speechStatus, stop } = useSpeech({
+        text: plainSpokenText, volume: 1, lang: language || navigator.language, pitch: 0.9, rate: 0.9,
+        autoPlay: true, highlightText: true, showOnlyHighlightedText: false,
+        highlightMode: 'word', enableDirectives: true, voiceURI: getBestVoice()?.voiceURI
+    })
     const previousSpeechStatusRef = useRef(speechStatus)
 
     useEffect(() => {

@@ -9,10 +9,22 @@ interface ChatMessageComponentProps {
     content: string;
     isPlaying: boolean;
     instantPlayStartPlay: boolean;
+    language: string;
     setIsPlaying: Dispatch<SetStateAction<boolean>>;
 }
 
-const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlayStartPlay = false }: ChatMessageComponentProps) => {
+const getBestVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+
+    return (
+        voices.find(v => v.name.includes("David")) || // 🥇 best (Windows)
+        voices.find(v => v.name.includes("Google US English")) ||
+        voices.find(v => v.name.toLowerCase().includes("male")) ||
+        voices.find(v => v.lang === "en-US")
+    );
+};
+
+const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlayStartPlay = false, language }: ChatMessageComponentProps) => {
     const [startPlay, setStartPlay] = useState(instantPlayStartPlay)
     const [volume, setVolume] = useState(0)
     const speechContainerRef = useRef<HTMLDivElement>(null)
@@ -28,9 +40,10 @@ const ChatMessageComponent = ({ content, isPlaying, setIsPlaying, instantPlaySta
     }
 
     const { Text, start, stop } = useSpeech({
-        text: stripHtmlForSpeech(content), pitch: 1, rate: 1, volume: volume, lang: 'en-US',
+        text: stripHtmlForSpeech(content), volume: volume, lang: language || navigator.language, pitch: 0.9, rate: 0.9,
         autoPlay: instantPlayStartPlay, highlightText: true, showOnlyHighlightedText: false,
-        highlightMode: 'word', enableDirectives: true, onStop: handleStop, onStart: handleStart
+        voiceURI: getBestVoice()?.voiceURI, highlightMode: 'word', enableDirectives: true,
+        onStop: handleStop, onStart: handleStart
     })
 
     const handlePlayVoice = () => {

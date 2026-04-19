@@ -283,7 +283,8 @@ export default function AIChatMessages({ currentSessionId, messages, setMessages
                                                 ) : (
                                                     <ChatMessageComponent
                                                         instantPlayStartPlay={msg.instantPlayStartPlay || false}
-                                                        content={msg.content} isPlaying={isPlaying} setIsPlaying={setIsPlaying}
+                                                        language={languageList[language]} setIsPlaying={setIsPlaying}
+                                                        content={msg.content} isPlaying={isPlaying}
                                                     />
                                                 )
                                             ) : (
