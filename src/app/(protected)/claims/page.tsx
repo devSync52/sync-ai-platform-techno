@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select'
 import { Button } from "@/components/ui/button";
 
-import { Bot, Car, Check, CircleCheck, CircleX, Clock, Plus, RefreshCcw, ShieldAlert } from 'lucide-react';
+import { Bot, Car, Check, CircleCheck, CircleX, Clock, Info, Package, Plus, RefreshCcw, ShieldAlert } from 'lucide-react';
 
 
 export default function DashboardClient({ userId }: { userId: string }) {
@@ -55,7 +55,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm min-h-[170px]">
           <div className="flex items-center gap-3 mb-5">
             <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
-              <Clock color="#ea580c" />
+              <Info color="#ea580c" />
             </div>
             <span className="text-[18px] text-[#4B5A8A] font-medium">Open</span>
           </div>
@@ -71,7 +71,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm min-h-[170px]">
           <div className="flex items-center gap-3 mb-5">
             <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-              <ShieldAlert color="#155dfc" />
+              <Clock color="#155dfc" />
             </div>
             <span className="text-[18px] text-[#4B5A8A] font-medium">In Progress</span>
           </div>
@@ -100,7 +100,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm min-h-[170px]">
           <div className="flex items-center gap-3 mb-5">
             <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
-              <CircleX color="#dc2626" />
+              <Package color="#dc2626" />
             </div>
             <span className="text-[18px] text-[#4B5A8A] font-medium">Total Value</span>
           </div>
