@@ -60,7 +60,6 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
     { href: "/sla", label: "SLA", icon: BarChart3, page: 'sla' },
     { href: "/discrepancies", label: "Discrepancies", icon: Shield, page: 'discrepancies' },
     { href: "/claims", label: "Claims", icon: Package, page: 'claims' },
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, page: 'dashboard' },
     { href: "/users", label: "Users", icon: Users, page: 'users' },
     { href: "/plans", label: "Plans", icon: FileText, page: 'plans' },
     { href: "/features", label: "Features", icon: BarChart3, page: 'features' },
