@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSupabase } from "@/components/supabase-provider";
 import { useSession } from "@/components/supabase-provider";
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Building2, Plug, ChevronDown, BoxIcon, FormInputIcon, BotIcon, User2Icon, Cog, UserCircle2, ShoppingBag, TicketPlus, Wallet, BarChart3, } from "lucide-react";
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Building2, Plug, ChevronDown, BoxIcon, FormInputIcon, BotIcon, User2Icon, Cog, UserCircle2, ShoppingBag, TicketPlus, Wallet, BarChart3, Shield, Package, } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type SidebarProps = {
@@ -56,6 +56,10 @@ export default function Sidebar({ onLinkClick }: SidebarProps) {
   }
 
   const navItems = [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, page: 'dashboard' },
+    { href: "/sla", label: "SLA", icon: BarChart3, page: 'sla' },
+    { href: "/discrepancies", label: "Discrepancies", icon: Shield, page: 'discrepancies' },
+    { href: "/claims", label: "Claims", icon: Package, page: 'claims' },
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, page: 'dashboard' },
     { href: "/users", label: "Users", icon: Users, page: 'users' },
     { href: "/plans", label: "Plans", icon: FileText, page: 'plans' },
