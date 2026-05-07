@@ -47,7 +47,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Total Discrepancies</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-black leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-black leading-none">0</h2>
 
         </div>
 
@@ -60,7 +60,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Total Variance</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-red-500 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-red-500 leading-none">0</h2>
 
         </div>
 
@@ -72,7 +72,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Open</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-orange-500 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-orange-500 leading-none">0</h2>
 
         </div>
 
@@ -83,7 +83,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">High Severity</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-red-500 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-red-500 leading-none">0</h2>
 
 
         </div>

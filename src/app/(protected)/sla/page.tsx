@@ -149,7 +149,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Total</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-black leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-black leading-none">0</h2>
 
           <p className="mt-3 text-[16px] text-[#5E6B8A]">
             Shipments tracked
@@ -166,7 +166,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">On-Time</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-green-600 leading-none">0%</h2>
+          <h2 className="text-4xl font-bold text-green-600 leading-none">0%</h2>
 
           <p className="mt-3 text-[16px] text-[#5E6B8A]">
             0 deliveries
@@ -183,7 +183,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Late</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-red-500 leading-none">0%</h2>
+          <h2 className="text-4xl font-bold text-red-500 leading-none">0%</h2>
 
           <p className="mt-3 text-[16px] text-[#5E6B8A]">
             0 deliveries
@@ -200,7 +200,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">At-Risk</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-orange-500 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-orange-500 leading-none">0</h2>
 
           <p className="mt-3 text-[16px] text-[#5E6B8A]">
             Orders at risk

@@ -60,7 +60,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Open</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-orange-500 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-orange-500 leading-none">0</h2>
 
         </div>
 
@@ -76,7 +76,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">In Progress</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-black leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-black leading-none">0</h2>
 
         </div>
 
@@ -91,7 +91,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Resolved</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-green-600 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-green-600 leading-none">0</h2>
 
         </div>
 
@@ -105,7 +105,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Total Value</span>
           </div>
 
-          <h2 className="text-5xl font-bold text-red-500 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-red-500 leading-none">0</h2>
 
 
         </div>
