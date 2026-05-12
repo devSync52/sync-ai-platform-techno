@@ -1,19 +1,20 @@
 "use client";
 
-// import "@/styles/daypicker-custom.css";
-
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from '@/components/ui/select'
 import { Button } from "@/components/ui/button";
 
-import { Bot, Car, Check, CircleCheck, CircleX, Clock, Download, Plus } from 'lucide-react';
+import { Bot, Car, CircleCheck, CircleX, Clock, Download, Plus } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+const weeklyTrendData = [
+    { week: "W1", onTime: 170, late: 16, atRisk: 9 },
+    { week: "W2", onTime: 162, late: 20, atRisk: 10 },
+    { week: "W3", onTime: 174, late: 14, atRisk: 11 },
+    { week: "W4", onTime: 169, late: 19, atRisk: 12 },
+    { week: "W5", onTime: 182, late: 15, atRisk: 8 },
+    { week: "W6", onTime: 188, late: 13, atRisk: 7 },
+];
 
 const clientData = [
     { name: "Acme Corp", percent: 94, count: 120, color: "bg-green-600" },
@@ -49,6 +50,24 @@ const ProgressRow = ({ item }) => (
     </div>
 );
 
+function TrendTooltip({ active, payload, label }) {
+    if (!active || !payload || !payload.length) return null;
+
+    return (
+        <div className="rounded-3xl border border-[#3f2d5f] bg-[#110923] p-4 text-sm text-white shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
+            <div className="mb-2 text-sm font-semibold text-white">{label}</div>
+            {payload.map((item) => (
+                <div key={item.dataKey} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
+                        {item.name == "onTime" ? "On Time" : item.name == "late" ? "Late" : "At Risk"}
+                    </span>
+                    <span className="font-semibold text-white">{item.value}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 
 export default function SlaKpiPage() {
@@ -132,7 +151,7 @@ export default function SlaKpiPage() {
 
                 {/* Total  */}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-[170px]">
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-42.5">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
                             <span className="text-[20px] text-black font-medium">Total</span>
@@ -149,7 +168,7 @@ export default function SlaKpiPage() {
 
                 {/* On-Time */}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-[170px]">
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-42.5">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
                             <span className="text-[20px] text-black font-medium">On-Time</span>
@@ -169,7 +188,7 @@ export default function SlaKpiPage() {
 
                 {/* Late */}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-[170px]">
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-42.5">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
                             <span className="text-[20px] text-black font-medium">Late</span>
@@ -189,7 +208,7 @@ export default function SlaKpiPage() {
 
                 {/* At-Risk */}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-[170px]">
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-42.5">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
                             <span className="text-[20px] text-black font-medium">At-Risk</span>
@@ -213,14 +232,37 @@ export default function SlaKpiPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
                 {/* Left Card */}
-                <div className="lg:col-span-2 bg-[#fff] rounded-2xl border border-gray-200 p-6 min-h-[200px]">
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 p-6 min-h-50">
                     <h2 className="text-black font-semibold text-xl">
                         Weekly Delivery Trend
                     </h2>
+
+                    <div className="mt-6 h-85">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={weeklyTrendData} margin={{ top: 12, right: 18, left: -16, bottom: 0 }}>
+                                <CartesianGrid stroke="#ece8f2" strokeDasharray="3 4" vertical={false} />
+                                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 12 }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 12 }} />
+                                <Tooltip content={<TrendTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+                                <Bar dataKey="onTime" stackId="a" fill="#079a35" radius={[8, 8, 0, 0]} />
+                                <Bar dataKey="late" stackId="a" fill="#ff3b4f" radius={[8, 8, 0, 0]} />
+                                <Bar dataKey="atRisk" stackId="a" fill="#f6a500" radius={[8, 8, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm text-slate-500 justify-center">
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                        On Time
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                        Late
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+                        At Risk
+                    </div>
                 </div>
 
                 {/* Right Card */}
-                <div className="bg-[#13002f] rounded-2xl p-6 flex flex-col justify-between min-h-[200px]">
+                <div className="bg-[#13002f] rounded-2xl p-6 flex flex-col justify-between min-h-50">
 
                     <div>
                         <div className="flex items-center gap-2 mb-6">
@@ -305,8 +347,6 @@ export default function SlaKpiPage() {
                     </table>
                 </div>
             </Card>
-
-
         </div>
     );
 }
