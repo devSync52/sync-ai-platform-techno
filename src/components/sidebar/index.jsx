@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import IconAsset from "@/components/IconAsset";
 import Link from "next/link";
+import { useDispatch } from "react-redux";
+import { UserLogoutAction } from "@/services/actions/authorization";
 
 const navGroups = [
   {
@@ -124,6 +126,8 @@ export default function Sidebar() {
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
 
+  const dispatch = useDispatch()
+
   useEffect(() => {
     if (!accountOpen) return;
 
@@ -243,7 +247,7 @@ export default function Sidebar() {
                 <IconAsset name="settings" className="h-4 w-4" />
                 Settings
               </button>
-              <button className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm text-red-400 transition hover:bg-white/5">
+              <button className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm text-red-400 transition hover:bg-white/5" onClick={() => UserLogoutAction(dispatch)}>
                 <IconAsset name="close" className="h-4 w-4" />
                 Sign out
               </button>

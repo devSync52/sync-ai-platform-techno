@@ -1,23 +1,10 @@
 "use client";
 
-// import "@/styles/daypicker-custom.css";
-
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Button } from "@/components/ui/button";
-
-import { Bot, Car, Check, CircleCheck, CircleX, Clock, Download, Plus, RefreshCcw, ShieldAlert, SquarePen, Trash } from 'lucide-react';
-
+import { Plus, SquarePen, Trash } from 'lucide-react';
 
 export default function ClientsPage() {
-
 
   return (
     <div className="p-6 space-y-6">
@@ -124,8 +111,6 @@ export default function ClientsPage() {
           </table>
         </div>
       </Card>
-
-
     </div>
   );
 }
