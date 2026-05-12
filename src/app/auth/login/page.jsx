@@ -1,21 +1,10 @@
 "use client";
 
-// import "@/styles/daypicker-custom.css";
-
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
 import { Button } from "@/components/ui/button";
-
-import { Bot, Car, Check, CircleCheck, CircleX, Clock, Download, Plus, RefreshCcw, ShieldAlert, SquarePen, Trash } from 'lucide-react';
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
+import Link from "next/link";
 
 
 export default function LoginPage() {
@@ -23,7 +12,7 @@ export default function LoginPage() {
 
     return (
         <div className="min-h-screen bg-[#0d0033] flex flex-col items-center justify-center p-4">
-            <div className="w-[500px] max-w-full bg-[#f3f3f3] rounded-2xl shadow-2xl py-10 px-8">
+            <div className="w-125 max-w-full bg-[#f3f3f3] rounded-2xl shadow-2xl py-10 px-8">
 
                 {/* Robot Icon */}
                 <div className="flex items-start justify-center pb-6">
@@ -49,7 +38,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* Button */}
-                <button className="w-full bg-gradient-to-r from-purple-700 to-violet-600 hover:opacity-90 transition-all text-white font-semibold py-3 rounded-lg shadow-lg cursor-pointer">
+                <button className="w-full bg-linear-to-r from-purple-700 to-violet-600 hover:opacity-90 transition-all text-white font-semibold py-3 rounded-lg shadow-lg cursor-pointer">
                     Sign in to SynC AI
                 </button>
 
@@ -78,7 +67,7 @@ export default function LoginPage() {
                 </div>
             </div>
             <p className="text-md text-white mt-5">
-                Don't have an account yet?  <a href="/auth/register" className="text-blue-400 hover:underline">Create an account</a>
+                Don&apos;t have an account yet?  <Link href="/auth/register" className="text-blue-400 hover:underline">Create an account</Link>
             </p>
         </div>
     );
