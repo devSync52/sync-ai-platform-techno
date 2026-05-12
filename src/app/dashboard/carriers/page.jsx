@@ -50,6 +50,27 @@ const carriers = [
     color: "bg-orange-100",
     url: "https://sellingpartnerapi-na.amazon.com/",
   },
+  {
+    name: "LaserShip",
+    subtitle: "LaserShip Regional Delivery",
+    icon: "⚡",
+    color: "bg-orange-100",
+    url: "https://api.lasership.com/",
+  },
+  {
+    name: "OnTrac",
+    subtitle: "OnTrac Regional Carrier",
+    icon: "🔵",
+    color: "bg-blue-200",
+    url: "https://www.ontrac.com/trackingres.asp",
+  },
+  {
+    name: "Veryk",
+    subtitle: "Veryk Multi-Carrier Platform — discounted FedEx, USPS & UPS rates",
+    icon: "🏷️",
+    color: "bg-yellow-100",
+    url: "https://api.veryk.com/v1/",
+  },
 ];
 
 export default function CarrierPage() {
@@ -90,7 +111,7 @@ export default function CarrierPage() {
                   {carrier.icon}
                 </div>
 
-                <div>
+                <div className="flex-1">
                   <h3 className="text-xl font-bold text-gray-900">
                     {carrier.name}
                   </h3>
