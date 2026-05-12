@@ -297,7 +297,7 @@ export default function SlaKpiPage() {
             </div>
 
             <Card className="p-4 bg-white">
-                <div className="mb-3 text-lg font-medium">At-Risk Orders</div>
+                <div className="mb-3 text-xl font-semibold">At-Risk Orders</div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="text-muted-foreground">
