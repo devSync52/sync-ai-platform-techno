@@ -71,11 +71,8 @@ function TrendTooltip({ active, payload, label }) {
 
 
 export default function SlaKpiPage() {
-
-
     return (
         <div className="p-6 space-y-6 overflow-auto">
-
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-2 mb-4">
                     <h1 className="text-2xl font-bold text-primary">SLA & KPI Dashboard</h1>
@@ -179,11 +176,8 @@ export default function SlaKpiPage() {
                         <div className="w-15 h-15 rounded-xl bg-green-100 flex items-center justify-center">
                             <CircleCheck size={30} color="#047c3b" />
                         </div>
-
                     </div>
-
                     <h2 className="text-4xl font-bold text-green-600 leading-none">0%</h2>
-
                 </div>
 
                 {/* Late */}
@@ -199,11 +193,8 @@ export default function SlaKpiPage() {
                         <div className="w-15 h-15 rounded-xl bg-red-100 flex items-center justify-center">
                             <CircleX size={30} color="#dc2626" />
                         </div>
-
                     </div>
-
                     <h2 className="text-4xl font-bold text-red-500 leading-none">0%</h2>
-
                 </div>
 
                 {/* At-Risk */}
@@ -219,14 +210,9 @@ export default function SlaKpiPage() {
                         <div className="w-15 h-15 rounded-xl bg-orange-100 flex items-center justify-center">
                             <Clock size={30} color="#ea580c" />
                         </div>
-
                     </div>
-
                     <h2 className="text-4xl font-bold text-orange-500 leading-none">0</h2>
-
-
                 </div>
-
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -281,7 +267,6 @@ export default function SlaKpiPage() {
 
                     <button className="mt-6 w-full bg-[#4a3d6a] hover:bg-[#5b4a82] transition-all text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2">
                         <Plus />
-
                         Generate Summary
                     </button>
                 </div>
@@ -294,7 +279,6 @@ export default function SlaKpiPage() {
                     <h2 className="text-xl font-semibold text-gray-900 mb-8">
                         Performance by Client
                     </h2>
-
                     {clientData.map((item, index) => (
                         <ProgressRow key={index} item={item} />
                     ))}
