@@ -1,27 +1,17 @@
-import { removeCookies, setCookies } from '@/lib/cookies';
+import { getCookies, removeCookies, setCookies } from '@/lib/cookies';
 import { USER_LOGIN_CONSTANTS, USER_LOGOUT_CONSTANTS } from '../constants/authorization';
 import axiosInstance from '@/config/axios';
 
 export const LoadUserAction = () => async (dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
     axiosInstance.get("/users").then((response) => {
-        if (response.data.status == 200) {
-            dispatch({
-                type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
-                    message: response.data.message,
-                    token: response.data.token,
-                    user: response.data.userProfileModel
-                }
-            });
-        } else {
-            dispatch({
-                type: USER_LOGIN_CONSTANTS.USER_LOGIN_VERIFY,
-                payload: {
-                    error: response.data,
-                    message: response.data.message
-                }
-            });
-        }
+        dispatch({
+            type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
+                message: "",
+                token: getCookies('auth-token'),
+                user: response.data
+            }
+        });
     }).catch((error) => {
         dispatch({
             type: USER_LOGIN_CONSTANTS.USER_LOGIN_FAILURE, payload: {
