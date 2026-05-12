@@ -42,7 +42,7 @@ export default function LoginPage() {
                     <div className="w-full">
                         <Label className="mb-2">Password</Label>
                         <Input type="password" placeholder="Password" className="py-5 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                        <p className="text-sm text-muted-foreground mt-2 ">
+                        <p className="text-sm text-muted-foreground mt-2 font-semibold">
                             Forgot your password? <a href="#" className="text-primary hover:underline">Reset it</a>
                         </p>
                     </div>
