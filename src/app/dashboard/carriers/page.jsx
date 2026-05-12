@@ -8,6 +8,7 @@ import { FetchIntegrationsAction } from "@/services/actions/integrations";
 import ConfigurationComponent from "./component/configuration";
 import axiosInstance from "@/config/axios";
 import { toast } from "react-hot-toast";
+import Link from "next/link";
 
 const carriers = [
   {
@@ -17,6 +18,7 @@ const carriers = [
     icon: "US",
     color: "bg-slate-100",
     url: "https://api.usps.com/",
+    development: "https://developers.usps.com/",
   },
   {
     name: "FedEx",
@@ -25,6 +27,7 @@ const carriers = [
     icon: "📦",
     color: "bg-purple-100",
     url: "https://apis.fedex.com/",
+    development: "https://developers.fedex.com/"
   },
   {
     name: "UPS",
@@ -33,6 +36,7 @@ const carriers = [
     icon: "⬛",
     color: "bg-stone-100",
     url: "https://onlinetools.ups.com/api/",
+    development: "https://developers.ups.com/"
   },
   {
     name: "GoFo",
@@ -41,6 +45,7 @@ const carriers = [
     icon: "🚀",
     color: "bg-red-100",
     url: "https://api.gofo.com/v1/",
+    development: "https://www.gofo.com/us/developers"
   },
   {
     name: "DHL",
@@ -49,6 +54,7 @@ const carriers = [
     icon: "🌍",
     color: "bg-yellow-100",
     url: "https://api-eu.dhl.com/",
+    development: "https://developer.dhl.com/"
   },
   {
     name: "Amazon Logistics",
@@ -57,6 +63,7 @@ const carriers = [
     icon: "📬",
     color: "bg-orange-100",
     url: "https://sellingpartnerapi-na.amazon.com/",
+    development: "https://developer.amazonservices.com/"
   },
   {
     name: "LaserShip",
@@ -65,6 +72,7 @@ const carriers = [
     icon: "⚡",
     color: "bg-orange-100",
     url: "https://api.lasership.com/",
+    development: "https://www.lasership.com/api"
   },
   {
     name: "OnTrac",
@@ -73,6 +81,7 @@ const carriers = [
     icon: "🔵",
     color: "bg-blue-200",
     url: "https://www.ontrac.com/trackingres.asp",
+    development: "https://www.ontrac.com/developers"
   },
   {
     name: "Veryk",
@@ -81,6 +90,7 @@ const carriers = [
     icon: "🏷️",
     color: "bg-yellow-100",
     url: "https://api.veryk.com/v1/",
+    development: "https://www.veryk.com/api-documentation"
   },
 ];
 
@@ -182,9 +192,9 @@ export default function CarrierPage() {
                   )
                 }
 
-                <button className="flex h-12 w-12 items-center justify-center rounded-xl border border-gray-300 bg-white hover:bg-gray-50">
+                <Link href={carrier.development} target="_blank" className="flex h-12 w-12 items-center justify-center rounded-xl border border-gray-300 bg-white hover:bg-gray-50">
                   <PanelsLeftBottom size={18} />
-                </button>
+                </Link>
               </div>
             </div>
           ))
