@@ -1,7 +1,7 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, } from '@/components/ui/select'
 import { Button } from "@/components/ui/button";
 
 import { Bot, Car, CircleCheck, CircleX, Clock, Download, Plus } from 'lucide-react';
@@ -88,10 +88,12 @@ export default function SlaKpiPage() {
                                 <SelectValue placeholder="Last 30 days" />
                             </SelectTrigger>
                             <SelectContent className="w-full">
-                                <SelectItem value="30day" defaultChecked>Last 30 days</SelectItem>
-                                <SelectItem value="7day">Last 7 days</SelectItem>
-                                <SelectItem value="90day">Last 90 days</SelectItem>
-                                <SelectItem value="year">Year to date</SelectItem>
+                                <SelectGroup className="w-full">
+                                    <SelectItem value="30day" defaultChecked>Last 30 days</SelectItem>
+                                    <SelectItem value="7day">Last 7 days</SelectItem>
+                                    <SelectItem value="90day">Last 90 days</SelectItem>
+                                    <SelectItem value="year">Year to date</SelectItem>
+                                </SelectGroup>
                             </SelectContent>
                         </Select>
                     </div>
@@ -101,11 +103,13 @@ export default function SlaKpiPage() {
                                 <SelectValue placeholder="All Carriers" />
                             </SelectTrigger>
                             <SelectContent className="w-full">
-                                <SelectItem value="all" defaultChecked>All carriers</SelectItem>
-                                <SelectItem value="usps">USPS</SelectItem>
-                                <SelectItem value="fedex">FedEx</SelectItem>
-                                <SelectItem value="ups">UPS</SelectItem>
-                                <SelectItem value="gofo">Gofo</SelectItem>
+                                <SelectGroup className="w-full">
+                                    <SelectItem value="all" defaultChecked>All carriers</SelectItem>
+                                    <SelectItem value="usps">USPS</SelectItem>
+                                    <SelectItem value="fedex">FedEx</SelectItem>
+                                    <SelectItem value="ups">UPS</SelectItem>
+                                    <SelectItem value="gofo">Gofo</SelectItem>
+                                </SelectGroup>
                             </SelectContent>
                         </Select>
                     </div>
@@ -115,7 +119,9 @@ export default function SlaKpiPage() {
                                 <SelectValue placeholder="All Clients" />
                             </SelectTrigger>
                             <SelectContent className="w-full">
-                                <SelectItem value="allclients" defaultChecked>All Clients</SelectItem>
+                                <SelectGroup className="w-full">
+                                    <SelectItem value="allclients" defaultChecked>All Clients</SelectItem>
+                                </SelectGroup>
                             </SelectContent>
                         </Select>
                     </div>
@@ -125,7 +131,9 @@ export default function SlaKpiPage() {
                                 <SelectValue placeholder="All Warehouses" />
                             </SelectTrigger>
                             <SelectContent className="w-full">
-                                <SelectItem value="allwarehouses" defaultChecked>All Warehouses</SelectItem>
+                                <SelectGroup className="w-full">
+                                    <SelectItem value="allwarehouses" defaultChecked>All Warehouses</SelectItem>
+                                </SelectGroup>
                             </SelectContent>
                         </Select>
                     </div>
