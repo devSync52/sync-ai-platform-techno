@@ -314,13 +314,14 @@ export default function RegisterPage() {
                             </div>
                         </div>
                     </div>
-
-                    <button className="w-full bg-linear-to-r from-purple-700 to-violet-600 hover:opacity-90 transition-all text-white font-semibold py-3 rounded-lg shadow-lg cursor-pointer" type="submit">
-                        Signup to SynC AI
-                    </button>
+                    <div className="pt-4">
+                        <button className="w-full bg-linear-to-r from-purple-700 to-violet-600 hover:opacity-90 transition-all text-white font-semibold py-3 rounded-lg shadow-lg cursor-pointer" type="submit">
+                            Signup to SynC AI
+                        </button>
+                    </div>
                 </form>
 
-                <div className="pt-5">
+                <div>
                     <div className="mb-5">
                         <p className="text-sm text-muted-foreground mt-2 text-center font-semibold">Or Continue With</p>
                     </div>
