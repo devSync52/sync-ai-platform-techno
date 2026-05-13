@@ -175,12 +175,12 @@ export default function ConciliationPage() {
             {/* Date Inputs */}
             <Input
               type="date"
-              className="py-4 rounded-lg border border-slate-300 px-4 text-sm text-slate-700 outline-none"
+              className="py-4 h-8 rounded-lg border border-slate-300 px-4 text-sm text-slate-700 outline-none"
             />
 
             <Input
               type="date"
-              className="py-4 rounded-lg border border-slate-300 px-4 text-sm text-slate-700 outline-none"
+              className="py-4 h-8 rounded-lg border border-slate-300 px-4 text-sm text-slate-700 outline-none"
             />
           </div>
         </div>

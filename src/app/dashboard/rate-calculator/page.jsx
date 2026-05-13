@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 
 export default function RateCalculatorPage() {
   return (
@@ -44,7 +45,7 @@ export default function RateCalculatorPage() {
               <Input
                 type="text"
                 placeholder="e.g. 5.5"
-                className="w-full py-6 px-4 rounded-xl border border-gray-300"
+                className="w-full"
               />
             </div>
 
@@ -55,7 +56,7 @@ export default function RateCalculatorPage() {
               <Input
                 type="text"
                 placeholder="e.g. 12"
-                className="w-full py-6 px-4 rounded-xl border border-gray-300"
+                className="w-full"
               />
             </div>
 
@@ -66,7 +67,7 @@ export default function RateCalculatorPage() {
               <Input
                 type="text"
                 placeholder="e.g. 8"
-                className="w-full py-6 px-4 rounded-xl border border-gray-300"
+                className="w-full"
               />
             </div>
 
@@ -77,7 +78,7 @@ export default function RateCalculatorPage() {
               <Input
                 type="text"
                 placeholder="e.g. 6"
-                className="w-full py-6 px-4 rounded-xl border border-gray-300"
+                className="w-full"
               />
             </div>
           </div>
@@ -91,7 +92,7 @@ export default function RateCalculatorPage() {
               <Input
                 type="text"
                 placeholder="e.g. 90210"
-                className="w-full py-6 px-4 rounded-xl border border-gray-300"
+                className="w-full"
               />
             </div>
 
@@ -102,7 +103,7 @@ export default function RateCalculatorPage() {
               <Input
                 type="text"
                 placeholder="e.g. 10001"
-                className="w-full py-6 px-4 rounded-xl border border-gray-300"
+                className="w-full"
               />
             </div>
           </div>
@@ -117,7 +118,7 @@ export default function RateCalculatorPage() {
 
               <div className="relative w-full">
                 <Select className="w-full">
-                  <SelectTrigger className="w-full py-6">
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="All Service Level" />
                   </SelectTrigger>
                   <SelectContent className="w-full ">
@@ -142,10 +143,10 @@ export default function RateCalculatorPage() {
 
           {/* Button */}
           <div className="mt-8">
-            <button className="inline-flex items-center gap-2 bg-[#c084fc] hover:bg-[#b46cf7] text-white font-semibold px-6 h-12 rounded-xl transition">
+            <Button>
               <Calculator className="w-4 h-4" />
               Calculate Rates
-            </button>
+            </Button>
           </div>
         </div>
 

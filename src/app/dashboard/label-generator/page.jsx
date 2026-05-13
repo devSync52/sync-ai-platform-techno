@@ -124,32 +124,32 @@ export default function LabelGeneratorPage() {
               <Input
                 type="text"
                 placeholder="Name *"
-                className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                className="w-full"
               />
 
               <Input
                 type="text"
                 placeholder="Address"
-                className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                className="w-full"
               />
 
               <div className="grid grid-cols-3 gap-3">
                 <Input
                   type="text"
                   placeholder="City"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                  className="w-full"
                 />
 
                 <Input
                   type="text"
                   placeholder="State"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                  className="w-full"
                 />
 
                 <Input
                   type="text"
                   placeholder="ZIP"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                  className="w-full"
                 />
               </div>
             </div>
@@ -165,32 +165,32 @@ export default function LabelGeneratorPage() {
               <Input
                 type="text"
                 placeholder="Name *"
-                className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                className="w-full"
               />
 
               <Input
                 type="text"
                 placeholder="Address"
-                className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                className="w-full"
               />
 
               <div className="grid grid-cols-3 gap-3">
                 <Input
                   type="text"
                   placeholder="City"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                  className="w-full"
                 />
 
                 <Input
                   type="text"
                   placeholder="State"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                  className="w-full"
                 />
 
                 <Input
                   type="text"
                   placeholder="ZIP"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                  className="w-full"
                 />
               </div>
             </div>
@@ -212,7 +212,7 @@ export default function LabelGeneratorPage() {
               <Input
                 type="number"
                 placeholder="0.0"
-                className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                className="w-full"
               />
             </div>
 
@@ -224,7 +224,7 @@ export default function LabelGeneratorPage() {
               <Input
                 type="number"
                 placeholder="0.0"
-                className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                className="w-full"
               />
             </div>
 
@@ -236,7 +236,7 @@ export default function LabelGeneratorPage() {
               <Input
                 type="number"
                 placeholder="0.0"
-                className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                className="w-full"
               />
             </div>
 
@@ -248,7 +248,7 @@ export default function LabelGeneratorPage() {
               <Input
                 type="number"
                 placeholder="0.0"
-                className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+                className="w-full"
               />
             </div>
           </div>
@@ -263,17 +263,17 @@ export default function LabelGeneratorPage() {
           <Input
             type="text"
             placeholder="Optional reference..."
-            className="w-full rounded-xl border border-gray-300 px-4 py-6 outline-none focus:border-purple-500"
+            className="w-full"
           />
         </div>
 
         {/* Footer Buttons */}
         <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Button variant="outline" size="lg">
+          <Button variant="outline">
             Cancel
           </Button>
 
-          <Button size="lg">
+          <Button>
             <Tag className="h-5 w-5" />
             Generate Label
           </Button>
@@ -312,7 +312,7 @@ export default function LabelGeneratorPage() {
           </p>
 
           {/* Button */}
-          <Button size="lg">
+          <Button>
             <PlusIcon/>
             New Label
           </Button>
