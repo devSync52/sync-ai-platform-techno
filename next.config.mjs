@@ -3,7 +3,7 @@ const nextConfig = {
   /* config options here */
   reactStrictMode: false,
   env: {
-    NEXT_PUBLIC_API_URL: 'http://localhost:3000'
+    NEXT_PUBLIC_API_URL: 'https://middleware-aws-api.teexponent.com'
   }
 };
 
