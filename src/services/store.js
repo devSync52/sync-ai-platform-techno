@@ -3,6 +3,8 @@ import { applyMiddleware, combineReducers, compose, legacy_createStore as create
 import { thunk } from "redux-thunk";
 import { UserLoginReducer } from "./reducers/authorization"
 import { IntegrationReducer } from "./reducers/integrations"
+import { GeneralReducer } from "./reducers/general"
+import { WarehouseReducer } from "./reducers/warehouses"
 import { USER_LOGOUT_CONSTANTS } from "./constants/authorization";
 import { getCookies } from "@/lib/cookies";
 
@@ -10,7 +12,9 @@ const middleware = [thunk]
 
 const appReducer = combineReducers({
     authorization: UserLoginReducer,
-    integrations: IntegrationReducer
+    integrations: IntegrationReducer,
+    general: GeneralReducer,
+    warehouses: WarehouseReducer
 })
 
 const rootReducer = (state, action) => {

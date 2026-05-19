@@ -3,21 +3,75 @@
 // import "@/styles/daypicker-custom.css";
 
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Button } from "@/components/ui/button";
 
-import { Bot, Car, Check, CircleCheck, CircleX, Clock, Download, Plus, RefreshCcw, ShieldAlert, SquarePen, Trash } from 'lucide-react';
+import { Download, Plus, SquarePen, Trash } from 'lucide-react';
+import { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { DeleteWarehouseAction, ExportWarehousesAction, FetchWarehousesAction } from "@/services/actions/warehouses";
+import WareHouseOperation from "./components/operation";
+import { toast } from "react-hot-toast";
+import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 
 
 export default function WarehousesPage() {
+  const [viewOperation, setViewOperation] = useState({ show: false, details: null });
+  const [deleteOperation, setDeleteOperation] = useState({ show: false, warehouse: null });
+  const [exporting, setExporting] = useState(false);
+  const [page, setPage] = useState(1);
+  const rowCount = 10;
+  const dispatch = useDispatch();
+  const { data: warehouses, loading, deleting, pagination } = useSelector((state) => state.warehouses);
 
+  useEffect(() => {
+    dispatch(FetchWarehousesAction({ page, rowCount }));
+  }, [dispatch, page]);
+
+  const activeWarehouses = useMemo(() => warehouses?.filter((warehouse) => warehouse.isActive || warehouse.status?.toLowerCase() == 'active') || [], [warehouses]);
+  const statesCovered = useMemo(() => new Set((warehouses || []).map((warehouse) => warehouse.province?.name || warehouse.provinceName || warehouse.province).filter(Boolean)).size, [warehouses]);
+
+  const handleDeleteWarehouse = () => {
+    const warehouseId = deleteOperation.warehouse?.id;
+    if (!warehouseId) return;
+
+    dispatch(DeleteWarehouseAction(warehouseId)).then((response) => {
+      toast.success(response.data?.message || 'Warehouse deleted successfully', { id: 'warehouse-delete' });
+      setDeleteOperation({ show: false, warehouse: null });
+
+      if (warehouses.length == 1 && page > 1) {
+        setPage((currentPage) => Math.max(currentPage - 1, 1));
+      } else {
+        dispatch(FetchWarehousesAction({ page, rowCount }));
+      }
+    }).catch((error) => {
+      toast.error(error?.response?.data?.message || 'Unable to delete warehouse', { id: 'warehouse-delete' });
+    });
+  };
+
+  const handleExportWarehouses = () => {
+    setExporting(true);
+
+    dispatch(ExportWarehousesAction()).then((response) => {
+      const blob = new Blob([response.data], { type: response.headers?.['content-type'] || 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const disposition = response.headers?.['content-disposition'];
+      const filename = disposition?.match(/filename="?([^"]+)"?/)?.[1] || 'warehouses.csv';
+
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Warehouses exported successfully', { id: 'warehouse-export' });
+    }).catch((error) => {
+      toast.error(error?.response?.data?.message || 'Unable to export warehouses', { id: 'warehouse-export' });
+    }).finally(() => {
+      setExporting(false);
+    });
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -30,7 +84,13 @@ export default function WarehousesPage() {
         <div>
           <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             <div>
-              <Button size="lg">
+              <Button variant="outline" size="lg" type="button" onClick={handleExportWarehouses} disabled={exporting}>
+                <Download />
+                {exporting ? 'Exporting...' : 'Export CSV'}
+              </Button>
+            </div>
+            <div>
+              <Button size="lg" onClick={() => setViewOperation({ show: true, details: null })}>
                 <Plus />
                 Add Warehouse
               </Button>
@@ -48,7 +108,7 @@ export default function WarehousesPage() {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Total Warehouses</span>
           </div>
 
-          <h2 className="text-4xl font-bold text-black leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-black leading-none">{pagination?.total ?? warehouses?.length ?? 0}</h2>
 
         </div>
 
@@ -60,7 +120,7 @@ export default function WarehousesPage() {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Active</span>
           </div>
 
-          <h2 className="text-4xl font-bold text-green-500 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-green-500 leading-none">{activeWarehouses.length}</h2>
 
         </div>
 
@@ -72,7 +132,7 @@ export default function WarehousesPage() {
             <span className="text-[18px] text-[#4B5A8A] font-medium">States Covered</span>
           </div>
 
-          <h2 className="text-4xl font-bold text-red-500 leading-none">0</h2>
+          <h2 className="text-4xl font-bold text-red-500 leading-none">{statesCovered}</h2>
 
         </div>
 
@@ -81,50 +141,98 @@ export default function WarehousesPage() {
       <Card className="p-4 bg-white">
         <div className="flex justify-between items-center mb-3">
           <div className="text-lg font-medium">All Warehouses</div>
+          <div className="text-sm text-muted-foreground">
+            Page {pagination?.page || page} of {pagination?.totalPages || 1}
+          </div>
 
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-muted-foreground">
               <tr className="border-b text-left">
-                <th className="py-2 pr-3">Client Code</th>
-                <th className="py-2 pr-3">Client Name</th>
-                <th className="py-2 pr-3">Contact Email</th>
-                <th className="py-2 pr-3">Contact Name</th>
-                <th className="py-2 pr-3">Notes</th>
+                <th className="py-2 pr-3">Warehouse Name</th>
+                <th className="py-2 pr-3">Region</th>
+                <th className="py-2 pr-3">Province</th>
+                <th className="py-2 pr-3">City</th>
+                <th className="py-2 pr-3">Postal Code</th>
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b last:border-0">
-                <td className="py-2 pr-3 font-medium">#1</td>
-                <td className="py-2 pr-3">Ayan Mukherjee</td>
-                <td className="py-2 pr-3">zofepejeca@mailinator.com</td>
-                <td className="py-2 pr-3">ABC</td>
-                <td className="py-2 pr-3">Rem obcaecati praese</td>
-                <td className="py-2 pr-3">
-                  <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-sm font-medium text-green-700 inset-ring inset-ring-green-600/10">
-                    Active
-                  </span>
-                </td>
-                <td className="py-2 pr-3">
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon">
-                      <SquarePen />
-                    </Button>
-                    <Button variant="outline" size="icon">
-                      <Trash />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
+              {loading && (
+                <tr>
+                  <td className="py-6 text-center text-muted-foreground" colSpan={7}>Loading warehouses...</td>
+                </tr>
+              )}
+
+              {!loading && !warehouses?.length && (
+                <tr>
+                  <td className="py-6 text-center text-muted-foreground" colSpan={7}>No warehouses found.</td>
+                </tr>
+              )}
+
+              {!loading && warehouses?.map((warehouse, index) => {
+                const status = warehouse.isActive || warehouse.status?.toLowerCase() == 'active' ? 'Active' : 'Inactive';
+                return (
+                  <tr key={warehouse.id || index} className="border-b last:border-0">
+                    <td className="py-2 pr-3">{warehouse.name || '-'}</td>
+                    <td className="py-2 pr-3">{warehouse.region?.name}</td>
+                    <td className="py-2 pr-3">{warehouse.province?.name}</td>
+                    <td className="py-2 pr-3">{warehouse.address?.city || '-'}</td>
+                    <td className="py-2 pr-3">{warehouse.address?.postalcode || '-'}</td>
+                    <td className="py-2 pr-3">
+                      <span className={`inline-flex items-center rounded-md px-2 py-1 text-sm font-medium ${status == 'Active' ? 'bg-green-50 text-green-700 inset-ring inset-ring-green-600/10' : 'bg-slate-100 text-slate-600 inset-ring inset-ring-slate-500/10'}`}>
+                        {status}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" onClick={() => setViewOperation({ show: true, details: warehouse })}>
+                          <SquarePen />
+                        </Button>
+                        <Button variant="outline" size="icon" onClick={() => setDeleteOperation({ show: true, warehouse })}>
+                          <Trash />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
+        <div className="mt-4 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-muted-foreground">
+            Showing {(pagination?.offset || 0) + (warehouses?.length ? 1 : 0)}-{(pagination?.offset || 0) + (warehouses?.length || 0)} of {pagination?.total || 0}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) <= 1} onClick={() => setPage((currentPage) => Math.max(currentPage - 1, 1))}>
+              Previous
+            </Button>
+            <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) >= (pagination?.totalPages || 1)} onClick={() => setPage((currentPage) => currentPage + 1)}>
+              Next
+            </Button>
+          </div>
+        </div>
       </Card>
 
+      {viewOperation.show && (
+        <WareHouseOperation
+          open={viewOperation.show}
+          details={viewOperation.details}
+          handleClose={() => setViewOperation({ show: false, details: null })}
+        />
+      )}
 
+      <DeleteConfirmationModal
+        open={deleteOperation.show}
+        onOpenChange={() => setDeleteOperation({ show: false, warehouse: null })}
+        title="Delete warehouse"
+        description={`Are you sure you want to delete ${deleteOperation.warehouse?.name || 'this warehouse'}? This action cannot be undone.`}
+        loading={deleting}
+        onConfirm={handleDeleteWarehouse}
+      />
     </div>
   );
 }
