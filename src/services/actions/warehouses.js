@@ -8,12 +8,14 @@ export const FetchWarehousesAction = (params = {}) => async (dispatch) => {
         const response = await axiosInstance.get('/warehouses', { params });
         const data = response.data?.data ?? [];
         const pagination = response.data?.pagination ?? null;
+        const active = response.data?.active ?? 0;
 
         dispatch({
             type: WAREHOUSE_CONSTANTS.FETCH_WAREHOUSES_SUCCESS,
             payload: {
                 data,
                 pagination,
+                active,
                 message: response.data?.message || null
             }
         });

@@ -21,13 +21,12 @@ export default function WarehousesPage() {
   const [page, setPage] = useState(1);
   const rowCount = 10;
   const dispatch = useDispatch();
-  const { data: warehouses, loading, deleting, pagination } = useSelector((state) => state.warehouses);
+  const { data: warehouses, loading, deleting, pagination, active: activeWarehouses } = useSelector((state) => state.warehouses);
 
   useEffect(() => {
     dispatch(FetchWarehousesAction({ page, rowCount }));
   }, [dispatch, page]);
 
-  const activeWarehouses = useMemo(() => warehouses?.filter((warehouse) => warehouse.isActive || warehouse.status?.toLowerCase() == 'active') || [], [warehouses]);
   const statesCovered = useMemo(() => new Set((warehouses || []).map((warehouse) => warehouse.province?.name || warehouse.provinceName || warehouse.province).filter(Boolean)).size, [warehouses]);
 
   const handleDeleteWarehouse = () => {
@@ -120,7 +119,7 @@ export default function WarehousesPage() {
             <span className="text-[18px] text-[#4B5A8A] font-medium">Active</span>
           </div>
 
-          <h2 className="text-4xl font-bold text-green-500 leading-none">{activeWarehouses.length}</h2>
+          <h2 className="text-4xl font-bold text-green-500 leading-none">{activeWarehouses ?? 0}</h2>
 
         </div>
 
@@ -156,6 +155,7 @@ export default function WarehousesPage() {
                 <th className="py-2 pr-3">City</th>
                 <th className="py-2 pr-3">Postal Code</th>
                 <th className="py-2 pr-3">Status</th>
+                <th className="py-2 pr-3">Provider</th>
                 <th className="py-2 pr-3">Actions</th>
               </tr>
             </thead>
@@ -172,9 +172,8 @@ export default function WarehousesPage() {
                 </tr>
               )}
 
-              {!loading && warehouses?.map((warehouse, index) => {
-                const status = warehouse.isActive || warehouse.status?.toLowerCase() == 'active' ? 'Active' : 'Inactive';
-                return (
+              {
+                !loading && warehouses?.map((warehouse, index) => (
                   <tr key={warehouse.id || index} className="border-b last:border-0">
                     <td className="py-2 pr-3">{warehouse.name || '-'}</td>
                     <td className="py-2 pr-3">{warehouse.region?.name}</td>
@@ -182,10 +181,11 @@ export default function WarehousesPage() {
                     <td className="py-2 pr-3">{warehouse.address?.city || '-'}</td>
                     <td className="py-2 pr-3">{warehouse.address?.postalcode || '-'}</td>
                     <td className="py-2 pr-3">
-                      <span className={`inline-flex items-center rounded-md px-2 py-1 text-sm font-medium ${status == 'Active' ? 'bg-green-50 text-green-700 inset-ring inset-ring-green-600/10' : 'bg-slate-100 text-slate-600 inset-ring inset-ring-slate-500/10'}`}>
-                        {status}
+                      <span className={`capitalize inline-flex items-center rounded-md px-2 py-1 text-sm font-medium ${warehouse.status == 'active' ? 'bg-green-50 text-green-700 inset-ring inset-ring-green-600/10' : 'bg-slate-100 text-slate-600 inset-ring inset-ring-slate-500/10'}`}>
+                        {warehouse?.status}
                       </span>
                     </td>
+                    <td className="py-2 pr-3">{warehouse?.provider || '-'}</td>
                     <td className="py-2 pr-3">
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="icon" onClick={() => setViewOperation({ show: true, details: warehouse })}>
@@ -197,8 +197,8 @@ export default function WarehousesPage() {
                       </div>
                     </td>
                   </tr>
-                );
-              })}
+                ))
+              }
             </tbody>
           </table>
         </div>

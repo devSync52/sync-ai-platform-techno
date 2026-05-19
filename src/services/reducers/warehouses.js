@@ -4,6 +4,7 @@ const WAREHOUSES_INIT = {
     loading: false,
     deleting: false,
     data: [],
+    active: 0,
     pagination: {
         page: 1,
         rowCount: 10,
@@ -25,6 +26,7 @@ export const WarehouseReducer = (state = WAREHOUSES_INIT, action) => {
                 ...state,
                 loading: false,
                 data: action.payload.data,
+                active: action.payload.active ?? 0,
                 pagination: action.payload.pagination || WAREHOUSES_INIT.pagination,
                 message: action.payload.message || null,
                 error: null
