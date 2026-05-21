@@ -148,11 +148,7 @@ export default function ClientsPage() {
               {
                 !loading && clients?.map((client, index) => {
                   const status = getClientStatus(client);
-                  const statusClass = status == 'active'
-                    ? 'bg-green-50 text-green-700 inset-ring inset-ring-green-600/10'
-                    : status == 'suspended'
-                      ? 'bg-amber-50 text-amber-700 inset-ring inset-ring-amber-600/10'
-                      : 'bg-slate-100 text-slate-600 inset-ring inset-ring-slate-500/10';
+                  const statusClass = status == 'active' ? 'bg-green-50 text-green-700 inset-ring inset-ring-green-600/10' : status == 'suspended' ? 'bg-amber-50 text-amber-700 inset-ring inset-ring-amber-600/10' : 'bg-slate-100 text-slate-600 inset-ring inset-ring-slate-500/10';
 
                   return (
                     <tr key={getClientId(client) || index} className="border-b last:border-0">
