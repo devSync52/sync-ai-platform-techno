@@ -1,13 +1,13 @@
 import IconAsset from "@/components/IconAsset";
 import { colorMap } from "./data";
 
-export default function MetricCard({ metric }) {
+export default function MetricCard({ metric, index = 0 }) {
   const colors = colorMap[metric.color];
 
   return (
-    <article className="h-44.25 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+    <article className="group/card interactive-card motion-fade-up h-44.25 rounded-xl border border-[#ece8f2] bg-white/95 p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)] backdrop-blur" style={{ animationDelay: `${index * 70}ms` }}>
       <div className="mb-4 flex items-center justify-between">
-        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${colors.icon}`}>
+        <div className={`flex h-8 w-8 items-center justify-center rounded-lg shadow-sm transition group-hover/card:scale-105 ${colors.icon}`}>
           <IconAsset name={metric.icon} className="h-4 w-4" />
         </div>
         {

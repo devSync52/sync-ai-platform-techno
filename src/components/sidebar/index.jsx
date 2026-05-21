@@ -156,7 +156,7 @@ export default function Sidebar() {
     <aside className={`hidden shrink-0 min-h-0 flex-col bg-[#110923] text-[#b9aecb] transition-all duration-300 md:flex ${compressed ? "w-20" : "w-64"}`}>
       <div className={`flex h-16 items-center gap-3 border-b border-white/10 px-5 ${compressed ? "justify-center px-2" : ""}`}>
 
-        <button onClick={() => setCompressed(!compressed)} className="flex items-center justify-center rounded-lg transition-all duration-200 text-[#9b8cb8] hover:text-white hover:bg-[#1e1631] h-8 w-8" title={compressed ? "Expand" : "Compress"}>
+        <button onClick={() => setCompressed(!compressed)} className="flex items-center justify-center rounded-lg transition-all duration-200 text-[#9b8cb8] hover:scale-105 hover:text-white hover:bg-[#1e1631] h-8 w-8" title={compressed ? "Expand" : "Compress"}>
           <IconAsset name="sidebar" className="h-4 w-4" />
         </button>
 
@@ -197,7 +197,7 @@ export default function Sidebar() {
                   group.items.map((item) => {
                     const active = isActive(item.href);
                     return (
-                      <Link key={item.label} href={item.href || "#"} title={compressed ? item.label : ""} className={`flex items-center gap-3 rounded-lg transition-all duration-200 border-l-3 group relative ${compressed ? "h-9 w-9 justify-center px-0 py-1.5 mx-auto" : "h-8.5 px-3 py-2 text-sm"} ${active ? `border-l-[#7b00f5] bg-[#2b1d51] text-white` : `border-l-transparent text-[#aea2c0] hover:bg-[#1e1631] hover:text-[#c9bfd9]`}`}>
+                      <Link key={item.label} href={item.href || "#"} title={compressed ? item.label : ""} className={`flex items-center gap-3 rounded-lg transition-all duration-200 border-l-3 group relative ${compressed ? "h-9 w-9 justify-center px-0 py-1.5 mx-auto" : "h-8.5 px-3 py-2 text-sm"} ${active ? `border-l-[#7b00f5] bg-[#2b1d51] text-white shadow-[0_10px_24px_rgba(103,0,231,0.18)]` : `border-l-transparent text-[#aea2c0] hover:translate-x-0.5 hover:bg-[#1e1631] hover:text-[#c9bfd9]`}`}>
                         <IconAsset name={item.icon} className={compressed ? "h-5 w-5" : "h-4 w-4"} />
                         {
                           compressed ? (
@@ -243,10 +243,10 @@ export default function Sidebar() {
 
           {accountOpen && (
             <div className={`absolute z-50 w-44 rounded-3xl border border-[#2b1d51] bg-[#110923] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.16)] ${compressed ? "left-full top-1/2 -translate-y-1/2 ml-2" : "left-0 bottom-full mb-2"}`}>
-              <button className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm text-white transition hover:bg-white/5">
+              <Link href="/dashboard/settings" className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm text-white transition hover:bg-white/5" onClick={() => setAccountOpen(false)}>
                 <IconAsset name="settings" className="h-4 w-4" />
                 Settings
-              </button>
+              </Link>
               <button className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm text-red-400 transition hover:bg-white/5" onClick={() => UserLogoutAction(dispatch)}>
                 <IconAsset name="close" className="h-4 w-4" />
                 Sign out
