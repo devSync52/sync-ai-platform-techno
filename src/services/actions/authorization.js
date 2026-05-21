@@ -2,9 +2,22 @@ import { getCookies, removeCookies, setCookies } from '@/lib/cookies';
 import { USER_LOGIN_CONSTANTS, USER_LOGOUT_CONSTANTS } from '../constants/authorization';
 import axiosInstance from '@/config/axios';
 
+const FORCE_PASSWORD_CHANGE_COOKIE = 'force-change-password';
+
+const shouldForcePasswordChange = (user) => Boolean(user?.clientProfile?.generatedPassword);
+
+const syncPasswordChangeRequirement = (user) => {
+    if (shouldForcePasswordChange(user)) {
+        setCookies(FORCE_PASSWORD_CHANGE_COOKIE, 'true');
+    } else {
+        removeCookies(FORCE_PASSWORD_CHANGE_COOKIE);
+    }
+};
+
 export const LoadUserAction = () => async (dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
     axiosInstance.get("/users").then((response) => {
+        syncPasswordChangeRequirement(response.data);
         dispatch({
             type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
                 message: "",
@@ -26,6 +39,7 @@ export const UserLoginAction = (data, dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
     axiosInstance.post("/users/login", data).then((response) => {
         if (response.data.success) {
+            syncPasswordChangeRequirement(response.data.data.user);
             setCookies('auth-token', response.data.data.accessToken)
             dispatch({
                 type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
@@ -64,6 +78,7 @@ export const SSOUserAction = (data, dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
     axiosInstance.post("/users/sso-register", data).then(async (response) => {
         if (response.data.status == 200) {
+            syncPasswordChangeRequirement(response.data.userProfileModel);
             setCookies('auth-token', response.data.token)
             dispatch({
                 type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
@@ -89,6 +104,7 @@ export const UserVerificationAction = (data, dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
     axiosInstance.put("/users/activate", data).then((response) => {
         if (response.data.success) {
+            syncPasswordChangeRequirement(response.data.data.user);
             setCookies('auth-token', response.data.data.accessToken);
             dispatch({
                 type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
@@ -146,9 +162,33 @@ export const UserForgotPasswordAction = (data, dispatch) => {
     })
 }
 
+export const UserChangePasswordAction = async (data, dispatch, user) => {
+    const response = await axiosInstance.put("/users/change-password", data);
+
+    if (response.data.success) {
+        removeCookies(FORCE_PASSWORD_CHANGE_COOKIE);
+
+        if (user) {
+            dispatch({
+                type: USER_LOGIN_CONSTANTS.UPDATE_USER,
+                payload: {
+                    ...user,
+                    clientProfile: user.clientProfile ? {
+                        ...user.clientProfile,
+                        generatedPassword: null
+                    } : user.clientProfile
+                }
+            });
+        }
+    }
+
+    return response;
+}
+
 export const UserLogoutAction = (dispatch) => {
     dispatch({ type: USER_LOGOUT_CONSTANTS.USER_LOGOUT_REQUEST })
     removeCookies('auth-token')
+    removeCookies(FORCE_PASSWORD_CHANGE_COOKIE)
     dispatch({ type: USER_LOGOUT_CONSTANTS.USER_LOGOUT_COMPLETE, payload: { message: 'Good bye, please visit again!' } });
     window.location.href = '/'
 }
