@@ -128,6 +128,7 @@ export default function ClientsPage() {
                 <th className="py-2 pr-3">Client Name</th>
                 <th className="py-2 pr-3">Contact Email</th>
                 <th className="py-2 pr-3">Phone</th>
+                <th className="py-2 pr-3">Generated Password</th>
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Actions</th>
               </tr>
@@ -156,6 +157,7 @@ export default function ClientsPage() {
                       <td className="py-2 pr-3">{getClientName(client)}</td>
                       <td className="py-2 pr-3">{client?.profile?.email || '-'}</td>
                       <td className="py-2 pr-3">{[client?.profile?.countryCode, client?.profile?.phone].filter(Boolean).join(' ') || '-'}</td>
+                      <td className="py-2 pr-3">{client?.generatedPassword || '-'}</td>
                       <td className="py-2 pr-3">
                         <Select value={status} onValueChange={(value) => handleStatusChange(client, value)} disabled={updatingStatus == getClientId(client)}>
                           <SelectTrigger className={`h-9 w-32 capitalize ${statusClass}`}>
