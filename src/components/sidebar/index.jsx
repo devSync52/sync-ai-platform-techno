@@ -52,6 +52,11 @@ const navGroups = [
         icon: "warehouse"
       },
       {
+        label: "Address Book",
+        href: "/dashboard/addresses",
+        icon: "users"
+      },
+      {
         label: "SLA Rules",
         href: "/dashboard/sla-rules",
         icon: "timer"

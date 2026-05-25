@@ -6,6 +6,7 @@ import { IntegrationReducer } from "./reducers/integrations"
 import { GeneralReducer } from "./reducers/general"
 import { WarehouseReducer } from "./reducers/warehouses"
 import { ClientReducer } from "./reducers/clients"
+import { AddressReducer } from "./reducers/addresses"
 import { USER_LOGOUT_CONSTANTS } from "./constants/authorization";
 import { getCookies } from "@/lib/cookies";
 
@@ -16,7 +17,8 @@ const appReducer = combineReducers({
     integrations: IntegrationReducer,
     general: GeneralReducer,
     warehouses: WarehouseReducer,
-    clients: ClientReducer
+    clients: ClientReducer,
+    addresses: AddressReducer
 })
 
 const rootReducer = (state, action) => {
