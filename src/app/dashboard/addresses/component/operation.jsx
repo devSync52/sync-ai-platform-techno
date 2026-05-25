@@ -100,7 +100,7 @@ export default function AddressOperation({ open, handleClose, details, onSaved }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="!max-w-[min(calc(100vw-2rem),760px)] gap-0 overflow-hidden p-0">
+      <DialogContent className="max-w-[min(calc(100vw-2rem),760px)]! gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b px-6 py-5">
           <DialogTitle className="text-lg">{details ? "Update address" : "Create address"}</DialogTitle>
         </DialogHeader>
