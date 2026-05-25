@@ -27,6 +27,11 @@ const navGroups = [
         icon: "link"
       },
       {
+        label: "Orders",
+        href: "/dashboard/orders",
+        icon: "package"
+      },
+      {
         label: "SLA & KPI",
         href: "/dashboard/sla-kpi",
         icon: "chart"
