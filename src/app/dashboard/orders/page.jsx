@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileText, PackagePlus, Pencil, RefreshCw, Trash } from "lucide-react";
+import { Box, FileText, PackageCheck, PackagePlus, Pencil, RefreshCw, Trash } from "lucide-react";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-hot-toast";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import { DeleteOrderAction, FetchOrdersAction } from "@/services/actions/orders";
 import moment from "moment-timezone";
@@ -16,31 +15,93 @@ const rowCount = 10;
 const getPackages = (order) => {
   const packageList = order.packageLists;
   if (Array.isArray(packageList)) return packageList;
-  return packageList.packages || order?.packages || [];
+  return packageList?.packages || order?.packages || [];
 };
 
-const getWeight = (order) => getPackages(order).reduce((total, item) => total + Number(item?.weight || 0), 0) || "-";
-const getDimensions = (order) => getPackages(order).map((item) => {
-  return [item.length, item.width, item.height].filter((value) => value !== undefined && value !== null && value !== "").join("*");
-}).filter(Boolean).join(" ");
+const formatNumber = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "-";
+  return number % 1 === 0 ? number.toString() : number.toFixed(2).replace(/\.?0+$/, "");
+};
 
-const getBestPrice = (order) => order?.bestPrice || order?.best_price || order?.amount || order?.total || order?.charge || "-";
+const formatCurrency = (amount, currency = "USD", symbol = "$") => {
+  const number = Number(amount);
+  if (!Number.isFinite(number)) return "-";
+
+  if (currency === "USD") return `${symbol}${number.toFixed(2)}`;
+  return `${currency} ${number.toFixed(2)}`;
+};
+
+const getPrices = (order) => {
+  const prices = Array.isArray(order?.prices) ? order.prices : [];
+  const total = prices.reduce((sum, item) => sum + Number(item?.amount || 0), 0);
+  const currency = prices[0]?.currency || order?.service?.carrier?.currency?.code || "USD";
+  const symbol = order?.service?.carrier?.currency?.symbol || "$";
+
+  return {
+    items: prices,
+    total: total || Number(order?.bestPrice || order?.best_price || order?.amount || order?.total || order?.charge || 0),
+    currency,
+    symbol,
+  };
+};
+
+const getCarrier = (order) => {
+  return {
+    name: order?.service?.carrier?.name || order?.carrier?.name || order?.provider || "-",
+    service: order?.service?.name || order?.service?.code || order?.serviceName || "-",
+  };
+};
+
+const getStatus = (status) => {
+  if (!status || typeof status === "string") {
+    const value = status || "Submitted";
+    return { label: value, code: value.toLowerCase() };
+  }
+
+  return {
+    label: status.name || status.code || "Submitted",
+    code: status.code || status.name?.toLowerCase() || "",
+  };
+};
 
 const getAddressBlock = (address) => {
   if (!address || typeof address == "string") return { title: address || "-", lines: [] };
 
   const title = address.name || address.company || "-";
   const phone = address.phone || address.mobile_phone || address.mobilePhone;
-  const addressLine = address.address || address.address1;
-  const location = [address.city, address.province?.name || address.province, address.postalcode || address.postalCode].filter(Boolean).join(", ");
+  const addressLine = address.address || address.addressLine1 || address.address1;
+  const addressLine2 = address.addressLine2 || address.address2;
+  const province = address.province?.name || address.province?.code || address.province;
+  const country = address.region?.name || address.country;
+  const location = [address.city, province, address.postalcode || address.postalCode].filter(Boolean).join(" ");
 
   return {
     title,
-    lines: [phone ? `P: ${phone}` : "", addressLine, address.address2, location].filter(Boolean),
+    company: address.company,
+    phone,
+    lines: [addressLine, addressLine2, [location, country].filter(Boolean).join(" ")].filter(Boolean),
   };
 };
 const getInitiationAddress = (order) => getAddressBlock(order?.initiation || order?.source || order?.from);
 const getDestinationAddress = (order) => getAddressBlock(order?.destination || order?.to);
+
+const getBarcodeBars = (value) => {
+  const source = String(value || "");
+  return Array.from({ length: 42 }, (_, index) => {
+    const code = source.charCodeAt(index % Math.max(source.length, 1)) || 47;
+    return code % 5 === 0 ? "w-1.5" : code % 3 === 0 ? "w-1" : "w-0.5";
+  });
+};
+
+const stateColors = [
+  "text-amber-500",
+  "text-blue-600",
+  "text-green-600",
+  "text-red-500",
+  "text-violet-600",
+  "text-slate-900",
+];
 
 export default function OrdersPage() {
   const [page, setPage] = useState(1);
@@ -52,8 +113,11 @@ export default function OrdersPage() {
     dispatch(FetchOrdersAction({ page, rowCount }));
   }, [dispatch, page]);
 
-  const completedCount = useMemo(() => states?.completed ?? states?.complete ?? 0, [states]);
-  const quotationCount = useMemo(() => states?.quotation ?? 0, [states]);
+  const stateCards = useMemo(() => Object.entries(states || {}).map(([label, value], index) => ({
+    label,
+    value,
+    color: stateColors[index % stateColors.length],
+  })), [states]);
 
   const handleRefresh = () => {
     dispatch(FetchOrdersAction({ page, rowCount }));
@@ -83,7 +147,7 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-6 pb-32 sm:pb-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div className="mb-4 space-y-2">
           <h1 className="text-2xl font-bold text-primary">Order Management</h1>
@@ -103,7 +167,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <div className="mb-5 flex items-center gap-3">
             <span className="text-[18px] font-medium text-[#4B5A8A]">Total Orders</span>
@@ -111,123 +175,182 @@ export default function OrdersPage() {
           <h2 className="text-4xl font-bold leading-none text-black">{pagination?.total ?? orders.length ?? 0}</h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="mb-5 flex items-center gap-3">
-            <span className="text-[18px] font-medium text-[#4B5A8A]">Quotation</span>
+        {stateCards.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="mb-5 flex items-center gap-3">
+              <span className="text-[18px] font-medium text-[#4B5A8A]">{item.label}</span>
+            </div>
+            <h2 className={`text-4xl font-bold leading-none ${item.color}`}>{item.value ?? 0}</h2>
           </div>
-          <h2 className="text-4xl font-bold leading-none text-amber-500">{quotationCount}</h2>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="mb-5 flex items-center gap-3">
-            <span className="text-[18px] font-medium text-[#4B5A8A]">Completed</span>
-          </div>
-          <h2 className="text-4xl font-bold leading-none text-green-500">{completedCount}</h2>
-        </div>
+        ))}
       </div>
 
-      <Card className="bg-white p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-lg font-medium">All Orders</div>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-semibold text-slate-950">All Orders</div>
+            <p className="text-sm text-muted-foreground">Booked shipments and generated courier labels.</p>
+          </div>
           <Button variant="outline" size="icon" type="button" disabled={loading} onClick={handleRefresh}>
             <RefreshCw />
           </Button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-300 text-sm">
-            <thead className="bg-slate-50 text-slate-900">
-              <tr className="border-b text-left">
-                <th className="px-3 py-2 text-center">ID/DateTime</th>
-                <th className="px-3 py-2">Package Type</th>
-                <th className="px-3 py-2">Initiation</th>
-                <th className="px-3 py-2">Destination</th>
-                <th className="px-3 py-2">Weight(Lb)</th>
-                <th className="px-3 py-2">Dimensions(In)</th>
-                <th className="px-3 py-2">BEST PRICE</th>
-                <th className="px-3 py-2">Operation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {
-                loading ? (
-                  <tr>
-                    <td className="py-6 text-center text-muted-foreground" colSpan={9}>
-                      Loading orders...
-                    </td>
-                  </tr>
-                ) : !orders.length ? (
-                  <tr>
-                    <td className="py-6 text-center text-muted-foreground" colSpan={9}>No orders found.</td>
-                  </tr>
-                ) : orders.map((order) => {
-                  const initiation = getInitiationAddress(order);
-                  const destination = getDestinationAddress(order);
+        <div className="space-y-3">
+          {
+            loading ? (
+              <div className="rounded border border-dashed bg-white py-12 text-center text-sm text-muted-foreground">
+                Loading orders...
+              </div>
+            ) : !orders.length ? (
+              <div className="rounded border border-dashed bg-white py-12 text-center text-sm text-muted-foreground">No orders found.</div>
+            ) : orders.map((order) => {
+              const initiation = getInitiationAddress(order);
+              const destination = getDestinationAddress(order);
+              const packages = getPackages(order);
+              const prices = getPrices(order);
+              const carrier = getCarrier(order);
+              const status = getStatus(order?.status);
+              const waybillNumber = order?.waybillNumber || order?.trackingNumber || "-";
 
-                  return (
-                    <tr key={order?.id} className="border-b align-top last:border-0">
-                      <td className="px-3 py-4 text-center">
-                        <div className="font-medium">#{order?.orderId || "-"}</div>
-                        <div className="mt-5 text-xs text-red-500">{moment(order?.createdAt).format("LLLL")}</div>
-                        <div className="mt-1 text-xs text-blue-600">{order?.status}</div>
-                      </td>
-                      <td className="px-3 py-4 capitalize">{order?.orderType}</td>
-                      <td className="px-3 py-4">
-                        <div className="font-semibold">{initiation.title}</div>
-                        {initiation.lines.map((line) => <div key={line} className="text-xs text-slate-700">{line}</div>)}
-                      </td>
-                      <td className="px-3 py-4">
-                        <div className="font-semibold">{destination.title}</div>
-                        {destination.lines.map((line) => <div key={line} className="text-xs text-slate-700">{line}</div>)}
-                      </td>
-                      <td className="px-3 py-4">{getWeight(order)}</td>
-                      <td className="px-3 py-4">{getDimensions(order) || "-"}</td>
-                      <td className="px-3 py-4">{getBestPrice(order)}</td>
-                      <td className="px-3 py-4">
-                        <div className="flex items-center gap-2">
-                          {
-                            order?.status == "quotation" && (
-                              <>
-                                <Link href={`/dashboard/orders/generate/${order?.id}`} className={buttonVariants({ variant: "outline", size: "icon" })}>
-                                  <Pencil />
-                                </Link>
-                                <Button
-                                  variant="destructive"
-                                  size="icon-sm"
-                                  type="button"
-                                  title="Delete quotation"
-                                  aria-label="Delete quotation"
-                                  onClick={() => openDeleteQuotation(order)}
-                                >
-                                  <Trash />
-                                </Button>
-                              </>
-                            )
-                          }
+              return (
+                <article key={order?.id} className="overflow-hidden rounded border border-slate-200 bg-white text-sm shadow-sm">
+                  <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Box className="size-4 shrink-0 text-blue-600" />
+                      <span className="truncate text-base font-bold text-blue-700">{order?.orderId || "-"}</span>
+                      <span className="shrink-0 text-sm font-semibold text-slate-500">({order?.referenceNumber || "-"})</span>
+                    </div>
+                    <span className="text-sm font-medium capitalize text-red-500">{status.label}</span>
+                  </div>
+
+                  <div className="grid gap-0 lg:grid-cols-[1.4fr_1.2fr_1fr]">
+                    <div className="space-y-5 border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
+                      <div className="flex items-start gap-3">
+                        <div className="grid size-10 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-[10px] font-black text-violet-700">
+                          {carrier.name.split(" ")[0]?.slice(0, 5) || "Ship"}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              }
-            </tbody>
-          </table>
+                        <div className="min-w-0">
+                          <div className="truncate text-lg font-semibold text-slate-950">{carrier.name}</div>
+                          <div className="text-xs font-medium text-slate-500">{carrier.service}</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-base font-semibold capitalize text-slate-950">
+                          <PackageCheck className="size-4" />
+                          {order?.orderType || "Parcel"}
+                        </div>
+
+                        {packages.length ? packages.map((item, index) => (
+                          <div key={item?.id || index} className="space-y-1">
+                            <div className="text-base font-bold text-amber-600">Package #{index + 1}</div>
+                            <div className="text-xs font-semibold text-slate-500">Weight: {formatNumber(item?.weight)} lb</div>
+                            <div className="text-xs font-semibold text-slate-500">
+                              Dimensions: {[item?.length, item?.width, item?.height].filter(Boolean).map(formatNumber).join("*") || "-"} in
+                            </div>
+                            <div className="text-xs font-semibold text-slate-500">Insurance: {formatCurrency(item?.insurance || 0, prices.currency, prices.symbol)}</div>
+                          </div>
+                        )) : (
+                          <div className="text-sm text-muted-foreground">No package details available.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex min-h-56 flex-col justify-center border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
+                      <div className="max-w-lg">
+                        <div className="flex items-center gap-2 text-lg font-bold text-slate-950">
+                          <span>{destination.title}</span>
+                        </div>
+                        {destination.phone && <div className="mt-1 text-xs font-semibold text-slate-700">P: {destination.phone}</div>}
+                        {destination.company && destination.company !== destination.title && (
+                          <div className="text-xs text-slate-500">{destination.company}</div>
+                        )}
+                        <div className="mt-3 space-y-1 text-base leading-tight text-slate-950">
+                          {destination.lines.map((line) => <div key={line}>{line}</div>)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-between gap-5 p-4">
+                      <div className="flex justify-end">
+                        <div className="text-right">
+                          <div className="flex h-10 items-end justify-end gap-0.5">
+                            {getBarcodeBars(waybillNumber).map((width, index) => (
+                              <span key={`${waybillNumber}-${index}`} className={`${width} h-9 bg-black`} />
+                            ))}
+                          </div>
+                          <div className="font-mono text-xs font-bold text-slate-700">{waybillNumber}</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-right">
+                        {prices.items.length ? prices.items.map((item) => (
+                          <div key={item?.id || `${item?.description}-${item?.amount}`} className="grid grid-cols-[1fr_auto] gap-3 text-xs uppercase text-slate-600">
+                            <span>{item?.description || item?.code || "Charge"}:</span>
+                            <span className="font-bold text-red-500">{formatCurrency(item?.amount, item?.currency || prices.currency, prices.symbol)}</span>
+                          </div>
+                        )) : (
+                          <div className="grid grid-cols-[1fr_auto] gap-3 text-xs uppercase text-slate-600">
+                            <span>Best Price:</span>
+                            <span className="font-bold text-red-500">{formatCurrency(prices.total, prices.currency, prices.symbol)}</span>
+                          </div>
+                        )}
+                        <div className="border-t border-dashed border-slate-300 pt-3">
+                          <div className="grid grid-cols-[1fr_auto] gap-3 text-base font-black text-slate-950">
+                            <span>Grand Total:</span>
+                            <span className="text-red-500">{formatCurrency(prices.total, prices.currency, prices.symbol)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-end sm:justify-between">
+                        <div className="text-xs text-slate-500">
+                          <div className="font-semibold text-blue-700">{initiation.company || initiation.title}</div>
+                          <div>{moment(order?.createdAt).format("YYYY-MM-DD HH:mm:ss")}</div>
+                        </div>
+                        {
+                          status.code == "draft" && (
+                            <div className="flex items-center justify-end gap-2">
+                              <Link href={`/dashboard/orders/generate/${order?.id}`} className={buttonVariants({ variant: "outline", size: "icon" })} title="Edit quotation" aria-label="Edit quotation">
+                                <Pencil />
+                              </Link>
+                              <Button
+                                variant="destructive"
+                                size="icon-sm"
+                                type="button"
+                                title="Delete quotation"
+                                aria-label="Delete quotation"
+                                onClick={() => openDeleteQuotation(order)}
+                              >
+                                <Trash />
+                              </Button>
+                            </div>
+                          )
+                        }
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })
+          }
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-4 flex flex-col gap-3 border-t bg-background pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-muted-foreground">
             Showing {(pagination?.offset || 0) + (orders.length ? 1 : 0)}-{(pagination?.offset || 0) + orders.length} of {pagination?.total || 0}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) <= 1} onClick={() => setPage((currentPage) => Math.max(currentPage - 1, 1))}>
               Previous
             </Button>
-            <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) >= (pagination?.totalPages || 1)} onClick={() => setPage((currentPage) => currentPage + 1)}>
+            <Button className="ml-auto sm:ml-0" variant="outline" type="button" disabled={loading || (pagination?.page || page) >= (pagination?.totalPages || 1)} onClick={() => setPage((currentPage) => currentPage + 1)}>
               Next
             </Button>
           </div>
         </div>
-      </Card>
+      </section>
 
       <DeleteConfirmationModal
         open={deleteOperation.show}
