@@ -12,6 +12,7 @@ import { DeleteWarehouseAction, ExportWarehousesAction, FetchWarehousesAction } 
 import WareHouseOperation from "./components/operation";
 import { toast } from "react-hot-toast";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
+import DashboardPagination from "@/components/DashboardPagination";
 
 
 export default function WarehousesPage() {
@@ -202,19 +203,13 @@ export default function WarehousesPage() {
             </tbody>
           </table>
         </div>
-        <div className="mt-4 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {(pagination?.offset || 0) + (warehouses?.length ? 1 : 0)}-{(pagination?.offset || 0) + (warehouses?.length || 0)} of {pagination?.total || 0}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) <= 1} onClick={() => setPage((currentPage) => Math.max(currentPage - 1, 1))}>
-              Previous
-            </Button>
-            <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) >= (pagination?.totalPages || 1)} onClick={() => setPage((currentPage) => currentPage + 1)}>
-              Next
-            </Button>
-          </div>
-        </div>
+        <DashboardPagination
+          pagination={pagination}
+          itemCount={warehouses?.length || 0}
+          currentPage={page}
+          loading={loading}
+          onPageChange={setPage}
+        />
       </Card>
 
       {viewOperation.show && (

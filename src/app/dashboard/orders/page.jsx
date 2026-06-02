@@ -6,17 +6,12 @@ import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-hot-toast";
 import { Button, buttonVariants } from "@/components/ui/button";
+import DashboardPagination from "@/components/DashboardPagination";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import { DeleteOrderAction, FetchOrdersAction } from "@/services/actions/orders";
 import moment from "moment-timezone";
 
 const rowCount = 10;
-
-const getPackages = (order) => {
-  const packageList = order.packageLists;
-  if (Array.isArray(packageList)) return packageList;
-  return packageList?.packages || order?.packages || [];
-};
 
 const formatNumber = (value) => {
   const number = Number(value);
@@ -43,25 +38,6 @@ const getPrices = (order) => {
     total: total || Number(order?.bestPrice || order?.best_price || order?.amount || order?.total || order?.charge || 0),
     currency,
     symbol,
-  };
-};
-
-const getCarrier = (order) => {
-  return {
-    name: order?.service?.carrier?.name || order?.carrier?.name || order?.provider || "-",
-    service: order?.service?.name || order?.service?.code || order?.serviceName || "-",
-  };
-};
-
-const getStatus = (status) => {
-  if (!status || typeof status === "string") {
-    const value = status || "Submitted";
-    return { label: value, code: value.toLowerCase() };
-  }
-
-  return {
-    label: status.name || status.code || "Submitted",
-    code: status.code || status.name?.toLowerCase() || "",
   };
 };
 
@@ -147,7 +123,7 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="space-y-6 p-6 pb-32 sm:pb-6">
+    <div className="space-y-6 p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div className="mb-4 space-y-2">
           <h1 className="text-2xl font-bold text-primary">Order Management</h1>
@@ -207,11 +183,7 @@ export default function OrdersPage() {
             ) : orders.map((order) => {
               const initiation = getInitiationAddress(order);
               const destination = getDestinationAddress(order);
-              const packages = getPackages(order);
               const prices = getPrices(order);
-              const carrier = getCarrier(order);
-              const status = getStatus(order?.status);
-              const waybillNumber = order?.waybillNumber || order?.trackingNumber || "-";
 
               return (
                 <article key={order?.id} className="overflow-hidden rounded border border-slate-200 bg-white text-sm shadow-sm">
@@ -221,18 +193,18 @@ export default function OrdersPage() {
                       <span className="truncate text-base font-bold text-blue-700">{order?.orderId || "-"}</span>
                       <span className="shrink-0 text-sm font-semibold text-slate-500">({order?.referenceNumber || "-"})</span>
                     </div>
-                    <span className="text-sm font-medium capitalize text-red-500">{status.label}</span>
+                    <span className="text-sm font-medium capitalize text-red-500">{order?.status?.name}</span>
                   </div>
 
                   <div className="grid gap-0 lg:grid-cols-[1.4fr_1.2fr_1fr]">
                     <div className="space-y-5 border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
                       <div className="flex items-start gap-3">
                         <div className="grid size-10 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-[10px] font-black text-violet-700">
-                          {carrier.name.split(" ")[0]?.slice(0, 5) || "Ship"}
+                          {order?.service?.carrier?.name.split(" ")[0]?.slice(0, 5) || "Ship"}
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-lg font-semibold text-slate-950">{carrier.name}</div>
-                          <div className="text-xs font-medium text-slate-500">{carrier.service}</div>
+                          <div className="truncate text-lg font-semibold text-slate-950">{order?.service?.carrier?.name}</div>
+                          <div className="text-xs font-medium text-slate-500">{order?.service?.name}</div>
                         </div>
                       </div>
 
@@ -242,18 +214,20 @@ export default function OrdersPage() {
                           {order?.orderType || "Parcel"}
                         </div>
 
-                        {packages.length ? packages.map((item, index) => (
-                          <div key={item?.id || index} className="space-y-1">
-                            <div className="text-base font-bold text-amber-600">Package #{index + 1}</div>
-                            <div className="text-xs font-semibold text-slate-500">Weight: {formatNumber(item?.weight)} lb</div>
-                            <div className="text-xs font-semibold text-slate-500">
-                              Dimensions: {[item?.length, item?.width, item?.height].filter(Boolean).map(formatNumber).join("*") || "-"} in
+                        {
+                          order?.packageLists.length ? order?.packageLists.map((item, index) => (
+                            <div key={item?.id || index} className="space-y-1">
+                              <div className="text-base font-bold text-amber-600">Package #{index + 1}</div>
+                              <div className="text-xs font-semibold text-slate-500">Weight: {formatNumber(item?.weight)} lb</div>
+                              <div className="text-xs font-semibold text-slate-500">
+                                Dimensions: {[item?.length, item?.width, item?.height].filter(Boolean).map(formatNumber).join("*") || "-"} in
+                              </div>
+                              <div className="text-xs font-semibold text-slate-500">Insurance: {formatCurrency(item?.insurance || 0, prices.currency, prices.symbol)}</div>
                             </div>
-                            <div className="text-xs font-semibold text-slate-500">Insurance: {formatCurrency(item?.insurance || 0, prices.currency, prices.symbol)}</div>
-                          </div>
-                        )) : (
-                          <div className="text-sm text-muted-foreground">No package details available.</div>
-                        )}
+                          )) : (
+                            <div className="text-sm text-muted-foreground">No package details available.</div>
+                          )
+                        }
                       </div>
                     </div>
 
@@ -276,11 +250,11 @@ export default function OrdersPage() {
                       <div className="flex justify-end">
                         <div className="text-right">
                           <div className="flex h-10 items-end justify-end gap-0.5">
-                            {getBarcodeBars(waybillNumber).map((width, index) => (
-                              <span key={`${waybillNumber}-${index}`} className={`${width} h-9 bg-black`} />
+                            {getBarcodeBars(order?.waybillNumber).map((width, index) => (
+                              <span key={`${order?.waybillNumber}-${index}`} className={`${width} h-9 bg-black`} />
                             ))}
                           </div>
-                          <div className="font-mono text-xs font-bold text-slate-700">{waybillNumber}</div>
+                          <div className="font-mono text-xs font-bold text-slate-700">{order?.waybillNumber}</div>
                         </div>
                       </div>
 
@@ -310,7 +284,7 @@ export default function OrdersPage() {
                           <div>{moment(order?.createdAt).format("YYYY-MM-DD HH:mm:ss")}</div>
                         </div>
                         {
-                          status.code == "draft" && (
+                          order?.status?.code == "draft" && (
                             <div className="flex items-center justify-end gap-2">
                               <Link href={`/dashboard/orders/generate/${order?.id}`} className={buttonVariants({ variant: "outline", size: "icon" })} title="Edit quotation" aria-label="Edit quotation">
                                 <Pencil />
@@ -337,19 +311,13 @@ export default function OrdersPage() {
           }
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 border-t bg-background pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {(pagination?.offset || 0) + (orders.length ? 1 : 0)}-{(pagination?.offset || 0) + orders.length} of {pagination?.total || 0}
-          </div>
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) <= 1} onClick={() => setPage((currentPage) => Math.max(currentPage - 1, 1))}>
-              Previous
-            </Button>
-            <Button className="ml-auto sm:ml-0" variant="outline" type="button" disabled={loading || (pagination?.page || page) >= (pagination?.totalPages || 1)} onClick={() => setPage((currentPage) => currentPage + 1)}>
-              Next
-            </Button>
-          </div>
-        </div>
+        <DashboardPagination
+          pagination={pagination}
+          itemCount={orders.length}
+          currentPage={page}
+          loading={loading}
+          onPageChange={setPage}
+        />
       </section>
 
       <DeleteConfirmationModal

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-hot-toast";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
+import DashboardPagination from "@/components/DashboardPagination";
 import { DeleteClientAction, FetchClientsAction, UpdateClientStatusAction } from "@/services/actions/clients";
 import ClientOperation from "./components/operation";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -186,19 +187,13 @@ export default function ClientsPage() {
             </tbody>
           </table>
         </div>
-        <div className="mt-4 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {(pagination?.offset || 0) + (clients?.length ? 1 : 0)}-{(pagination?.offset || 0) + (clients?.length || 0)} of {pagination?.total || 0}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) <= 1} onClick={() => setPage((currentPage) => Math.max(currentPage - 1, 1))}>
-              Previous
-            </Button>
-            <Button variant="outline" type="button" disabled={loading || (pagination?.page || page) >= (pagination?.totalPages || 1)} onClick={() => setPage((currentPage) => currentPage + 1)}>
-              Next
-            </Button>
-          </div>
-        </div>
+        <DashboardPagination
+          pagination={pagination}
+          itemCount={clients?.length || 0}
+          currentPage={page}
+          loading={loading}
+          onPageChange={setPage}
+        />
       </Card>
 
       {viewOperation.show && (
