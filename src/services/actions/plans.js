@@ -93,3 +93,57 @@ export const UpdatePlanAction = (planId, data) => async (dispatch) => {
         throw error;
     }
 };
+
+export const DeletePlanAction = (planId) => async (dispatch) => {
+    dispatch({ type: PLAN_CONSTANTS.DELETE_PLAN_REQUEST });
+
+    try {
+        const response = await axiosInstance.delete(API_URL.PLAN_BY_ID(planId));
+
+        dispatch({
+            type: PLAN_CONSTANTS.DELETE_PLAN_SUCCESS,
+            payload: {
+                data: response.data?.data || null,
+                message: response.data?.message || null
+            }
+        });
+
+        return response;
+    } catch (error) {
+        dispatch({
+            type: PLAN_CONSTANTS.DELETE_PLAN_FAILURE,
+            payload: {
+                message: error?.response?.data?.message || error?.message,
+                error
+            }
+        });
+        throw error;
+    }
+};
+
+export const UpdatePlanStatusAction = (planId, status) => async (dispatch) => {
+    dispatch({ type: PLAN_CONSTANTS.UPDATE_PLAN_STATUS_REQUEST, payload: { planId } });
+
+    try {
+        const response = await axiosInstance.patch(API_URL.PLAN_BY_ID(planId), { status });
+
+        dispatch({
+            type: PLAN_CONSTANTS.UPDATE_PLAN_STATUS_SUCCESS,
+            payload: {
+                data: response.data?.data || null,
+                message: response.data?.message || null
+            }
+        });
+
+        return response;
+    } catch (error) {
+        dispatch({
+            type: PLAN_CONSTANTS.UPDATE_PLAN_STATUS_FAILURE,
+            payload: {
+                message: error?.response?.data?.message || error?.message,
+                error
+            }
+        });
+        throw error;
+    }
+};

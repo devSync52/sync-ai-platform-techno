@@ -3,6 +3,8 @@ import { PLAN_CONSTANTS } from '../constants/plans';
 const PLANS_INIT = {
     loading: false,
     saving: false,
+    deleting: false,
+    updatingStatus: null,
     data: [],
     pagination: null,
     message: null,
@@ -50,6 +52,44 @@ export const PlanReducer = (state = PLANS_INIT, action) => {
             return {
                 ...state,
                 saving: false,
+                error: action.payload.error,
+                message: action.payload.message || null
+            };
+
+        case PLAN_CONSTANTS.DELETE_PLAN_REQUEST:
+            return { ...state, deleting: true, message: null, error: null };
+
+        case PLAN_CONSTANTS.DELETE_PLAN_SUCCESS:
+            return {
+                ...state,
+                deleting: false,
+                message: action.payload.message || null,
+                error: null
+            };
+
+        case PLAN_CONSTANTS.DELETE_PLAN_FAILURE:
+            return {
+                ...state,
+                deleting: false,
+                error: action.payload.error,
+                message: action.payload.message || null
+            };
+
+        case PLAN_CONSTANTS.UPDATE_PLAN_STATUS_REQUEST:
+            return { ...state, updatingStatus: action.payload.planId, message: null, error: null };
+
+        case PLAN_CONSTANTS.UPDATE_PLAN_STATUS_SUCCESS:
+            return {
+                ...state,
+                updatingStatus: null,
+                message: action.payload.message || null,
+                error: null
+            };
+
+        case PLAN_CONSTANTS.UPDATE_PLAN_STATUS_FAILURE:
+            return {
+                ...state,
+                updatingStatus: null,
                 error: action.payload.error,
                 message: action.payload.message || null
             };

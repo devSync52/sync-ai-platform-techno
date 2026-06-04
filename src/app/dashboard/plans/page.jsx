@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
-import { Edit, Plus } from "lucide-react";
+import { Edit, Plus, Trash } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import { PROJECT_URL } from "@/utils/constants";
-import { FetchPlansAction } from "@/services/actions/plans";
+import { DeletePlanAction, FetchPlansAction, UpdatePlanStatusAction } from "@/services/actions/plans";
 import PlanOperation from "./components/operation";
 
 const getUserRole = (user) => {
@@ -35,8 +38,9 @@ export default function PlansPage() {
     const dispatch = useDispatch();
     const router = useRouter();
     const { user, loading: userLoading } = useSelector((state) => state.authorization);
-    const { data: plans, loading } = useSelector((state) => state.plans);
+    const { data: plans, loading, deleting, updatingStatus } = useSelector((state) => state.plans);
     const [operation, setOperation] = useState({ show: false, details: null });
+    const [deleteOperation, setDeleteOperation] = useState({ show: false, plan: null });
 
     const authorized = isSuperAdmin(user);
 
@@ -59,6 +63,30 @@ export default function PlansPage() {
 
         return { total: plans?.length || 0, active, inactive: Math.max((plans?.length || 0) - active, 0), highlighted };
     }, [plans]);
+
+    const handleDeletePlan = () => {
+        const planId = deleteOperation.plan?.id;
+        if (!planId) return;
+
+        dispatch(DeletePlanAction(planId)).then((response) => {
+            toast.success(response.data?.message || "Plan deleted successfully", { id: "plan-delete" });
+            setDeleteOperation({ show: false, plan: null });
+            dispatch(FetchPlansAction());
+        }).catch((error) => {
+            toast.error(error?.response?.data?.message || "Unable to delete plan", { id: "plan-delete" });
+        });
+    };
+
+    const handleStatusChange = (plan, status) => {
+        if (!plan?.id || plan.status == status || updatingStatus == plan.id) return;
+
+        dispatch(UpdatePlanStatusAction(plan.id, status)).then((response) => {
+            toast.success(response.data?.message || "Plan status updated successfully", { id: "plan-status" });
+            dispatch(FetchPlansAction());
+        }).catch((error) => {
+            toast.error(error?.response?.data?.message || "Unable to update plan status", { id: "plan-status" });
+        });
+    };
 
     if (userLoading || !user || !authorized) {
         return (
@@ -158,14 +186,27 @@ export default function PlansPage() {
                                         </span>
                                     </td>
                                     <td className="py-3 pr-3">
-                                        <span className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${plan.status == "active" ? "bg-green-50 text-green-700 inset-ring inset-ring-green-600/10" : "bg-slate-100 text-slate-600 inset-ring inset-ring-slate-500/10"}`}>
-                                            {plan.status || "inactive"}
-                                        </span>
+                                        <div className="flex items-center gap-3">
+                                            <Switch
+                                                checked={plan.status == "active"}
+                                                onCheckedChange={(checked) => handleStatusChange(plan, checked ? "active" : "inactive")}
+                                                disabled={updatingStatus == plan.id}
+                                            />
+                                            <span className={`capitalize text-sm font-medium ${plan.status == "active" ? "text-green-700" : "text-slate-500"}`}>
+                                                {plan.status}
+                                            </span>
+                                        </div>
+                                        {updatingStatus == plan.id && <div className="mt-1 text-xs text-muted-foreground">Updating...</div>}
                                     </td>
                                     <td className="py-3 pr-3">
-                                        <Button variant="outline" size="icon" onClick={() => setOperation({ show: true, details: plan })}>
-                                            <Edit />
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="outline" size="icon" onClick={() => setOperation({ show: true, details: plan })}>
+                                                <Edit />
+                                            </Button>
+                                            <Button variant="outline" size="icon" onClick={() => setDeleteOperation({ show: true, plan })}>
+                                                <Trash />
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -181,6 +222,15 @@ export default function PlansPage() {
                     handleClose={() => setOperation({ show: false, details: null })}
                 />
             )}
+
+            <DeleteConfirmationModal
+                open={deleteOperation.show}
+                onOpenChange={() => setDeleteOperation({ show: false, plan: null })}
+                title="Delete plan"
+                description={`Are you sure you want to delete ${deleteOperation.plan?.name || "this plan"}? This action cannot be undone.`}
+                loading={deleting}
+                onConfirm={handleDeletePlan}
+            />
         </div>
     );
 }
