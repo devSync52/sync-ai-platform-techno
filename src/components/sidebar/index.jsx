@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import IconAsset from "@/components/IconAsset";
 import Link from "next/link";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { UserLogoutAction } from "@/services/actions/authorization";
 import { PROJECT_URL } from "@/utils/constants";
 
@@ -118,6 +118,12 @@ const navGroups = [
     label: "SYSTEM",
     items: [
       {
+        label: "Plans",
+        href: PROJECT_URL.DASHBOARD_PLANS,
+        icon: "receipt",
+        superAdminOnly: true
+      },
+      {
         label: "Notifications",
         href: PROJECT_URL.DASHBOARD_NOTIFICATIONS,
         icon: "notification"
@@ -131,13 +137,24 @@ const navGroups = [
   },
 ];
 
+const getUserRole = (user) => {
+  const details = user?.data?.user || user?.data || user;
+  return details?.role || details?.userType || details?.profile?.role || details?.profile?.userType || details?.clientProfile?.role || null;
+};
+const isSuperAdmin = (user) => getUserRole(user) == "super_admin";
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [compressed, setCompressed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
+  const { user } = useSelector((state) => state.authorization);
 
   const dispatch = useDispatch()
+  const visibleNavGroups = navGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.superAdminOnly || isSuperAdmin(user))
+  })).filter((group) => group.items.length);
 
   useEffect(() => {
     if (!accountOpen) return;
@@ -195,7 +212,7 @@ export default function Sidebar() {
 
       <nav className={`flex-1 min-h-0 space-y-3 overflow-y-auto px-2 sidebar-scroll ${compressed ? "pt-4" : ""}`}>
         {
-          navGroups.map((group) => (
+          visibleNavGroups.map((group) => (
             <div key={group.label}>
               {!compressed && (
                 <div className="mb-2 flex items-center justify-between px-3 text-[10px] font-bold tracking-[0.16em] text-[#7d708e]">

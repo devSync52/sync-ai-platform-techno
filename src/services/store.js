@@ -8,6 +8,7 @@ import { WarehouseReducer } from "./reducers/warehouses"
 import { ClientReducer } from "./reducers/clients"
 import { AddressReducer } from "./reducers/addresses"
 import { OrderReducer } from "./reducers/orders"
+import { PlanReducer } from "./reducers/plans"
 import { USER_LOGOUT_CONSTANTS } from "./constants/authorization";
 import { getCookies } from "@/lib/cookies";
 
@@ -20,7 +21,8 @@ const appReducer = combineReducers({
     warehouses: WarehouseReducer,
     clients: ClientReducer,
     addresses: AddressReducer,
-    orders: OrderReducer
+    orders: OrderReducer,
+    plans: PlanReducer
 })
 
 const rootReducer = (state, action) => {
