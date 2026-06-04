@@ -20,6 +20,7 @@ const API_URL = Object.freeze({
 
 
     USER_SUBSCRIPTION: "/users/subscription",
+    SUBSCRIPTION_CREATE: "/subscription/create",
     GENERAL_REGION: "/general/region",
     INTEGRATIONS: "/integrations",
     INTEGRATION_BY_ID: (id) => `/integrations/${id}`,
