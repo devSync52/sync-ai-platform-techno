@@ -1,11 +1,12 @@
 import axiosInstance from '@/config/axios';
 import { ADDRESS_CONSTANTS } from '../constants/addresses';
+import { API_URL } from '@/utils/constants';
 
 export const FetchAddressesAction = (params = {}) => async (dispatch) => {
     dispatch({ type: ADDRESS_CONSTANTS.FETCH_ADDRESSES_REQUEST });
 
     try {
-        const response = await axiosInstance.get('/addresses', { params });
+        const response = await axiosInstance.get(API_URL.ADDRESSES, { params });
         const responseData = response.data?.data;
         const data = Array.isArray(responseData) ? responseData : responseData?.data || responseData?.addresses || response.data?.addresses || [];
         const pagination = response.data?.pagination || responseData?.pagination || response.data?.meta || null;
@@ -41,7 +42,7 @@ export const DeleteAddressAction = (addressId) => async (dispatch) => {
     dispatch({ type: ADDRESS_CONSTANTS.DELETE_ADDRESS_REQUEST });
 
     try {
-        const response = await axiosInstance.delete(`/addresses/${addressId}`);
+        const response = await axiosInstance.delete(API_URL.ADDRESS_BY_ID(addressId));
 
         dispatch({
             type: ADDRESS_CONSTANTS.DELETE_ADDRESS_SUCCESS,

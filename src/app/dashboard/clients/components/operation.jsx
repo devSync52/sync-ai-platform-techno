@@ -13,6 +13,7 @@ import axiosInstance from '@/config/axios';
 import { FetchClientsAction } from '@/services/actions/clients';
 import { toast } from 'react-hot-toast';
 import { useDispatch } from 'react-redux';
+import { API_URL } from '@/utils/constants';
 
 const schema = yup.object({
     firstName: yup.string().required('First name is required'),
@@ -77,7 +78,7 @@ export default function ClientOperation({ open, handleClose }) {
 
     const onSubmit = (data) => {
         setSubmitting(true);
-        axiosInstance.post('/clients', data).then((response) => {
+        axiosInstance.post(API_URL.CLIENTS, data).then((response) => {
             if (response.data?.success) {
                 toast.success(response.data.message || 'Client saved successfully', { id: 'client-operation' });
                 dispatch(FetchClientsAction());

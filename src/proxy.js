@@ -1,42 +1,98 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { API_URL, PROJECT_URL } from '@/utils/constants';
+
+const isChangePasswordRoute = (pathname) => pathname == PROJECT_URL.CHANGE_PASSWORD;
+const isSubscriptionRoute = (pathname) => pathname == PROJECT_URL.SUBSCRIPTION;
+const isOnboardingRoute = (pathname) => pathname.startsWith(PROJECT_URL.ONBOARDING);
+
+const isPublicRoute = (pathname) => pathname == PROJECT_URL.HOME || pathname.startsWith(PROJECT_URL.AUTH);
+const hasGeneratedPassword = (user) => Boolean(user?.clientProfile?.generatedPassword);
+
+const redirectToLogin = (request, pathname) => {
+    const loginUrl = new URL(PROJECT_URL.LOGIN, request.url);
+    if (!pathname.startsWith(PROJECT_URL.AUTH)) {
+        loginUrl.searchParams.set('redirect', pathname);
+    }
+    return NextResponse.redirect(loginUrl);
+};
+
+const getUserDetails = async (token) => {
+    if (!API_URL.ROOT) {
+        return null;
+    }
+
+    try {
+        const response = await fetch(`${API_URL.ROOT}${API_URL.USERS}`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+            cache: 'no-store',
+        });
+
+        if (!response.ok) {
+            return null;
+        }
+
+        return await response.json();
+    } catch {
+        return null;
+    }
+};
 
 export async function proxy(request) {
     const { pathname } = request.nextUrl;
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth-token')?.value;
-    const forcePasswordChange = cookieStore.get('force-change-password')?.value == 'true';
-    const isChangePasswordRoute = pathname == '/change-password';
+    const token = request.cookies.get('auth-token')?.value;
 
-    if (!token && isChangePasswordRoute) {
-        const loginUrl = new URL('/auth/login', request.url);
-        loginUrl.searchParams.set('redirect', pathname);
-        return NextResponse.redirect(loginUrl);
+    if (!token) {
+        if (isPublicRoute(pathname)) {
+            return NextResponse.next();
+        }
+
+        return redirectToLogin(request, pathname);
     }
 
-    if (token && forcePasswordChange && !isChangePasswordRoute) {
-        return NextResponse.redirect(new URL('/change-password', request.url));
+    const user = await getUserDetails(token);
+
+    if (!user) {
+        if (isPublicRoute(pathname)) {
+            return NextResponse.next();
+        }
+
+        return redirectToLogin(request, pathname);
     }
 
-    if (token && !forcePasswordChange && isChangePasswordRoute) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+    if (hasGeneratedPassword(user)) {
+        if (!isChangePasswordRoute(pathname)) {
+            return NextResponse.redirect(new URL(PROJECT_URL.CHANGE_PASSWORD, request.url));
+        }
+
+        return NextResponse.next();
     }
 
-    // If user is authenticated and trying to access root or auth pages, redirect to dashboard
-    if (token && (pathname == '/' || pathname.startsWith('/auth'))) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+    if (isChangePasswordRoute(pathname)) {
+        return NextResponse.redirect(new URL(PROJECT_URL.DASHBOARD, request.url));
     }
 
-    // If user is not authenticated and trying to access dashboard, redirect to login with redirect param
-    if (!token && pathname.startsWith('/dashboard')) {
-        const loginUrl = new URL('/auth/login', request.url);
-        loginUrl.searchParams.set('redirect', pathname);
-        return NextResponse.redirect(loginUrl);
+    if (user?.onboardingStep == 'subscription') {
+        if (!isSubscriptionRoute(pathname)) {
+            return NextResponse.redirect(new URL(PROJECT_URL.SUBSCRIPTION, request.url));
+        }
+
+        return NextResponse.next();
+    }
+
+    if (isOnboardingRoute(pathname)) {
+        return NextResponse.redirect(new URL(PROJECT_URL.DASHBOARD, request.url));
+    }
+
+    if (isPublicRoute(pathname)) {
+        return NextResponse.redirect(new URL(PROJECT_URL.DASHBOARD, request.url));
     }
 
     return NextResponse.next();
 }
 
 export const config = {
-    matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+    matcher: ['/((?!api|_next/static|_next/image|assets|favicon.ico|.*\\..*).*)'],
 };

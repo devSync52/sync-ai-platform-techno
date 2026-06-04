@@ -6,6 +6,7 @@ import IconAsset from "@/components/IconAsset";
 import Link from "next/link";
 import { useDispatch } from "react-redux";
 import { UserLogoutAction } from "@/services/actions/authorization";
+import { PROJECT_URL } from "@/utils/constants";
 
 const navGroups = [
   {
@@ -14,7 +15,7 @@ const navGroups = [
       {
         label: "Dashboard",
         icon: "dashboard",
-        href: "/dashboard",
+        href: PROJECT_URL.DASHBOARD,
       }
     ],
   },
@@ -23,22 +24,22 @@ const navGroups = [
     items: [
       {
         label: "Carrier Hub",
-        href: "/dashboard/carriers",
+        href: PROJECT_URL.DASHBOARD_CARRIERS,
         icon: "link"
       },
       {
         label: "Orders",
-        href: "/dashboard/orders",
+        href: PROJECT_URL.DASHBOARD_ORDERS,
         icon: "package"
       },
       {
         label: "SLA & KPI",
-        href: "/dashboard/sla-kpi",
+        href: PROJECT_URL.DASHBOARD_SLA_KPI,
         icon: "chart"
       },
       {
         label: "Label Generator",
-        href: "/dashboard/label-generator",
+        href: PROJECT_URL.DASHBOARD_LABEL_GENERATOR,
         icon: "tag"
       },
     ],
@@ -48,27 +49,27 @@ const navGroups = [
     items: [
       {
         label: "Clients",
-        href: "/dashboard/clients",
+        href: PROJECT_URL.DASHBOARD_CLIENTS,
         icon: "users"
       },
       {
         label: "Warehouses",
-        href: "/dashboard/warehouses",
+        href: PROJECT_URL.DASHBOARD_WAREHOUSES,
         icon: "warehouse"
       },
       {
         label: "Address Book",
-        href: "/dashboard/addresses",
+        href: PROJECT_URL.DASHBOARD_ADDRESSES,
         icon: "users"
       },
       {
         label: "SLA Rules",
-        href: "/dashboard/sla-rules",
+        href: PROJECT_URL.DASHBOARD_SLA_RULES,
         icon: "timer"
       },
       {
         label: "Bulk Import",
-        href: "/dashboard/bulk-import",
+        href: PROJECT_URL.DASHBOARD_BULK_IMPORT,
         icon: "upload"
       },
     ],
@@ -78,27 +79,27 @@ const navGroups = [
     items: [
       {
         label: "Conciliation",
-        href: "/dashboard/conciliation",
+        href: PROJECT_URL.DASHBOARD_CONCILIATION,
         icon: "file"
       },
       {
         label: "Discrepancies",
-        href: "/dashboard/discrepancies",
+        href: PROJECT_URL.DASHBOARD_DISCREPANCIES,
         icon: "alert"
       },
       {
         label: "Claims",
-        href: "/dashboard/claims",
+        href: PROJECT_URL.DASHBOARD_CLAIMS,
         icon: "package"
       },
       {
         label: "Rate Intelligence",
-        href: "/dashboard/rate-intelligence",
+        href: PROJECT_URL.DASHBOARD_RATE_INTELLIGENCE,
         icon: "chart"
       },
       {
         label: "Rate Calculator",
-        href: "/dashboard/rate-calculator",
+        href: PROJECT_URL.DASHBOARD_RATE_CALCULATOR,
         icon: "receipt"
       },
     ],
@@ -108,7 +109,7 @@ const navGroups = [
     items: [
       {
         label: "Credit Wallet",
-        href: "/dashboard/credit-wallet",
+        href: PROJECT_URL.DASHBOARD_CREDIT_WALLET,
         icon: "wallet"
       }
     ],
@@ -118,12 +119,12 @@ const navGroups = [
     items: [
       {
         label: "Notifications",
-        href: "/dashboard/notifications",
+        href: PROJECT_URL.DASHBOARD_NOTIFICATIONS,
         icon: "notification"
       },
       {
         label: "Settings",
-        href: "/dashboard/settings",
+        href: PROJECT_URL.DASHBOARD_SETTINGS,
         icon: "settings"
       },
     ],
@@ -157,8 +158,8 @@ export default function Sidebar() {
   }, [accountOpen]);
 
   const isActive = (href) => {
-    if (href == "/dashboard" && pathname == "/dashboard") return true;
-    if (href != "/dashboard" && pathname.startsWith(href)) return true;
+    if (href == PROJECT_URL.DASHBOARD && pathname == PROJECT_URL.DASHBOARD) return true;
+    if (href != PROJECT_URL.DASHBOARD && pathname.startsWith(href)) return true;
     return false;
   };
 
@@ -253,7 +254,7 @@ export default function Sidebar() {
 
           {accountOpen && (
             <div className={`absolute z-50 w-44 rounded-3xl border border-[#2b1d51] bg-[#110923] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.16)] ${compressed ? "left-full top-1/2 -translate-y-1/2 ml-2" : "left-0 bottom-full mb-2"}`}>
-              <Link href="/dashboard/settings" className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm text-white transition hover:bg-white/5" onClick={() => setAccountOpen(false)}>
+              <Link href={PROJECT_URL.DASHBOARD_SETTINGS} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm text-white transition hover:bg-white/5" onClick={() => setAccountOpen(false)}>
                 <IconAsset name="settings" className="h-4 w-4" />
                 Settings
               </Link>

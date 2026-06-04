@@ -1,7 +1,8 @@
 import { getCookies, removeCookies } from '@/lib/cookies';
 import axios from 'axios';
+import { API_URL } from '@/utils/constants';
 
-const axiosInstance = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL + "/api/v1" });
+const axiosInstance = axios.create({ baseURL: API_URL.ROOT });
 
 axiosInstance.interceptors.request.use(config => {
   config.headers.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone

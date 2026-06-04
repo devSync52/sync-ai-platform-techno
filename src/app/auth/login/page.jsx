@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { UserLoginAction, UserVerificationAction, UserResendActivationAction } from "@/services/actions/authorization";
 import { toast } from "react-hot-toast";
+import { PROJECT_URL } from "@/utils/constants";
 
 const schema = yup.object({
     username: yup.string().required("Username is required"),
@@ -132,7 +133,7 @@ export default function LoginPage() {
                 {/* Robot Icon */}
                 <div className="flex items-start justify-center pb-6">
                     <Image
-                        src="/assets/logo.png"
+                        src={PROJECT_URL.LOGO}
                         alt="robot"
                         width={145} height={145}
                     />
@@ -187,7 +188,7 @@ export default function LoginPage() {
                     <div className="flex justify-center gap-2">
                         <Button variant="outline" className="py-5 px-4">
                             <Image
-                                src="/assets/google.svg"
+                                src={PROJECT_URL.GOOGLE_ICON}
                                 alt="robot"
                                 width={20} height={20}
                             />
@@ -195,7 +196,7 @@ export default function LoginPage() {
                         </Button>
                         <Button variant="outline" className="py-5 px-4">
                             <Image
-                                src="/assets/facebook.svg"
+                                src={PROJECT_URL.FACEBOOK_ICON}
                                 alt="robot"
                                 width={24} height={24}
                             />
@@ -205,7 +206,7 @@ export default function LoginPage() {
                 </div>
             </div>
             <p className="text-md text-white mt-5">
-                Don&apos;t have an account yet?  <Link href="/auth/register" className="text-blue-400 hover:underline">Create an account</Link>
+                Don&apos;t have an account yet?  <Link href={PROJECT_URL.REGISTER} className="text-blue-400 hover:underline">Create an account</Link>
             </p>
         </div>
     );

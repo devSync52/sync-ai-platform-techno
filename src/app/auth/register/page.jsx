@@ -15,6 +15,7 @@ import Link from "next/link";
 import axiosInstance from "@/config/axios";
 import { useDispatch, useSelector } from "react-redux";
 import { UserVerificationAction, UserResendActivationAction } from "@/services/actions/authorization";
+import { API_URL, PROJECT_URL } from "@/utils/constants";
 
 const schema = yup.object({
     firstName: yup.string().required("First name is required"),
@@ -58,7 +59,7 @@ export default function RegisterPage() {
         if (isVerification) {
             UserVerificationAction({ username: data.email, code: data.code }, dispatch);
         } else {
-            axiosInstance.post("/users/register", data).then((response) => {
+            axiosInstance.post(API_URL.USER_REGISTER, data).then((response) => {
                 if (response.data.success) {
                     setIsVerification(true);
                     setResendCountdown(60);
@@ -160,7 +161,7 @@ export default function RegisterPage() {
         <div className="min-h-screen bg-[#0d0033] flex flex-col items-center justify-center p-4">
             <div className="w-150 max-w-full bg-[#f3f3f3] rounded-2xl shadow-2xl py-10 px-8">
                 <div className="flex items-start justify-center pb-6">
-                    <Image src="/assets/logo.png" alt="robot" width={145} height={145} />
+                    <Image src={PROJECT_URL.LOGO} alt="robot" width={145} height={145} />
                 </div>
 
                 <form className="grid grid-cols-1 gap-4 w-full mb-8" onSubmit={handleSubmit(onSubmit)}>
@@ -327,18 +328,18 @@ export default function RegisterPage() {
                     </div>
                     <div className="flex justify-center gap-2">
                         <Button variant="outline" className="py-5 px-4">
-                            <Image src="/assets/google.svg" alt="robot" width={20} height={20} />
+                            <Image src={PROJECT_URL.GOOGLE_ICON} alt="robot" width={20} height={20} />
                             Sign With Google
                         </Button>
                         <Button variant="outline" className="py-5 px-4">
-                            <Image src="/assets/facebook.svg" alt="robot" width={24} height={24} />
+                            <Image src={PROJECT_URL.FACEBOOK_ICON} alt="robot" width={24} height={24} />
                             Sign With Facebook
                         </Button>
                     </div>
                 </div>
             </div>
             <p className="text-md text-white mt-5">
-                Already have an account? <Link href="/auth/login" className="text-blue-400 hover:underline">Sign In</Link>
+                Already have an account? <Link href={PROJECT_URL.LOGIN} className="text-blue-400 hover:underline">Sign In</Link>
             </p>
         </div>
     );

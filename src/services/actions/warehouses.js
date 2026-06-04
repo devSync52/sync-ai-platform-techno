@@ -1,11 +1,12 @@
 import axiosInstance from '@/config/axios';
 import { WAREHOUSE_CONSTANTS } from '../constants/warehouses';
+import { API_URL } from '@/utils/constants';
 
 export const FetchWarehousesAction = (params = {}) => async (dispatch) => {
     dispatch({ type: WAREHOUSE_CONSTANTS.FETCH_WAREHOUSES_REQUEST });
 
     try {
-        const response = await axiosInstance.get('/warehouses', { params });
+        const response = await axiosInstance.get(API_URL.WAREHOUSES, { params });
         const data = response.data?.data ?? [];
         const pagination = response.data?.pagination ?? null;
         const active = response.data?.active ?? 0;
@@ -37,7 +38,7 @@ export const DeleteWarehouseAction = (warehouseId) => async (dispatch) => {
     dispatch({ type: WAREHOUSE_CONSTANTS.DELETE_WAREHOUSE_REQUEST });
 
     try {
-        const response = await axiosInstance.delete(`/warehouses/${warehouseId}`);
+        const response = await axiosInstance.delete(API_URL.WAREHOUSE_BY_ID(warehouseId));
 
         dispatch({
             type: WAREHOUSE_CONSTANTS.DELETE_WAREHOUSE_SUCCESS,
@@ -62,7 +63,7 @@ export const DeleteWarehouseAction = (warehouseId) => async (dispatch) => {
 };
 
 export const ExportWarehousesAction = () => async () => {
-    const response = await axiosInstance.get('/warehouses/export', {
+    const response = await axiosInstance.get(API_URL.WAREHOUSES_EXPORT, {
         responseType: 'blob'
     });
 

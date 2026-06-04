@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserChangePasswordAction } from "@/services/actions/authorization";
+import { PROJECT_URL } from "@/utils/constants";
 
 const schema = yup.object({
     currentPassword: yup.string().required("Current password is required"),
@@ -58,7 +59,7 @@ export default function ChangePasswordPage() {
 
             if (response.data.success) {
                 toast.success(response.data.message || "Password changed successfully", { id: "change-password" });
-                router.replace("/dashboard");
+                router.replace(PROJECT_URL.DASHBOARD);
                 return;
             }
 
@@ -97,7 +98,7 @@ export default function ChangePasswordPage() {
         <div className="min-h-screen bg-[#0d0033] flex flex-col items-center justify-center p-4">
             <div className="w-125 max-w-full bg-[#f3f3f3] rounded-2xl shadow-2xl py-10 px-8">
                 <div className="flex items-start justify-center pb-6">
-                    <Image src="/assets/logo.png" alt="SynC AI" width={120} height={120} />
+                    <Image src={PROJECT_URL.LOGO} alt="SynC AI" width={120} height={120} />
                 </div>
 
                 <div className="mb-8 text-center">

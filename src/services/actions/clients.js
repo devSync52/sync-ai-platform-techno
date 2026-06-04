@@ -1,11 +1,12 @@
 import axiosInstance from '@/config/axios';
 import { CLIENT_CONSTANTS } from '../constants/clients';
+import { API_URL } from '@/utils/constants';
 
 export const FetchClientsAction = (params = {}) => async (dispatch) => {
     dispatch({ type: CLIENT_CONSTANTS.FETCH_CLIENTS_REQUEST });
 
     try {
-        const response = await axiosInstance.get('/clients', { params });
+        const response = await axiosInstance.get(API_URL.CLIENTS, { params });
         const data = response.data?.data ?? [];
         const pagination = response.data?.pagination ?? null;
         const states = response.data?.states || {
@@ -41,7 +42,7 @@ export const DeleteClientAction = (clientId) => async (dispatch) => {
     dispatch({ type: CLIENT_CONSTANTS.DELETE_CLIENT_REQUEST });
 
     try {
-        const response = await axiosInstance.delete(`/clients/${clientId}`);
+        const response = await axiosInstance.delete(API_URL.CLIENT_BY_ID(clientId));
 
         dispatch({
             type: CLIENT_CONSTANTS.DELETE_CLIENT_SUCCESS,
@@ -69,7 +70,7 @@ export const UpdateClientStatusAction = (clientId, status) => async (dispatch) =
     dispatch({ type: CLIENT_CONSTANTS.UPDATE_CLIENT_STATUS_REQUEST, payload: { clientId } });
 
     try {
-        const response = await axiosInstance.put(`/clients/${clientId}`, { status });
+        const response = await axiosInstance.put(API_URL.CLIENT_BY_ID(clientId), { status });
 
         dispatch({
             type: CLIENT_CONSTANTS.UPDATE_CLIENT_STATUS_SUCCESS,

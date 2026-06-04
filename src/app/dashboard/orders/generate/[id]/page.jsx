@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import GenerateQuoteForm from "../../component/generate-quote";
+import { PROJECT_URL } from "@/utils/constants";
 
 export default async function UpdateQuotePage({ params }) {
   const { id } = await params;
@@ -14,7 +15,7 @@ export default async function UpdateQuotePage({ params }) {
           <p>Update quotation details and generate refreshed courier rates.</p>
         </div>
 
-        <Link href="/dashboard/orders" className={buttonVariants({ variant: "outline", className: "min-w-24 whitespace-nowrap px-4" })}>
+        <Link href={PROJECT_URL.DASHBOARD_ORDERS} className={buttonVariants({ variant: "outline", className: "min-w-24 whitespace-nowrap px-4" })}>
           <ArrowLeft />
           Back
         </Link>

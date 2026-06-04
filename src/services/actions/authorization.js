@@ -1,23 +1,11 @@
 import { getCookies, removeCookies, setCookies } from '@/lib/cookies';
 import { USER_LOGIN_CONSTANTS, USER_LOGOUT_CONSTANTS } from '../constants/authorization';
 import axiosInstance from '@/config/axios';
-
-const FORCE_PASSWORD_CHANGE_COOKIE = 'force-change-password';
-
-const shouldForcePasswordChange = (user) => Boolean(user?.clientProfile?.generatedPassword);
-
-const syncPasswordChangeRequirement = (user) => {
-    if (shouldForcePasswordChange(user)) {
-        setCookies(FORCE_PASSWORD_CHANGE_COOKIE, 'true');
-    } else {
-        removeCookies(FORCE_PASSWORD_CHANGE_COOKIE);
-    }
-};
+import { API_URL, PROJECT_URL } from '@/utils/constants';
 
 export const LoadUserAction = () => async (dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
-    axiosInstance.get("/users").then((response) => {
-        syncPasswordChangeRequirement(response.data);
+    axiosInstance.get(API_URL.USERS).then((response) => {
         dispatch({
             type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
                 message: "",
@@ -37,9 +25,8 @@ export const LoadUserAction = () => async (dispatch) => {
 
 export const UserLoginAction = (data, dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
-    axiosInstance.post("/users/login", data).then((response) => {
+    axiosInstance.post(API_URL.USER_LOGIN, data).then((response) => {
         if (response.data.success) {
-            syncPasswordChangeRequirement(response.data.data.user);
             setCookies('auth-token', response.data.data.accessToken)
             dispatch({
                 type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
@@ -76,9 +63,8 @@ export const UserLoginAction = (data, dispatch) => {
 
 export const SSOUserAction = (data, dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
-    axiosInstance.post("/users/sso-register", data).then(async (response) => {
+    axiosInstance.post(API_URL.USER_SSO_REGISTER, data).then(async (response) => {
         if (response.data.status == 200) {
-            syncPasswordChangeRequirement(response.data.userProfileModel);
             setCookies('auth-token', response.data.token)
             dispatch({
                 type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
@@ -102,9 +88,8 @@ export const SSOUserAction = (data, dispatch) => {
 
 export const UserVerificationAction = (data, dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
-    axiosInstance.put("/users/activate", data).then((response) => {
+    axiosInstance.put(API_URL.USER_ACTIVATE, data).then((response) => {
         if (response.data.success) {
-            syncPasswordChangeRequirement(response.data.data.user);
             setCookies('auth-token', response.data.data.accessToken);
             dispatch({
                 type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: {
@@ -133,7 +118,7 @@ export const UserVerificationAction = (data, dispatch) => {
 
 export const UserResendActivationAction = (data, dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
-    return axiosInstance.patch("/users/resend-activation", data).then((response) => response).catch((error) => {
+    return axiosInstance.patch(API_URL.USER_RESEND_ACTIVATION, data).then((response) => response).catch((error) => {
         dispatch({
             type: USER_LOGIN_CONSTANTS.USER_LOGIN_FAILURE, payload: {
                 message: error?.response?.data?.message || error?.message,
@@ -146,7 +131,7 @@ export const UserResendActivationAction = (data, dispatch) => {
 
 export const UserForgotPasswordAction = (data, dispatch) => {
     dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_REQUEST });
-    axiosInstance.post("/users/forgot-password", data).then(async (response) => {
+    axiosInstance.post(API_URL.USER_FORGOT_PASSWORD, data).then(async (response) => {
         if (response.data.status == 200) {
             setCookies('auth-token', response.data.data.token);
             dispatch({ type: USER_LOGIN_CONSTANTS.USER_LOGIN_SUCCESS, payload: { token: response.data.data.token, message: response.data.message } });
@@ -163,11 +148,9 @@ export const UserForgotPasswordAction = (data, dispatch) => {
 }
 
 export const UserChangePasswordAction = async (data, dispatch, user) => {
-    const response = await axiosInstance.put("/users/change-password", data);
+    const response = await axiosInstance.put(API_URL.USER_CHANGE_PASSWORD, data);
 
     if (response.data.success) {
-        removeCookies(FORCE_PASSWORD_CHANGE_COOKIE);
-
         if (user) {
             dispatch({
                 type: USER_LOGIN_CONSTANTS.UPDATE_USER,
@@ -188,7 +171,6 @@ export const UserChangePasswordAction = async (data, dispatch, user) => {
 export const UserLogoutAction = (dispatch) => {
     dispatch({ type: USER_LOGOUT_CONSTANTS.USER_LOGOUT_REQUEST })
     removeCookies('auth-token')
-    removeCookies(FORCE_PASSWORD_CHANGE_COOKIE)
     dispatch({ type: USER_LOGOUT_CONSTANTS.USER_LOGOUT_COMPLETE, payload: { message: 'Good bye, please visit again!' } });
-    window.location.href = '/'
+    window.location.href = PROJECT_URL.HOME
 }

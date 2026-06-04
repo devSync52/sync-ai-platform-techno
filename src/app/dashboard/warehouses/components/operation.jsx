@@ -13,6 +13,7 @@ import { FetchRegionsAction } from '@/services/actions/general';
 import { FetchWarehousesAction } from '@/services/actions/warehouses';
 import { toast } from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
+import { API_URL } from '@/utils/constants';
 
 const schema = yup.object({
     name: yup.string().required('Warehouse is required'),
@@ -68,7 +69,7 @@ export default function WareHouseOperation({ open, handleClose, details }) {
 
     const onSubmit = (data) => {
         setSubmitting(true);
-        const request = details?.id ? axiosInstance.put(`/warehouses/${details.id}`, data) : axiosInstance.post('/warehouses', data);
+        const request = details?.id ? axiosInstance.put(API_URL.WAREHOUSE_BY_ID(details.id), data) : axiosInstance.post(API_URL.WAREHOUSES, data);
         request.then((response) => {
             if (response.data?.success) {
                 toast.success(response.data.message || 'Warehouse saved successfully', { id: 'warehouse-operation' });

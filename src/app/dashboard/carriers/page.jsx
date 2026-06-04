@@ -9,6 +9,7 @@ import ConfigurationComponent from "./component/configuration";
 import axiosInstance from "@/config/axios";
 import { toast } from "react-hot-toast";
 import Link from "next/link";
+import { API_URL } from "@/utils/constants";
 
 const carriers = [
   {
@@ -109,7 +110,7 @@ export default function CarrierPage() {
   const available = useCallback((provider) => (integrations || [{}])?.find(integration => integration.provider == provider), [integrations]);
 
   const onToggled = (details) => {
-    axiosInstance.patch(`/integrations/${details.id}`).then((response) => {
+    axiosInstance.patch(API_URL.INTEGRATION_BY_ID(details.id)).then((response) => {
       if (response.data.success) {
         dispatch(FetchIntegrationsAction());
       } else {

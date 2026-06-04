@@ -1,0 +1,72 @@
+const DEFAULT_API_BASE_URL = "https://middleware-aws-api.teexponent.com";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_BASE_URL;
+const API_ROOT = `${API_BASE_URL}/api/v1`;
+
+const API_URL = Object.freeze({
+    BASE_URL: API_BASE_URL,
+    DEFAULT_BASE_URL: DEFAULT_API_BASE_URL,
+    ROOT: API_ROOT,
+    PLANS: "/plans",
+    USERS: "/users",
+    USER_LOGIN: "/users/login",
+    USER_REGISTER: "/users/register",
+    USER_SSO_REGISTER: "/users/sso-register",
+    USER_ACTIVATE: "/users/activate",
+    USER_RESEND_ACTIVATION: "/users/resend-activation",
+    USER_FORGOT_PASSWORD: "/users/forgot-password",
+    USER_CHANGE_PASSWORD: "/users/change-password",
+    USER_COMPLETE_ONBOARDING: "/users/complete-onboarding",
+
+
+    USER_SUBSCRIPTION: "/users/subscription",
+    GENERAL_REGION: "/general/region",
+    INTEGRATIONS: "/integrations",
+    INTEGRATION_BY_ID: (id) => `/integrations/${id}`,
+    CLIENTS: "/clients",
+    CLIENT_BY_ID: (id) => `/clients/${id}`,
+    WAREHOUSES: "/warehouses",
+    WAREHOUSE_BY_ID: (id) => `/warehouses/${id}`,
+    WAREHOUSES_EXPORT: "/warehouses/export",
+    ADDRESSES: "/addresses",
+    ADDRESS_BY_ID: (id) => `/addresses/${id}`,
+    ADDRESSES_FETCH: "/addresses/fetch",
+    ORDERS: "/orders",
+    ORDER_BY_ID: (id) => `/orders/${id}`,
+    ORDER_QUOTE: "/orders/quote",
+})
+
+const PROJECT_URL = Object.freeze({
+    HOME: "/",
+    AUTH: "/auth",
+    LOGIN: "/auth/login",
+    REGISTER: "/auth/register",
+    DASHBOARD: "/dashboard",
+    CHANGE_PASSWORD: "/change-password",
+    ONBOARDING: "/onboarding",
+    SUBSCRIPTION: "/onboarding/subscription",
+    DASHBOARD_CARRIERS: "/dashboard/carriers",
+    DASHBOARD_ORDERS: "/dashboard/orders",
+    DASHBOARD_ORDERS_CREATE: "/dashboard/orders/create",
+    DASHBOARD_ORDERS_GENERATE: "/dashboard/orders/generate",
+    DASHBOARD_ORDER_GENERATE_BY_ID: (id) => `/dashboard/orders/generate/${id}`,
+    DASHBOARD_SLA_KPI: "/dashboard/sla-kpi",
+    DASHBOARD_LABEL_GENERATOR: "/dashboard/label-generator",
+    DASHBOARD_CLIENTS: "/dashboard/clients",
+    DASHBOARD_WAREHOUSES: "/dashboard/warehouses",
+    DASHBOARD_ADDRESSES: "/dashboard/addresses",
+    DASHBOARD_SLA_RULES: "/dashboard/sla-rules",
+    DASHBOARD_BULK_IMPORT: "/dashboard/bulk-import",
+    DASHBOARD_CONCILIATION: "/dashboard/conciliation",
+    DASHBOARD_DISCREPANCIES: "/dashboard/discrepancies",
+    DASHBOARD_CLAIMS: "/dashboard/claims",
+    DASHBOARD_RATE_INTELLIGENCE: "/dashboard/rate-intelligence",
+    DASHBOARD_RATE_CALCULATOR: "/dashboard/rate-calculator",
+    DASHBOARD_CREDIT_WALLET: "/dashboard/credit-wallet",
+    DASHBOARD_NOTIFICATIONS: "/dashboard/notifications",
+    DASHBOARD_SETTINGS: "/dashboard/settings",
+    LOGO: "/assets/logo.png",
+    GOOGLE_ICON: "/assets/google.svg",
+    FACEBOOK_ICON: "/assets/facebook.svg",
+})
+
+export { API_URL, PROJECT_URL }

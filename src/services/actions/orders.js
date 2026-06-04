@@ -1,11 +1,12 @@
 import axiosInstance from '@/config/axios';
 import { ORDER_CONSTANTS } from '../constants/orders';
+import { API_URL } from '@/utils/constants';
 
 export const FetchOrdersAction = (params = {}) => async (dispatch) => {
     dispatch({ type: ORDER_CONSTANTS.FETCH_ORDERS_REQUEST });
 
     try {
-        const response = await axiosInstance.get('/orders', { params });
+        const response = await axiosInstance.get(API_URL.ORDERS, { params });
         const responseData = response.data?.data;
         const data = Array.isArray(responseData) ? responseData : responseData?.data || responseData?.orders || response.data?.orders || [];
         const pagination = response.data?.pagination || responseData?.pagination || response.data?.meta || null;
@@ -38,7 +39,7 @@ export const DeleteOrderAction = (orderId) => async (dispatch) => {
     dispatch({ type: ORDER_CONSTANTS.DELETE_ORDER_REQUEST });
 
     try {
-        const response = await axiosInstance.delete(`/orders/${orderId}`);
+        const response = await axiosInstance.delete(API_URL.ORDER_BY_ID(orderId));
 
         dispatch({
             type: ORDER_CONSTANTS.DELETE_ORDER_SUCCESS,

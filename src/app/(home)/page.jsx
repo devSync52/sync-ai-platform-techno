@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PROJECT_URL } from "@/utils/constants";
 
 export default function HomePage() {
   return (
@@ -8,7 +9,7 @@ export default function HomePage() {
 
         <div className="flex flex-1 items-end self-stretch">
           <Link
-            href="/dashboard"
+            href={PROJECT_URL.DASHBOARD}
             className="flex h-[60px] w-full items-center justify-center rounded-[10px] bg-gradient-to-r from-[#7b00f5] to-[#7a00e8] text-[22px] font-semibold text-white shadow-[0_12px_28px_rgba(124,0,245,0.22)] transition-opacity hover:opacity-95"
           >
             Sign in to SynC AI

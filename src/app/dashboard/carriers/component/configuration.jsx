@@ -10,6 +10,7 @@ import axiosInstance from '@/config/axios';
 import { toast } from 'react-hot-toast';
 import { FetchIntegrationsAction } from '@/services/actions/integrations';
 import { useDispatch } from 'react-redux';
+import { API_URL } from '@/utils/constants';
 
 const schema = yup.object({
     appKey: yup.string().required('API Key is required'),
@@ -48,7 +49,7 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
         };
 
         if (details) {
-            axiosInstance.put('/integrations', payload).then((response) => {
+            axiosInstance.put(API_URL.INTEGRATIONS, payload).then((response) => {
                 if (response.data.success) {
                     toast.success(response.data.message, { id: 'integration' })
                     handleClose()
@@ -62,7 +63,7 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
                 }
             });
         } else {
-            axiosInstance.post('/integrations', payload).then((response) => {
+            axiosInstance.post(API_URL.INTEGRATIONS, payload).then((response) => {
                 if (response.data.success) {
                     toast.success(response.data.message, { id: 'integration' })
                     handleClose()

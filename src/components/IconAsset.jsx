@@ -24,11 +24,12 @@ import uploadIcon from "@/assets/icons/upload.svg";
 import usersIcon from "@/assets/icons/users.svg";
 import walletIcon from "@/assets/icons/wallet.svg";
 import warehouseIcon from "@/assets/icons/warehouse.svg";
+import { PROJECT_URL } from "@/utils/constants";
 
 const icons = {
   alert: alertIcon,
   arrowRight: arrowRightIcon,
-  bot: "/assets/logo.png",
+  bot: PROJECT_URL.LOGO,
   chart: chartIcon,
   check: checkIcon,
   chevron: chevronIcon,

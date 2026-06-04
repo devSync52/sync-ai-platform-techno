@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FetchIntegrationsAction } from "@/services/actions/integrations";
+import { PROJECT_URL } from "@/utils/constants";
 
 const fallbackUser = {
   firstName: "Soumallya",
@@ -271,15 +272,15 @@ export default function SettingsPage() {
                 <h2 className="text-xl font-semibold text-gray-950">Workspace Links</h2>
               </div>
               <div className="space-y-3">
-                <Link href="/dashboard/clients" className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 font-medium transition hover:bg-gray-50">
+                <Link href={PROJECT_URL.DASHBOARD_CLIENTS} className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 font-medium transition hover:bg-gray-50">
                   Client Management
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                 </Link>
-                <Link href="/dashboard/warehouses" className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 font-medium transition hover:bg-gray-50">
+                <Link href={PROJECT_URL.DASHBOARD_WAREHOUSES} className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 font-medium transition hover:bg-gray-50">
                   Warehouses
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                 </Link>
-                <Link href="/dashboard/credit-wallet" className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 font-medium transition hover:bg-gray-50">
+                <Link href={PROJECT_URL.DASHBOARD_CREDIT_WALLET} className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 font-medium transition hover:bg-gray-50">
                   Credit Wallet
                   <Wallet className="h-4 w-4 text-amber-500" />
                 </Link>
@@ -388,7 +389,7 @@ export default function SettingsPage() {
                 <Globe className="h-5 w-5 text-violet-600" />
                 <h2 className="text-xl font-semibold text-gray-950">Carrier API Connections</h2>
               </div>
-              <Link href="/dashboard/carriers" className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium transition-all hover:bg-muted">
+              <Link href={PROJECT_URL.DASHBOARD_CARRIERS} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium transition-all hover:bg-muted">
                 <Truck />
                 Manage Carriers
               </Link>

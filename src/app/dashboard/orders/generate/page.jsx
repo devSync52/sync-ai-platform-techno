@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import GenerateQuoteForm from "../component/generate-quote";
+import { PROJECT_URL } from "@/utils/constants";
 
 export default function GenerateQuotePage() {
   return (
@@ -12,7 +13,7 @@ export default function GenerateQuotePage() {
           <p>Generate courier quotes from origin, destination, and package details.</p>
         </div>
 
-        <Link href="/dashboard/orders" className={buttonVariants({ variant: "outline", className: "min-w-24 whitespace-nowrap px-4" })}>
+        <Link href={PROJECT_URL.DASHBOARD_ORDERS} className={buttonVariants({ variant: "outline", className: "min-w-24 whitespace-nowrap px-4" })}>
           <ArrowLeft />
           Back
         </Link>

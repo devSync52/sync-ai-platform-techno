@@ -1,9 +1,10 @@
 import axiosInstance from '@/config/axios';
 import { GENERAL_CONSTANTS } from '../constants/general';
+import { API_URL } from '@/utils/constants';
 
 export const FetchRegionsAction = () => async (dispatch) => {
     dispatch({ type: GENERAL_CONSTANTS.FETCH_REGIONS_REQUEST });
-    axiosInstance.get('/general/region').then((response) => {
+    axiosInstance.get(API_URL.GENERAL_REGION).then((response) => {
         if (response.data.success) {
             dispatch({
                 type: GENERAL_CONSTANTS.FETCH_REGIONS_SUCCESS,

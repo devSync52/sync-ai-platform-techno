@@ -10,6 +10,7 @@ import DashboardPagination from "@/components/DashboardPagination";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import { DeleteOrderAction, FetchOrdersAction } from "@/services/actions/orders";
 import moment from "moment-timezone";
+import { PROJECT_URL } from "@/utils/constants";
 
 const rowCount = 10;
 
@@ -131,12 +132,12 @@ export default function OrdersPage() {
         </div>
 
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-          <Link href="/dashboard/orders/create" className={buttonVariants({ size: "lg", className: "min-w-36 whitespace-nowrap px-4" })}>
+          <Link href={PROJECT_URL.DASHBOARD_ORDERS_CREATE} className={buttonVariants({ size: "lg", className: "min-w-36 whitespace-nowrap px-4" })}>
             <PackagePlus />
             Create Order
           </Link>
 
-          <Link href="/dashboard/orders/generate" className={buttonVariants({ variant: "outline", size: "lg", className: "min-w-40 whitespace-nowrap px-4" })}>
+          <Link href={PROJECT_URL.DASHBOARD_ORDERS_GENERATE} className={buttonVariants({ variant: "outline", size: "lg", className: "min-w-40 whitespace-nowrap px-4" })}>
             <FileText />
             Generate Quote
           </Link>
@@ -286,7 +287,7 @@ export default function OrdersPage() {
                         {
                           order?.status?.code == "draft" && (
                             <div className="flex items-center justify-end gap-2">
-                              <Link href={`/dashboard/orders/generate/${order?.id}`} className={buttonVariants({ variant: "outline", size: "icon" })} title="Edit quotation" aria-label="Edit quotation">
+                              <Link href={PROJECT_URL.DASHBOARD_ORDER_GENERATE_BY_ID(order?.id)} className={buttonVariants({ variant: "outline", size: "icon" })} title="Edit quotation" aria-label="Edit quotation">
                                 <Pencil />
                               </Link>
                               <Button

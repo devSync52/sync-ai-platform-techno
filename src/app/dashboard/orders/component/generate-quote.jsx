@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import axiosInstance from "@/config/axios";
+import { API_URL } from "@/utils/constants";
 
 const defaultPackage = {
   weight: 3,
@@ -206,7 +207,7 @@ export default function GenerateQuoteForm({ quoteId }) {
   const formLocked = quoteGenerated;
 
   useEffect(() => {
-    axiosInstance.get("/addresses/fetch").then((response) => {
+    axiosInstance.get(API_URL.ADDRESSES_FETCH).then((response) => {
       if (response.data.success) {
         setAddresses(response.data?.data || []);
       } else {
@@ -222,7 +223,7 @@ export default function GenerateQuoteForm({ quoteId }) {
   useEffect(() => {
     if (!quoteId) return;
 
-    axiosInstance.get(`/orders/${quoteId}`).then((response) => {
+    axiosInstance.get(API_URL.ORDER_BY_ID(quoteId)).then((response) => {
       const order = response.data?.data?.order || response.data?.data || response.data?.order || {};
       reset(normalizeQuoteValues(order));
     }).catch((error) => {
@@ -235,7 +236,7 @@ export default function GenerateQuoteForm({ quoteId }) {
   const onSubmit = (data) => {
     const payload = quoteId ? { ...data, quoteId } : data;
 
-    axiosInstance.post("/orders/quote", payload).then((response) => {
+    axiosInstance.post(API_URL.ORDER_QUOTE, payload).then((response) => {
       if (response.data.success) {
         const carriers = response.data?.data?.response || [];
         setQuoteCarriers(carriers);

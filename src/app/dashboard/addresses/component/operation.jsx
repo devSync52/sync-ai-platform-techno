@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import axiosInstance from "@/config/axios";
 import { FetchRegionsAction } from "@/services/actions/general";
+import { API_URL } from "@/utils/constants";
 
 const addressTypes = ["commercial", "residential"];
 
@@ -81,7 +82,7 @@ export default function AddressOperation({ open, handleClose, details, onSaved }
     setSubmitting(true);
 
     const addressId = details?.id;
-    const request = addressId ? axiosInstance.put(`/addresses/${addressId}`, data) : axiosInstance.post("/addresses", data);
+    const request = addressId ? axiosInstance.put(API_URL.ADDRESS_BY_ID(addressId), data) : axiosInstance.post(API_URL.ADDRESSES, data);
 
     request.then((response) => {
       if (response.data?.success) {
