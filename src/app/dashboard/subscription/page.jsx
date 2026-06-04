@@ -93,105 +93,125 @@ export default function SubscriptionPage() {
     return (
         <div className="min-h-screen bg-slate-50 py-10">
             <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-                <div className="mb-8 flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Subscription</p>
-                        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Current plan</h1>
-                        <p className="mt-1 text-sm text-slate-600">Manage your active subscription and view invoices in one place.</p>
-                    </div>
-
-                    <div className="flex gap-3">
-                        <Button variant="outline" onClick={() => router.push(PROJECT_URL.SUBSCRIPTION)}>Change plan</Button>
+                <div className="mb-8 overflow-hidden rounded-[2rem] border border-slate-200 bg-linear-to-r from-slate-950 via-slate-900 to-slate-950 p-8 text-white shadow-xl shadow-slate-900/10 sm:p-10">
+                    <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="max-w-2xl">
+                            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-300">Subscription</p>
+                            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Your active plan is ready.</h1>
+                            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-300">
+                                Manage your active subscription from a single place. Review plan details, billing, invoices, and take action in one polished view.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <Button variant="default" onClick={() => router.push(PROJECT_URL.SUBSCRIPTION)}>Change plan</Button>
+                            <Button variant="secondary" onClick={() => router.push(PROJECT_URL.DASHBOARD)}>Go to dashboard</Button>
+                        </div>
                     </div>
                 </div>
 
                 {!hasSubscription ? (
-                    <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
-                        <p className="text-sm font-medium text-slate-600">No active subscription found for your account.</p>
-                        <p className="mt-3 text-lg font-semibold text-slate-900">Start a new subscription to access premium features.</p>
+                    <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">No subscription</p>
+                        <p className="mt-3 text-2xl font-semibold text-slate-900">Activate a plan to unlock premium features.</p>
+                        <p className="mt-4 text-sm text-slate-600">Pick the best plan for your team and start shipping smarter.</p>
                         <div className="mt-8 flex justify-center">
-                            <Button onClick={() => router.push(PROJECT_URL.SUBSCRIPTION)}>Take Subscription</Button>
+                            <Button onClick={() => router.push(PROJECT_URL.SUBSCRIPTION)}>Browse plans</Button>
                         </div>
                     </div>
                 ) : (
                     <>
-                        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-                                <div>
-                                    <div className="flex items-center gap-3 text-sm text-slate-500">
-                                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">{subscription.status?.toUpperCase() || "ACTIVE"}</span>
-                                        <span className="text-slate-400">Started {formatDate(subscription.created)}</span>
-                                    </div>
-                                    <div className="mt-4">
-                                        <h2 className="text-2xl font-semibold text-slate-900">{product.name || "Subscription plan"}</h2>
+                        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+                            <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+                                <div className="flex items-center justify-between gap-4 rounded-[1.5rem] bg-slate-50 p-5">
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current plan</p>
+                                        <h2 className="mt-3 text-3xl font-semibold text-slate-900">{product.name || "Starter"}</h2>
                                         <p className="mt-2 text-sm text-slate-600">{product.description || "Your active plan details."}</p>
                                     </div>
-                                    <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                                        <div className="rounded-3xl bg-slate-50 p-4">
-                                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Price</p>
-                                            <p className="mt-2 text-xl font-semibold text-slate-900">{formatMoney(price.amount, price.currency)} <span className="text-sm text-slate-500">/ {price.interval || "month"}</span></p>
-                                        </div>
-                                        <div className="rounded-3xl bg-slate-50 p-4">
-                                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Billing cycle</p>
-                                            <p className="mt-2 font-semibold text-slate-900">{price.interval ? `${price.interval}ly` : "Monthly"}</p>
-                                        </div>
+                                    <div className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">
+                                        {subscription.status?.toUpperCase() || "ACTIVE"}
                                     </div>
-
-                                    {features.length > 0 && (
-                                        <div className="mt-6">
-                                            <p className="text-sm font-semibold text-slate-900">Included features</p>
-                                            <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-                                                {features.map((feature) => (
-                                                    <li key={feature} className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">{feature}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
                                 </div>
 
-                                <div className="rounded-3xl bg-slate-50 p-6">
-                                    <div className="space-y-4">
-                                        <div>
-                                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Subscription</p>
-                                            <p className="mt-2 font-semibold text-slate-900">{subscriptionId || "—"}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Product ID</p>
-                                            <p className="mt-2 font-semibold text-slate-900">{product.productId || product.id || "-"}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Price ID</p>
-                                            <p className="mt-2 font-semibold text-slate-900">{price.priceId || price.id || "-"}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Last updated</p>
-                                            <p className="mt-2 font-semibold text-slate-900">{formatDate(price.updatedAt || price.createdAt)}</p>
-                                        </div>
+                                <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                                    <div className="rounded-[1.5rem] bg-slate-950 p-6 text-white shadow-sm">
+                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Price</p>
+                                        <p className="mt-3 text-4xl font-semibold">
+                                            {formatMoney(price.amount, price.currency)}
+                                            <span className="ml-2 text-base font-normal text-slate-300">/ {price.interval || "month"}</span>
+                                        </p>
                                     </div>
-                                    <div className="mt-6 flex flex-wrap gap-3">
-                                        <Button
-                                            variant={isActive ? "secondary" : "outline"}
-                                            disabled={!isActive || loadingItems[subscriptionId]}
-                                            onClick={() => handleAction(subscriptionId, "cancel")}
-                                        >
-                                            {loadingItems[subscriptionId] ? "Processing..." : "Cancel"}
-                                        </Button>
-                                        <Button
-                                            disabled={!isActive || loadingItems[subscriptionId]}
-                                            onClick={() => handleAction(subscriptionId, "update")}
-                                        >
-                                            {loadingItems[subscriptionId] ? "Processing..." : "Update"}
-                                        </Button>
+                                    <div className="rounded-[1.5rem] bg-slate-50 p-6 shadow-sm">
+                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Billing cycle</p>
+                                        <p className="mt-3 text-xl font-semibold text-slate-900">{price.interval ? `${price.interval}ly` : "Monthly"}</p>
+                                        <p className="mt-2 text-sm text-slate-500">Next renewal date available in billing settings.</p>
+                                    </div>
+                                </div>
+
+                                {features.length > 0 && (
+                                    <div className="mt-8">
+                                        <p className="text-sm font-semibold text-slate-900">What you get</p>
+                                        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+                                            {features.map((feature) => (
+                                                <li key={feature} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                                                    <span className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
+                                                    <span>{feature}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                <div className="mt-8 flex flex-wrap gap-3">
+                                    <Button
+                                        variant={isActive ? "destructive" : "outline"}
+                                        disabled={!isActive || loadingItems[subscriptionId]}
+                                        onClick={() => handleAction(subscriptionId, "cancel")}
+                                    >
+                                        {loadingItems[subscriptionId] ? "Processing..." : "Cancel plan"}
+                                    </Button>
+                                    <Button
+                                        variant="default"
+                                        disabled={!isActive || loadingItems[subscriptionId]}
+                                        onClick={() => handleAction(subscriptionId, "update")}
+                                    >
+                                        {loadingItems[subscriptionId] ? "Processing..." : "Update plan"}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-sm">
+                                <h3 className="text-lg font-semibold text-white">Subscription details</h3>
+                                <div className="mt-6 space-y-5">
+                                    <div className="rounded-3xl bg-slate-900 p-5">
+                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Status</p>
+                                        <p className="mt-2 text-sm font-semibold text-slate-100">{subscription.status?.toUpperCase() || "ACTIVE"}</p>
+                                    </div>
+                                    <div className="rounded-3xl bg-slate-900 p-5">
+                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Billing cycle</p>
+                                        <p className="mt-2 text-sm font-semibold text-slate-100">{price.interval ? `${price.interval}ly` : "Monthly"}</p>
+                                    </div>
+                                    <div className="rounded-3xl bg-slate-900 p-5">
+                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Support</p>
+                                        <p className="mt-2 text-sm font-semibold text-slate-100">{features.includes("Email support") ? "Email support included" : "Standard support"}</p>
+                                    </div>
+                                    <div className="rounded-3xl bg-slate-900 p-5">
+                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Started</p>
+                                        <p className="mt-2 text-sm font-semibold text-slate-100">{formatDate(subscription.created)}</p>
+                                    </div>
+                                    <div className="rounded-3xl bg-slate-900 p-5">
+                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Last updated</p>
+                                        <p className="mt-2 text-sm font-semibold text-slate-100">{formatDate(price.updatedAt || price.createdAt)}</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="mt-6 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <p className="text-sm font-semibold text-slate-900">Invoice history</p>
-                                    <p className="text-sm text-slate-500">Recent invoices for this subscription.</p>
+                                    <p className="text-sm text-slate-500">Review recent billing activity for this subscription.</p>
                                 </div>
                                 <Button variant="outline" size="sm" onClick={() => router.push(PROJECT_URL.DASHBOARD)}>
                                     View dashboard
@@ -199,7 +219,7 @@ export default function SubscriptionPage() {
                             </div>
 
                             {invoices.length === 0 ? (
-                                <div className="mt-8 rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-600">
+                                <div className="mt-8 rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-600">
                                     No invoices available yet.
                                 </div>
                             ) : (
