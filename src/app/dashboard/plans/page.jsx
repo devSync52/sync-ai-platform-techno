@@ -142,7 +142,7 @@ export default function PlansPage() {
                                         <div className="flex flex-wrap gap-2">
                                             {plan.prices?.map((price) => (
                                                 <span key={price.id || price.priceId || price.interval} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                                                    {formatAmount(price.amount, price.currency)} / {price.interval}
+                                                    {price.amount > 0 ? formatAmount(price.amount, price.currency) : 'Custom'} {price.amount > 0 ? `/${price.interval}` : 'price'}
                                                 </span>
                                             ))}
                                         </div>
