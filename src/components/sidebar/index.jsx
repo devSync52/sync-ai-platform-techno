@@ -108,6 +108,11 @@ const navGroups = [
     label: "FINANCE",
     items: [
       {
+        label: "Subscription",
+        href: PROJECT_URL.DASHBOARD_SUBSCRIPTION,
+        icon: "wallet"
+      },
+      {
         label: "Credit Wallet",
         href: PROJECT_URL.DASHBOARD_CREDIT_WALLET,
         icon: "wallet"
