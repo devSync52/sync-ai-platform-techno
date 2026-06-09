@@ -261,14 +261,13 @@ export default function SubscriptionPage() {
                                 <div className="grid gap-3">
                                     {detailItems.map((item) => {
                                         const Icon = item.icon
-
                                         return (
                                             <div key={item.label} className={`rounded-lg border p-4 ${item.tone}`}>
                                                 <div className="flex items-start gap-3">
                                                     <Icon className="mt-0.5 size-5 shrink-0" />
                                                     <div className="min-w-0">
                                                         <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">{item.label}</p>
-                                                        <p className="mt-1 break-words text-sm font-bold">{item.value}</p>
+                                                        <p className="mt-1 wrap-break-word text-sm font-bold">{item.value}</p>
                                                     </div>
                                                 </div>
                                             </div>
