@@ -169,7 +169,7 @@ export default function ClientOperation({ open, handleClose }) {
                     </div>
 
                     <DialogFooter className="-mx-6 -mb-5 mt-5 px-6">
-                        <DialogClose asChild>
+                        <DialogClose >
                             <Button variant="outline" type="button" className="w-full sm:w-auto" onClick={handleClose}>
                                 Cancel
                             </Button>

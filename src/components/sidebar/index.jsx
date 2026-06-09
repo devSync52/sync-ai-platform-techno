@@ -101,7 +101,7 @@ const navGroups = [
         label: "Rate Calculator",
         href: PROJECT_URL.DASHBOARD_RATE_CALCULATOR,
         icon: "receipt"
-      },
+      }
     ],
   },
   {
@@ -116,7 +116,13 @@ const navGroups = [
         label: "Credit Wallet",
         href: PROJECT_URL.DASHBOARD_CREDIT_WALLET,
         icon: "wallet"
-      }
+      },
+      {
+        label: "Price Chart",
+        href: PROJECT_URL.DASHBOARD_PRICE_CHART,
+        icon: "chart",
+        superAdminOnly: true
+      },
     ],
   },
   {

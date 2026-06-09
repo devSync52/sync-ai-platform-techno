@@ -24,7 +24,7 @@ export default function DeleteConfirmationModal({
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <DialogClose asChild>
+                    <DialogClose >
                         <Button variant="outline" type="button" disabled={loading}>
                             {cancelLabel}
                         </Button>

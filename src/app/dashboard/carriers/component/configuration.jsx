@@ -143,7 +143,7 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
                     </div>
 
                     <DialogFooter>
-                        <DialogClose asChild>
+                        <DialogClose >
                             <Button variant="outline" type="button" className="w-full sm:w-auto" onClick={handleClose}>
                                 Cancel
                             </Button>
