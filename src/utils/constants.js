@@ -56,6 +56,7 @@ const PROJECT_URL = Object.freeze({
     DASHBOARD_ORDERS_GENERATE: "/dashboard/orders/generate",
     DASHBOARD_ORDER_GENERATE_BY_ID: (id) => `/dashboard/orders/generate/${id}`,
     DASHBOARD_SUBSCRIPTION: "/dashboard/subscription",
+    DASHBOARD_SUBSCRIPTION_UPGRADE: "/dashboard/subscription/upgrade",
     DASHBOARD_SLA_KPI: "/dashboard/sla-kpi",
     DASHBOARD_LABEL_GENERATOR: "/dashboard/label-generator",
     DASHBOARD_CLIENTS: "/dashboard/clients",

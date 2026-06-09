@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useDispatch, useSelector } from "react-redux"
 import { useRouter } from "next/navigation"
+import { ArrowRight, CalendarClock, Check, CreditCard, FileText, Gauge, LayoutDashboard, ReceiptText, ShieldCheck, Sparkles, WalletCards, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "react-hot-toast"
 import axiosInstance from "@/config/axios"
@@ -60,6 +61,36 @@ export default function SubscriptionPage() {
     const product = subscription?.product || {}
     const features = product.features || []
     const subscriptionId = subscription?.subscriptionId || subscription?.id
+    const planName = product.name || "Starter"
+    const billingCycle = price.interval ? `${price.interval}ly` : "Monthly"
+    const supportLabel = features.includes("Email support") ? "Email support included" : "Standard support"
+    const statusLabel = subscription?.status?.toUpperCase() || "ACTIVE"
+    const detailItems = [
+        {
+            label: "Status",
+            value: statusLabel,
+            icon: ShieldCheck,
+            tone: "border-emerald-100 bg-emerald-50 text-emerald-700",
+        },
+        {
+            label: "Billing cycle",
+            value: billingCycle,
+            icon: CalendarClock,
+            tone: "border-purple-100 bg-purple-50 text-purple-700",
+        },
+        {
+            label: "Support",
+            value: supportLabel,
+            icon: Gauge,
+            tone: "border-sky-100 bg-sky-50 text-sky-700",
+        },
+        {
+            label: "Started",
+            value: formatDate(subscription?.created),
+            icon: Sparkles,
+            tone: "border-fuchsia-100 bg-fuchsia-50 text-fuchsia-700",
+        },
+    ]
 
     const updateUser = (payload) => dispatch({ type: USER_LOGIN_CONSTANTS.UPDATE_USER, payload })
 
@@ -91,155 +122,218 @@ export default function SubscriptionPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 py-10">
-            <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-                <div className="mb-8 overflow-hidden rounded-[2rem] border border-slate-200 bg-linear-to-r from-slate-950 via-slate-900 to-slate-950 p-8 text-white shadow-xl shadow-slate-900/10 sm:p-10">
-                    <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="max-w-2xl">
-                            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-300">Subscription</p>
-                            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Your active plan is ready.</h1>
-                            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-300">
-                                Manage your active subscription from a single place. Review plan details, billing, invoices, and take action in one polished view.
+        <div className="min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-7xl">
+                <div className="mb-6 overflow-hidden rounded-lg border border-[#2d2047] bg-[#140821] text-white shadow-xl shadow-purple-950/15">
+                    <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_330px] lg:items-end">
+                        <div>
+                            <div className="mb-5 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-purple-100">
+                                <WalletCards className="size-4" />
+                                Subscription
+                            </div>
+                            <h1 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl">
+                                Manage your plan, billing, and invoices in one place.
+                            </h1>
+                            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#cdbfe2] sm:text-base">
+                                Keep your courier operations aligned with the right subscription tier and quickly review billing activity without leaving the dashboard.
                             </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-3">
-                            <Button variant="default" onClick={() => router.push(PROJECT_URL.SUBSCRIPTION)}>Change plan</Button>
-                            <Button variant="secondary" onClick={() => router.push(PROJECT_URL.DASHBOARD)}>Go to dashboard</Button>
+
+                        <div className="rounded-lg border border-white/10 bg-white/8 p-5">
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#a995c9]">Current spend</p>
+                            <div className="mt-4 flex items-end gap-2">
+                                <span className="text-4xl font-bold">{formatMoney(price.amount, price.currency)}</span>
+                                <span className="mb-1 text-sm font-medium text-[#cdbfe2]">/ {price.interval || "month"}</span>
+                            </div>
+                            <div className="mt-5 flex flex-wrap gap-3">
+                                <Button className="gap-2 bg-white text-[#1b0c2b] hover:bg-purple-50" onClick={() => router.push(PROJECT_URL.DASHBOARD_SUBSCRIPTION_UPGRADE)}>
+                                    Change plan
+                                    <ArrowRight className="size-4" />
+                                </Button>
+                                <Button variant="outline" className="gap-2 border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={() => router.push(PROJECT_URL.DASHBOARD)}>
+                                    <LayoutDashboard className="size-4" />
+                                    Dashboard
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {!hasSubscription ? (
-                    <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
-                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">No subscription</p>
-                        <p className="mt-3 text-2xl font-semibold text-slate-900">Activate a plan to unlock premium features.</p>
-                        <p className="mt-4 text-sm text-slate-600">Pick the best plan for your team and start shipping smarter.</p>
+                    <div className="rounded-lg border border-dashed border-purple-200 bg-white p-10 text-center shadow-sm">
+                        <div className="mx-auto flex size-14 items-center justify-center rounded-lg bg-purple-50 text-purple-700">
+                            <CreditCard className="size-7" />
+                        </div>
+                        <p className="mt-5 text-sm font-bold uppercase tracking-[0.18em] text-purple-700">No subscription</p>
+                        <p className="mt-3 text-2xl font-bold text-gray-950">Activate a plan to unlock premium features.</p>
+                        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-gray-600">Pick the best plan for your team and start shipping smarter.</p>
                         <div className="mt-8 flex justify-center">
-                            <Button onClick={() => router.push(PROJECT_URL.SUBSCRIPTION)}>Browse plans</Button>
+                            <Button className="bg-linear-to-r from-purple-600 to-violet-600 text-white hover:opacity-90" onClick={() => router.push(PROJECT_URL.SUBSCRIPTION)}>
+                                Browse plans
+                            </Button>
                         </div>
                     </div>
                 ) : (
                     <>
-                        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-                            <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-                                <div className="flex items-center justify-between gap-4 rounded-[1.5rem] bg-slate-50 p-5">
+                        <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
+                            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                                <div className="flex flex-col gap-5 border-b border-gray-100 pb-6 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
-                                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current plan</p>
-                                        <h2 className="mt-3 text-3xl font-semibold text-slate-900">{product.name || "Starter"}</h2>
-                                        <p className="mt-2 text-sm text-slate-600">{product.description || "Your active plan details."}</p>
+                                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-purple-700">Current plan</p>
+                                        <h2 className="mt-2 text-3xl font-bold text-gray-950">{planName}</h2>
+                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">{product.description || "Your active plan details."}</p>
                                     </div>
-                                    <div className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">
-                                        {subscription.status?.toUpperCase() || "ACTIVE"}
+                                    <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
+                                        <span className="size-2 rounded-full bg-emerald-500" />
+                                        {statusLabel}
                                     </div>
                                 </div>
 
-                                <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                                    <div className="rounded-[1.5rem] bg-slate-950 p-6 text-white shadow-sm">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Price</p>
-                                        <p className="mt-3 text-4xl font-semibold">
+                                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                                    <div className="rounded-lg bg-[#171024] p-6 text-white shadow-sm">
+                                        <div className="mb-4 flex size-10 items-center justify-center rounded-lg bg-white/10 text-purple-100">
+                                            <CreditCard className="size-5" />
+                                        </div>
+                                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#a995c9]">Plan price</p>
+                                        <p className="mt-3 text-4xl font-bold">
                                             {formatMoney(price.amount, price.currency)}
-                                            <span className="ml-2 text-base font-normal text-slate-300">/ {price.interval || "month"}</span>
+                                            <span className="ml-2 text-base font-medium text-[#cdbfe2]">/ {price.interval || "month"}</span>
                                         </p>
                                     </div>
-                                    <div className="rounded-[1.5rem] bg-slate-50 p-6 shadow-sm">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Billing cycle</p>
-                                        <p className="mt-3 text-xl font-semibold text-slate-900">{price.interval ? `${price.interval}ly` : "Monthly"}</p>
-                                        <p className="mt-2 text-sm text-slate-500">Next renewal date available in billing settings.</p>
+                                    <div className="rounded-lg border border-purple-100 bg-purple-50/70 p-6 shadow-sm">
+                                        <div className="mb-4 flex size-10 items-center justify-center rounded-lg bg-white text-purple-700">
+                                            <CalendarClock className="size-5" />
+                                        </div>
+                                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-purple-700">Billing cycle</p>
+                                        <p className="mt-3 text-2xl font-bold text-gray-950">{billingCycle}</p>
+                                        <p className="mt-2 text-sm leading-6 text-gray-600">Next renewal date is available in billing settings.</p>
                                     </div>
                                 </div>
 
                                 {features.length > 0 && (
-                                    <div className="mt-8">
-                                        <p className="text-sm font-semibold text-slate-900">What you get</p>
+                                    <div className="mt-6">
+                                        <p className="text-sm font-bold text-gray-950">Included benefits</p>
                                         <ul className="mt-4 grid gap-3 sm:grid-cols-2">
                                             {features.map((feature) => (
-                                                <li key={feature} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-                                                    <span className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
-                                                    <span>{feature}</span>
+                                                <li key={feature} className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700">
+                                                    <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+                                                        <Check className="size-4" />
+                                                    </span>
+                                                    <span className="leading-6">{feature}</span>
                                                 </li>
                                             ))}
                                         </ul>
                                     </div>
                                 )}
 
-                                <div className="mt-8 flex flex-wrap gap-3">
+                                <div className="mt-6 flex flex-wrap gap-3 border-t border-gray-100 pt-6">
                                     <Button
                                         variant={isActive ? "destructive" : "outline"}
                                         disabled={!isActive || loadingItems[subscriptionId]}
                                         onClick={() => handleAction(subscriptionId, "cancel")}
+                                        className="gap-2"
                                     >
+                                        <XCircle className="size-4" />
                                         {loadingItems[subscriptionId] ? "Processing..." : "Cancel plan"}
                                     </Button>
                                     <Button
                                         variant="default"
                                         disabled={!isActive || loadingItems[subscriptionId]}
-                                        onClick={() => handleAction(subscriptionId, "update")}
+                                        onClick={() => router.push(PROJECT_URL.DASHBOARD_SUBSCRIPTION_UPGRADE)}
+                                        className="gap-2 bg-linear-to-r from-purple-600 to-violet-600 text-white hover:opacity-90"
                                     >
-                                        {loadingItems[subscriptionId] ? "Processing..." : "Update plan"}
+                                        <Sparkles className="size-4" />
+                                        Update plan
                                     </Button>
                                 </div>
                             </div>
 
-                            <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-sm">
-                                <h3 className="text-lg font-semibold text-white">Subscription details</h3>
-                                <div className="mt-6 space-y-5">
-                                    <div className="rounded-3xl bg-slate-900 p-5">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Status</p>
-                                        <p className="mt-2 text-sm font-semibold text-slate-100">{subscription.status?.toUpperCase() || "ACTIVE"}</p>
+                            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                                <div className="mb-5 flex items-center justify-between gap-4">
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-950">Subscription details</p>
+                                        <p className="mt-1 text-sm text-gray-500">Operational billing summary</p>
                                     </div>
-                                    <div className="rounded-3xl bg-slate-900 p-5">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Billing cycle</p>
-                                        <p className="mt-2 text-sm font-semibold text-slate-100">{price.interval ? `${price.interval}ly` : "Monthly"}</p>
+                                    <div className="flex size-10 items-center justify-center rounded-lg bg-[#171024] text-white">
+                                        <ReceiptText className="size-5" />
                                     </div>
-                                    <div className="rounded-3xl bg-slate-900 p-5">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Support</p>
-                                        <p className="mt-2 text-sm font-semibold text-slate-100">{features.includes("Email support") ? "Email support included" : "Standard support"}</p>
-                                    </div>
-                                    <div className="rounded-3xl bg-slate-900 p-5">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Started</p>
-                                        <p className="mt-2 text-sm font-semibold text-slate-100">{formatDate(subscription.created)}</p>
-                                    </div>
-                                    <div className="rounded-3xl bg-slate-900 p-5">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Last updated</p>
-                                        <p className="mt-2 text-sm font-semibold text-slate-100">{formatDate(price.updatedAt || price.createdAt)}</p>
+                                </div>
+                                <div className="grid gap-3">
+                                    {detailItems.map((item) => {
+                                        const Icon = item.icon
+
+                                        return (
+                                            <div key={item.label} className={`rounded-lg border p-4 ${item.tone}`}>
+                                                <div className="flex items-start gap-3">
+                                                    <Icon className="mt-0.5 size-5 shrink-0" />
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">{item.label}</p>
+                                                        <p className="mt-1 break-words text-sm font-bold">{item.value}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 text-gray-700">
+                                        <div className="flex items-start gap-3">
+                                            <FileText className="mt-0.5 size-5 shrink-0 text-gray-500" />
+                                            <div>
+                                                <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Last updated</p>
+                                                <p className="mt-1 text-sm font-bold text-gray-900">{formatDate(price.updatedAt || price.createdAt)}</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="mt-6 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <p className="text-sm font-semibold text-slate-900">Invoice history</p>
-                                    <p className="text-sm text-slate-500">Review recent billing activity for this subscription.</p>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex size-9 items-center justify-center rounded-lg bg-purple-50 text-purple-700">
+                                        <FileText className="size-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-950">Invoice history</p>
+                                        <p className="text-sm text-gray-500">Review recent billing activity for this subscription.</p>
+                                    </div>
                                 </div>
-                                <Button variant="outline" size="sm" onClick={() => router.push(PROJECT_URL.DASHBOARD)}>
+                                <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push(PROJECT_URL.DASHBOARD)}>
+                                    <LayoutDashboard className="size-4" />
                                     View dashboard
                                 </Button>
                             </div>
 
                             {invoices.length === 0 ? (
-                                <div className="mt-8 rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-600">
-                                    No invoices available yet.
+                                <div className="mt-8 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-600">
+                                    <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-lg bg-white text-gray-500 shadow-sm">
+                                        <ReceiptText className="size-5" />
+                                    </div>
+                                    <p className="font-semibold text-gray-900">No invoices available yet.</p>
+                                    <p className="mt-1">Billing records will appear here after your first invoice is generated.</p>
                                 </div>
                             ) : (
-                                <div className="mt-6 overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                        <thead className="bg-slate-100 text-slate-600">
+                                <div className="mt-6 overflow-x-auto rounded-lg border border-gray-100">
+                                    <table className="min-w-full text-left text-sm">
+                                        <thead className="bg-gray-50 text-gray-600">
                                             <tr>
-                                                <th className="px-4 py-3 font-semibold">Invoice #</th>
-                                                <th className="px-4 py-3 font-semibold">Date</th>
-                                                <th className="px-4 py-3 font-semibold">Amount</th>
-                                                <th className="px-4 py-3 font-semibold">Status</th>
+                                                <th className="px-4 py-3 font-bold">Invoice #</th>
+                                                <th className="px-4 py-3 font-bold">Date</th>
+                                                <th className="px-4 py-3 font-bold">Amount</th>
+                                                <th className="px-4 py-3 font-bold">Status</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-slate-200 bg-white">
+                                        <tbody className="divide-y divide-gray-100 bg-white">
                                             {invoices.map((invoice) => (
                                                 <tr key={invoice.id || invoice.invoiceNumber || invoice.invoiceId}>
-                                                    <td className="px-4 py-4 text-slate-700">{invoice.invoiceNumber || invoice.invoiceId || invoice.id || "—"}</td>
-                                                    <td className="px-4 py-4 text-slate-500">{formatDate(invoice.date || invoice.createdAt || invoice.updatedAt)}</td>
-                                                    <td className="px-4 py-4 text-slate-700">{formatMoney(invoice.amount, invoice.currency)}</td>
-                                                    <td className="px-4 py-4 text-slate-700">{(invoice.status || "Paid").toUpperCase()}</td>
+                                                    <td className="px-4 py-4 font-semibold text-gray-800">{invoice.invoiceNumber || invoice.invoiceId || invoice.id || "-"}</td>
+                                                    <td className="px-4 py-4 text-gray-500">{formatDate(invoice.date || invoice.createdAt || invoice.updatedAt)}</td>
+                                                    <td className="px-4 py-4 font-semibold text-gray-800">{formatMoney(invoice.amount, invoice.currency)}</td>
+                                                    <td className="px-4 py-4">
+                                                        <span className="inline-flex rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                                                            {(invoice.status || "Paid").toUpperCase()}
+                                                        </span>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
