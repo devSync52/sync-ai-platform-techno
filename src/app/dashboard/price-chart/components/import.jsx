@@ -6,7 +6,7 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-hot-toast";
-import { Plus, Trash, Upload } from "lucide-react";
+import { Download, Plus, Trash, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -80,6 +80,25 @@ export default function PriceImport({ open, handleClose }) {
         event.target.value = "";
     };
 
+    const handleDownloadSample = () => {
+        const sampleRows = [
+            "minPrice,maxPrice,serviceCharge",
+            "0,100,5",
+            "100.01,250,8.5",
+            "250.01,500,12"
+        ];
+        const blob = new Blob([sampleRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = "price-chart-import-sample.csv";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+    };
+
     const onSubmit = (data) => {
         dispatch(ImportPricesAction(toPayload(data))).then((response) => {
             toast.success(response.data?.message || "Prices imported successfully", { id: "price-import" });
@@ -101,6 +120,10 @@ export default function PriceImport({ open, handleClose }) {
                     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm text-slate-500">CSV columns: minPrice, maxPrice, serviceCharge</p>
                         <div className="flex gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={handleDownloadSample}>
+                                <Download />
+                                Sample
+                            </Button>
                             <Button type="button" variant="outline" size="sm" onClick={() => append(emptyRow)}>
                                 <Plus />
                                 Add Row
