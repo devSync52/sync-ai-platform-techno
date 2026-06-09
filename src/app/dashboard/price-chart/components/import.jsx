@@ -38,15 +38,10 @@ const parseCsv = (text) => {
     }).filter((row) => row.minPrice !== undefined && row.maxPrice !== undefined);
 };
 
-const toPayload = (data) => ([
-    {
-        priceList: data.priceList.map((price) => ({
-            minPrice: Number(price.minPrice),
-            maxPrice: Number(price.maxPrice),
-            serviceCharge: Number(price.serviceCharge)
-        }))
-    }
-]);
+const toPayload = (data) => data.priceList.map((price) => ({
+    minPrice: Number(price.minPrice), maxPrice: Number(price.maxPrice),
+    serviceCharge: Number(price.serviceCharge)
+}));
 
 export default function PriceImport({ open, handleClose }) {
     const dispatch = useDispatch();
@@ -100,7 +95,7 @@ export default function PriceImport({ open, handleClose }) {
     };
 
     const onSubmit = (data) => {
-        dispatch(ImportPricesAction(toPayload(data))).then((response) => {
+        dispatch(ImportPricesAction({ priceList: toPayload(data) })).then((response) => {
             toast.success(response.data?.message || "Prices imported successfully", { id: "price-import" });
             dispatch(FetchPricesAction());
             handleClose();
