@@ -113,7 +113,7 @@ const carriers = [
   },
   {
     name: "Extensive",
-    slug: "EETENSIVE",
+    slug: "EXTENSIVE",
     subtitle: "Extensive warehouse and fulfillment operations",
     icon: "EX",
     logo: "EX",

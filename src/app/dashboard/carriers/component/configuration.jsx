@@ -24,7 +24,7 @@ const defaultValues = {
 };
 
 export default function ConfigurationComponent({ open, handleClose, carrier, details }) {
-    const providerSlug = carrier?.slug || '', isSellerCloud = providerSlug == 'SELLERCLOUD', isExtensive = providerSlug == 'EETENSIVE';
+    const providerSlug = carrier?.slug || '', isSellerCloud = providerSlug == 'SELLERCLOUD', isExtensive = providerSlug == 'EXTENSIVE';
 
     const dispatch = useDispatch();
 
