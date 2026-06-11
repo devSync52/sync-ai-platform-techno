@@ -13,6 +13,8 @@ import axiosInstance from "@/config/axios";
 import { API_URL } from "@/utils/constants";
 
 const defaultPackage = {
+  inventoryId: "",
+  name: "",
   weight: 3,
   dimension: {
     length: 3,
@@ -37,6 +39,8 @@ const schema = yup.object({
   packageList: yup.object({
     type: yup.string().oneOf(["pak", "parcel"]).required("Package type is required"),
     packages: yup.array().of(yup.object({
+      inventoryId: yup.string(),
+      name: yup.string().required("Product name is required"),
       weight: yup.number().typeError(`Weight is required`).positive(`Weight must be greater than 0`).required(`Weight is required`),
       dimension: yup.object({
         length: yup.number().typeError(`Length is required`).positive(`Length must be greater than 0`).required(`Length is required`),
@@ -54,6 +58,14 @@ const getAddressLabel = (address) => {
   return [name, address?.city, address?.postalcode].filter(Boolean).join(" - ") || getAddressId(address) || "Address";
 };
 
+const getInventoryId = (item) => {
+  const id = item?.id || item?._id || item?.inventoryId;
+  return id == null ? "" : String(id);
+};
+const getInventorySku = (item) => item?.productSku || item?.productId || item?.metadata?.ID || "";
+const getInventoryName = (item) => item?.name || item?.metadata?.ProductName || getInventorySku(item) || "Inventory item";
+const getInventoryLabel = (item) => [getInventoryName(item), getInventorySku(item)].filter(Boolean).join(" - ");
+
 const getQuoteAddressValue = (value) => {
   if (!value) return "";
   if (typeof value == "string" || typeof value == "number") return String(value);
@@ -61,6 +73,8 @@ const getQuoteAddressValue = (value) => {
 };
 
 const normalizePackage = (packageItem = {}) => ({
+  inventoryId: packageItem.inventoryId || packageItem.inventory_id || packageItem.productId || "",
+  name: packageItem.name || packageItem.productName || packageItem.product_name || "",
   weight: packageItem.weight ?? "",
   dimension: {
     length: packageItem.dimension?.length ?? packageItem.length ?? "",
@@ -183,7 +197,11 @@ function QuoteResults({ carriers }) {
 
 export default function GenerateQuoteForm({ quoteId }) {
   const [addresses, setAddresses] = useState([]);
+  const [inventories, setInventories] = useState([]);
+  const [selectedInventoryId, setSelectedInventoryId] = useState("");
+  const [inventorySearch, setInventorySearch] = useState("");
   const [loadingAddresses, setLoadingAddresses] = useState(true);
+  const [loadingInventories, setLoadingInventories] = useState(true);
   const [loadingQuote, setLoadingQuote] = useState(Boolean(quoteId));
   const [quoteCarriers, setQuoteCarriers] = useState([]);
   const [quoteGenerated, setQuoteGenerated] = useState(false);
@@ -221,6 +239,24 @@ export default function GenerateQuoteForm({ quoteId }) {
   }, []);
 
   useEffect(() => {
+    const search = inventorySearch.trim();
+    const timeoutId = setTimeout(() => {
+      setLoadingInventories(true);
+      axiosInstance.get(API_URL.INVENTORY, { params: { page: 1, rowCount: 100, ...(search ? { search } : {}) } }).then((response) => {
+        const payload = response.data?.data ?? [];
+        setInventories(Array.isArray(payload) ? payload : [payload].filter(Boolean));
+      }).catch((error) => {
+        toast.error(error?.response?.data?.message || "Unable to fetch inventory", { id: "quote-inventory" });
+        setInventories([]);
+      }).finally(() => {
+        setLoadingInventories(false);
+      });
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [inventorySearch]);
+
+  useEffect(() => {
     if (!quoteId) return;
 
     axiosInstance.get(API_URL.ORDER_BY_ID(quoteId)).then((response) => {
@@ -234,7 +270,14 @@ export default function GenerateQuoteForm({ quoteId }) {
   }, [quoteId, reset]);
 
   const onSubmit = (data) => {
-    const payload = quoteId ? { ...data, quoteId } : data;
+    const packageList = {
+      ...data.packageList,
+      packages: data.packageList.packages.map((packageItem) => {
+        const { inventoryId, ...packagePayload } = packageItem;
+        return inventoryId ? { ...packagePayload, inventoryId } : packagePayload;
+      })
+    };
+    const payload = quoteId ? { ...data, packageList, quoteId } : { ...data, packageList };
 
     axiosInstance.post(API_URL.ORDER_QUOTE, payload).then((response) => {
       if (response.data.success) {
@@ -256,8 +299,30 @@ export default function GenerateQuoteForm({ quoteId }) {
 
   const handleResetQuote = () => {
     reset(defaultValues);
+    setSelectedInventoryId("");
     setQuoteCarriers([]);
     setQuoteGenerated(false);
+  };
+
+  const getPackageFromInventory = (selectedInventory) => ({
+    inventoryId: getInventoryId(selectedInventory),
+    name: getInventoryName(selectedInventory),
+    weight: selectedInventory.weight || selectedInventory.metadata?.Weight || 0,
+    dimension: {
+      length: selectedInventory.length || selectedInventory.metadata?.ShippingLength || 0,
+      width: selectedInventory.width || selectedInventory.metadata?.ShippingWidth || 0,
+      height: selectedInventory.height || selectedInventory.metadata?.ShippingHeight || 0,
+    },
+    insurance: selectedInventory.price || selectedInventory.metadata?.SitePrice || 0,
+  });
+
+  const handleInventoryChange = (inventoryId) => {
+    const selectedInventory = inventories.find((item) => getInventoryId(item) == inventoryId);
+    if (!selectedInventory) return;
+
+    append(getPackageFromInventory(selectedInventory));
+    setSelectedInventoryId("");
+    setInventorySearch("");
   };
 
   return (
@@ -329,10 +394,35 @@ export default function GenerateQuoteForm({ quoteId }) {
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-medium">Packages</h2>
-              <Button type="button" variant="outline" disabled={loadingQuote || formLocked} onClick={() => append(defaultPackage)}>
-                <Plus />
-                Add Package
-              </Button>
+              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+                <Input
+                  className="w-full sm:w-56"
+                  disabled={loadingQuote || loadingInventories || formLocked}
+                  value={inventorySearch}
+                  onChange={(event) => setInventorySearch(event.target.value)}
+                  placeholder="Search inventory"
+                />
+
+                <Select disabled={loadingQuote || loadingInventories || formLocked} value={selectedInventoryId} onValueChange={handleInventoryChange}>
+                  <SelectTrigger className="w-full min-w-0 sm:w-72">
+                    <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">
+                      {loadingInventories ? "Loading inventory..." : inventories.length ? "Choose inventory" : "No inventory found"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {inventories.map((item) => (
+                      <SelectItem key={getInventoryId(item)} value={getInventoryId(item)}>
+                        {getInventoryLabel(item)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button type="button" variant="outline" disabled={loadingQuote || formLocked} onClick={() => append(defaultPackage)}>
+                  <Plus />
+                  Add Package
+                </Button>
+              </div>
             </div>
 
             {fields.map((field, index) => (
@@ -344,7 +434,13 @@ export default function GenerateQuoteForm({ quoteId }) {
                   </Button>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-5">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <label className="grid gap-2 text-sm font-medium text-slate-700 lg:col-span-2">
+                    Product Name
+                    <Input disabled={loadingQuote || formLocked} {...register(`packageList.packages.${index}.name`)} placeholder="Product name" />
+                    {errors.packageList?.packages?.[index]?.name && <span className="text-xs text-destructive">{errors.packageList.packages[index].name.message}</span>}
+                  </label>
+
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
                     Weight
                     <Input type="number" step="any" disabled={loadingQuote || formLocked} {...register(`packageList.packages.${index}.weight`)} placeholder="0.0" />

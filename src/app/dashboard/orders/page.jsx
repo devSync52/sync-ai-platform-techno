@@ -63,6 +63,18 @@ const getAddressBlock = (address) => {
 const getInitiationAddress = (order) => getAddressBlock(order?.initiation || order?.source || order?.from);
 const getDestinationAddress = (order) => getAddressBlock(order?.destination || order?.to);
 
+const getPackageDetails = (item = {}) => {
+  const inventory = item?.inventory || {};
+
+  return {
+    name: inventory.name || item.name || item.productName || item.product_name || "",
+    weight: inventory.weight ?? item.weight,
+    length: inventory.length ?? item.length,
+    width: inventory.width ?? item.width,
+    height: inventory.height ?? item.height,
+  };
+};
+
 const getBarcodeBars = (value) => {
   const source = String(value || "");
   return Array.from({ length: 42 }, (_, index) => {
@@ -216,16 +228,22 @@ export default function OrdersPage() {
                         </div>
 
                         {
-                          order?.packageLists.length ? order?.packageLists.map((item, index) => (
-                            <div key={item?.id || index} className="space-y-1">
-                              <div className="text-base font-bold text-amber-600">Package #{index + 1}</div>
-                              <div className="text-xs font-semibold text-slate-500">Weight: {formatNumber(item?.weight)} lb</div>
-                              <div className="text-xs font-semibold text-slate-500">
-                                Dimensions: {[item?.length, item?.width, item?.height].filter(Boolean).map(formatNumber).join("*") || "-"} in
+                          order?.packageLists.length ? order?.packageLists.map((item, index) => {
+                            const packageDetails = getPackageDetails(item);
+                            const dimensions = [packageDetails.length, packageDetails.width, packageDetails.height].filter((value) => value !== null && value !== undefined && value !== "").map(formatNumber).join("*") || "-";
+
+                            return (
+                              <div key={item?.id || index} className="space-y-1">
+                                <div className="text-base font-bold text-amber-600">Package #{index + 1}</div>
+                                {packageDetails.name && <div className="text-xs font-semibold text-slate-700">Name: {packageDetails.name}</div>}
+                                <div className="text-xs font-semibold text-slate-500">Weight: {formatNumber(packageDetails.weight)} lb</div>
+                                <div className="text-xs font-semibold text-slate-500">
+                                  Dimensions: {dimensions} in
+                                </div>
+                                <div className="text-xs font-semibold text-slate-500">Insurance: {formatCurrency(item?.insurance || 0, prices.currency, prices.symbol)}</div>
                               </div>
-                              <div className="text-xs font-semibold text-slate-500">Insurance: {formatCurrency(item?.insurance || 0, prices.currency, prices.symbol)}</div>
-                            </div>
-                          )) : (
+                            );
+                          }) : (
                             <div className="text-sm text-muted-foreground">No package details available.</div>
                           )
                         }

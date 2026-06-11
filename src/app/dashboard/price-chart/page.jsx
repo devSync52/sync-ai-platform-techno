@@ -24,6 +24,7 @@ const formatMoney = (value) => {
 };
 
 const getStatus = (price) => price?.status || "active";
+const getPriceType = (price) => price?.priceType || price?.type || "flat";
 const getServiceChargeType = (price) => price?.serviceChargeType || price?.chargeType || "flat";
 
 const formatServiceCharge = (price) => {
@@ -102,6 +103,7 @@ export default function PriceChartPage() {
         dispatch(UpdatePriceAction(priceId, {
             minPrice: Number(price.minPrice || 0),
             maxPrice: Number(price.maxPrice || 0),
+            priceType: getPriceType(price),
             serviceCharge: Number(price.serviceCharge || 0),
             serviceChargeType: getServiceChargeType(price),
             status: nextStatus
@@ -215,6 +217,7 @@ export default function PriceChartPage() {
                                 <th className="py-2 pr-3">Range</th>
                                 <th className="py-2 pr-3">Minimum</th>
                                 <th className="py-2 pr-3">Maximum</th>
+                                <th className="py-2 pr-3">Price Type</th>
                                 <th className="py-2 pr-3">Service Charge</th>
                                 <th className="py-2 pr-3">Charge Type</th>
                                 <th className="py-2 pr-3">Status</th>
@@ -224,13 +227,13 @@ export default function PriceChartPage() {
                         <tbody>
                             {loading && (
                                 <tr>
-                                    <td className="py-6 text-center text-muted-foreground" colSpan={7}>Loading price chart...</td>
+                                    <td className="py-6 text-center text-muted-foreground" colSpan={8}>Loading price chart...</td>
                                 </tr>
                             )}
 
                             {!loading && !sortedPrices.length && (
                                 <tr>
-                                    <td className="py-6 text-center text-muted-foreground" colSpan={7}>No price bands found.</td>
+                                    <td className="py-6 text-center text-muted-foreground" colSpan={8}>No price bands found.</td>
                                 </tr>
                             )}
 
@@ -246,6 +249,7 @@ export default function PriceChartPage() {
                                         </td>
                                         <td className="py-3 pr-3">{formatMoney(price.minPrice)}</td>
                                         <td className="py-3 pr-3">{formatMoney(price.maxPrice)}</td>
+                                        <td className="py-3 pr-3 capitalize">{getPriceType(price)}</td>
                                         <td className="py-3 pr-3">
                                             <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-primary">
                                                 {formatServiceCharge(price)}

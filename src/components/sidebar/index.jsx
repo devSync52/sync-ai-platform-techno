@@ -33,6 +33,11 @@ const navGroups = [
         icon: "package"
       },
       {
+        label: "Inventory",
+        href: PROJECT_URL.DASHBOARD_INVENTORY,
+        icon: "warehouse"
+      },
+      {
         label: "SLA & KPI",
         href: PROJECT_URL.DASHBOARD_SLA_KPI,
         icon: "chart"

@@ -16,17 +16,20 @@ import { CreatePriceAction, FetchPricesAction, UpdatePriceAction } from "@/servi
 const schema = yup.object({
     minPrice: yup.number().typeError("Enter minimum price").min(0, "Minimum price cannot be negative").required("Minimum price is required"),
     maxPrice: yup.number().typeError("Enter maximum price").moreThan(yup.ref("minPrice"), "Maximum price must be greater than minimum price").required("Maximum price is required"),
+    priceType: yup.string().oneOf(["percentage", "flat"]).required("Price type is required"),
     serviceCharge: yup.number().typeError("Enter service charge").min(0, "Service charge cannot be negative").required("Service charge is required"),
     serviceChargeType: yup.string().oneOf(["percentage", "flat"]).required("Service charge type is required"),
     status: yup.string().oneOf(["active", "deactive"])
 });
 
 const getPriceId = (details) => details?.id || details?._id || details?.priceId;
+const getPriceType = (details) => details?.priceType || details?.type || "flat";
 const getServiceChargeType = (details) => details?.serviceChargeType || details?.chargeType || "flat";
 
 const toFormValues = (details) => ({
     minPrice: details?.minPrice ?? "",
     maxPrice: details?.maxPrice ?? "",
+    priceType: getPriceType(details),
     serviceCharge: details?.serviceCharge ?? "",
     serviceChargeType: getServiceChargeType(details),
     status: details?.status || "active"
@@ -36,6 +39,7 @@ const toPayload = (data, isEdit) => {
     const payload = {
         minPrice: Number(data.minPrice),
         maxPrice: Number(data.maxPrice),
+        priceType: data.priceType || "flat",
         serviceCharge: Number(data.serviceCharge),
         serviceChargeType: data.serviceChargeType || "flat"
     };
@@ -97,6 +101,26 @@ export default function PriceOperation({ open, details, handleClose }) {
                                 {errors.maxPrice && <span className="text-xs text-destructive">{errors.maxPrice.message}</span>}
                             </label>
                         </div>
+
+                        <label className="grid gap-2 text-sm font-medium text-slate-700">
+                            Price Type
+                            <Controller
+                                control={control}
+                                name="priceType"
+                                render={({ field }) => (
+                                    <Select value={field.value} onValueChange={field.onChange}>
+                                        <SelectTrigger className="w-full min-w-0">
+                                            <SelectValue placeholder="Select price type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="flat">Flat</SelectItem>
+                                            <SelectItem value="percentage">Percentage</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            />
+                            {errors.priceType && <span className="text-xs text-destructive">{errors.priceType.message}</span>}
+                        </label>
 
                         <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
                             <label className="grid gap-2 text-sm font-medium text-slate-700">
