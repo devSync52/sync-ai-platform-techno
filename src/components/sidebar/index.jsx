@@ -158,6 +158,29 @@ const getUserRole = (user) => {
   return details?.role || details?.userType || details?.profile?.role || details?.profile?.userType || details?.clientProfile?.role || null;
 };
 const isSuperAdmin = (user) => getUserRole(user) == "super_admin";
+const getUserDetails = (user) => user?.data?.user || user?.data || user || {};
+const getUserProfile = (user) => {
+  const details = getUserDetails(user);
+  return details.profile || details.clientProfile || details.userProfile || details;
+};
+const getDisplayName = (user) => {
+  const details = getUserDetails(user);
+  const profile = getUserProfile(user);
+  const fullName = [profile?.firstName || details?.firstName, profile?.lastName || details?.lastName].filter(Boolean).join(" ");
+
+  return details?.name || profile?.name || fullName || details?.username || "User";
+};
+const getDisplayEmail = (user) => {
+  const details = getUserDetails(user);
+  const profile = getUserProfile(user);
+
+  return details?.email || profile?.email || details?.user?.email || "";
+};
+const getInitials = (name, email) => {
+  const source = name && name != "User" ? name : email;
+  const words = String(source || "U").split(/[\s@._-]+/).filter(Boolean);
+  return words.slice(0, 2).map((word) => word.charAt(0).toUpperCase()).join("") || "U";
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -165,6 +188,9 @@ export default function Sidebar() {
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
   const { user } = useSelector((state) => state.authorization);
+  const displayName = getDisplayName(user);
+  const displayEmail = getDisplayEmail(user);
+  const initials = getInitials(displayName, displayEmail);
 
   const dispatch = useDispatch()
   const visibleNavGroups = navGroups.map((group) => ({
@@ -275,12 +301,12 @@ export default function Sidebar() {
         <div ref={accountRef} className="relative w-full">
           <button onClick={() => setAccountOpen((open) => !open)} className={`flex items-center gap-3 rounded-xl border border-white/10 bg-[#12061f] px-3 py-2 text-left transition-all duration-200 ${compressed ? "justify-center px-0 py-0" : "w-full"}`} title="Account menu">
             <div className="flex h-8 w-9 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-600 text-xs font-bold text-white">
-              S
+              {initials}
             </div>
             {!compressed && (
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-white">Soumallya Dey</div>
-                <div className="truncate text-xs text-[#827391]">soumallya.dey@technoexpnent.co.in</div>
+                <div className="truncate text-sm font-semibold text-white">{displayName}</div>
+                <div className="truncate text-xs text-[#827391]">{displayEmail || getUserRole(user) || "Signed in"}</div>
               </div>
             )}
           </button>

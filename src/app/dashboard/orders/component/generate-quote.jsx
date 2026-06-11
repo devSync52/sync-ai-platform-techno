@@ -98,11 +98,43 @@ const normalizeQuoteValues = (order = {}) => {
   };
 };
 
-function QuoteResults({ carriers }) {
+const normalizePriceBands = (response) => {
+  const payload = response.data?.data ?? [];
+
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.prices)) return payload.prices;
+  if (Array.isArray(payload?.items)) return payload.items;
+
+  return [];
+};
+
+const getPriceBandStatus = (priceBand) => priceBand?.status || "active";
+const getServiceBaseAmount = (service) => Number(service?.charge ?? service?.freight ?? 0);
+const getMatchingPriceBand = (priceBands, amount) => {
+  const value = Number(amount || 0);
+
+  return (priceBands || []).find((priceBand) => {
+    const minPrice = Number(priceBand?.minPrice ?? 0);
+    const maxPrice = Number(priceBand?.maxPrice ?? 0);
+    return getPriceBandStatus(priceBand) == "active" && value >= minPrice && value <= maxPrice;
+  });
+};
+const getAppliedServiceCharge = (service, priceBands) => {
+  const baseAmount = getServiceBaseAmount(service);
+  const priceBand = getMatchingPriceBand(priceBands, baseAmount);
+
+  return {
+    amount: priceBand ? Number(priceBand?.serviceCharge ?? priceBand?.price ?? 0) : 0,
+    priceBand,
+  };
+};
+
+function QuoteResults({ carriers, loadingPriceBands, priceBands }) {
   const serviceRows = carriers.flatMap((carrier) => ((carrier.services || []).map((service) => ({ carrier, service }))));
   const warningRows = carriers.filter((carrier) => !(carrier.services || []).length);
   const bestCharge = serviceRows.reduce((lowest, row) => {
-    const charge = Number(row.service?.charge || 0);
+    const serviceCharge = getAppliedServiceCharge(row.service, priceBands);
+    const charge = Number(row.service?.charge || 0) + serviceCharge.amount;
     return lowest == null || charge < lowest ? charge : lowest;
   }, null);
 
@@ -115,7 +147,9 @@ function QuoteResults({ carriers }) {
         {
           serviceRows.map(({ carrier, service }) => {
             const chargeDetails = service.charge_details || [];
-            const isBestPrice = bestCharge != null && Number(service.charge || 0) == bestCharge;
+            const serviceCharge = getAppliedServiceCharge(service, priceBands);
+            const grandTotal = Number(service.charge || 0) + serviceCharge.amount;
+            const isBestPrice = bestCharge != null && grandTotal == bestCharge;
 
             return (
               <div key={`${carrier.carrier_id}-${service.id}-${service.token}`} className="grid gap-4 px-4 py-4 lg:grid-cols-[1fr_320px]">
@@ -149,10 +183,17 @@ function QuoteResults({ carriers }) {
                       </div>
                     ))}
 
+                    <div className="flex justify-between gap-4 text-slate-500">
+                      <span>Service Charge:</span>
+                      <span className="text-red-500">
+                        {loadingPriceBands ? "Loading..." : Number(serviceCharge.amount || 0).toFixed(2)}
+                      </span>
+                    </div>
+
                     <div className="mt-2 border-t border-dashed border-slate-400 pt-2">
                       <div className="flex justify-between gap-4 text-base font-bold">
                         <span>Grand Total({carrier.currency?.code || "USD"}):</span>
-                        <span className="text-red-500">{Number(service.charge || 0).toFixed(2)}</span>
+                        <span className="text-red-500">{grandTotal.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -204,6 +245,8 @@ export default function GenerateQuoteForm({ quoteId }) {
   const [loadingInventories, setLoadingInventories] = useState(true);
   const [loadingQuote, setLoadingQuote] = useState(Boolean(quoteId));
   const [quoteCarriers, setQuoteCarriers] = useState([]);
+  const [priceBands, setPriceBands] = useState([]);
+  const [loadingPriceBands, setLoadingPriceBands] = useState(false);
   const [quoteGenerated, setQuoteGenerated] = useState(false);
 
   const { register, handleSubmit, control, reset, formState: { errors, isSubmitting }, } = useForm({
@@ -269,6 +312,21 @@ export default function GenerateQuoteForm({ quoteId }) {
     });
   }, [quoteId, reset]);
 
+  const fetchPriceBands = () => {
+    setLoadingPriceBands(true);
+
+    return axiosInstance.get(API_URL.PRICES).then((response) => {
+      setPriceBands(normalizePriceBands(response));
+      return response;
+    }).catch((error) => {
+      setPriceBands([]);
+      toast.error(error?.response?.data?.message || "Unable to fetch service charges", { id: "quote-price-chart" });
+      throw error;
+    }).finally(() => {
+      setLoadingPriceBands(false);
+    });
+  };
+
   const onSubmit = (data) => {
     const packageList = {
       ...data.packageList,
@@ -279,9 +337,10 @@ export default function GenerateQuoteForm({ quoteId }) {
     };
     const payload = quoteId ? { ...data, packageList, quoteId } : { ...data, packageList };
 
-    axiosInstance.post(API_URL.ORDER_QUOTE, payload).then((response) => {
+    axiosInstance.post(API_URL.ORDER_QUOTE, payload).then(async (response) => {
       if (response.data.success) {
         const carriers = response.data?.data?.response || [];
+        await fetchPriceBands().catch(() => null);
         setQuoteCarriers(carriers);
         setQuoteGenerated(true);
         toast.success(response.data?.message || "Quote generated successfully", { id: "generate-quote" });
@@ -292,6 +351,7 @@ export default function GenerateQuoteForm({ quoteId }) {
       }
     }).catch((error) => {
       setQuoteCarriers([]);
+      setPriceBands([]);
       setQuoteGenerated(false);
       toast.error(error?.response?.data?.message || "Unable to generate quote", { id: "generate-quote" });
     });
@@ -301,6 +361,7 @@ export default function GenerateQuoteForm({ quoteId }) {
     reset(defaultValues);
     setSelectedInventoryId("");
     setQuoteCarriers([]);
+    setPriceBands([]);
     setQuoteGenerated(false);
   };
 
@@ -491,7 +552,7 @@ export default function GenerateQuoteForm({ quoteId }) {
         </div>
       </form>
 
-      <QuoteResults carriers={quoteCarriers} />
+      <QuoteResults carriers={quoteCarriers} loadingPriceBands={loadingPriceBands} priceBands={priceBands} />
     </>
   );
 }
