@@ -8,10 +8,7 @@ export default function HomePage() {
         <SynCBotMascot />
 
         <div className="flex flex-1 items-end self-stretch">
-          <Link
-            href={PROJECT_URL.DASHBOARD}
-            className="flex h-[60px] w-full items-center justify-center rounded-[10px] bg-gradient-to-r from-[#7b00f5] to-[#7a00e8] text-[22px] font-semibold text-white shadow-[0_12px_28px_rgba(124,0,245,0.22)] transition-opacity hover:opacity-95"
-          >
+          <Link href={PROJECT_URL.LOGIN} className="flex h-[60px] w-full items-center justify-center rounded-[10px] bg-gradient-to-r from-[#7b00f5] to-[#7a00e8] text-[22px] font-semibold text-white shadow-[0_12px_28px_rgba(124,0,245,0.22)] transition-opacity hover:opacity-95">
             Sign in to SynC AI
           </Link>
         </div>

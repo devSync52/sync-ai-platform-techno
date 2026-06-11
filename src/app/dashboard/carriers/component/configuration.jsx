@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
@@ -11,23 +11,33 @@ import { toast } from 'react-hot-toast';
 import { FetchIntegrationsAction } from '@/services/actions/integrations';
 import { useDispatch } from 'react-redux';
 import { API_URL } from '@/utils/constants';
+import { ExternalLink } from 'lucide-react';
 
-const schema = yup.object({
-    appKey: yup.string().required('API Key is required'),
-    appSecret: yup.string().required('API Secret is required'),
-    isActive: yup.boolean(),
-});
+const defaultValues = {
+    appKey: '',
+    appSecret: '',
+    companyName: '',
+    emailId: '',
+    username: '',
+    password: '',
+    isActive: false
+};
 
 export default function ConfigurationComponent({ open, handleClose, carrier, details }) {
-    const providerSlug = carrier?.slug || '';
+    const providerSlug = carrier?.slug || '', isSellerCloud = providerSlug == 'SELLERCLOUD', isExtensive = providerSlug == 'EETENSIVE';
 
     const dispatch = useDispatch();
 
+    const schema = useMemo(() => yup.object({
+        ...(isSellerCloud ? { companyName: yup.string().required('Company name is required') } : {}),
+        ...(isExtensive ? { username: yup.string().email('Enter a valid email').required('Email ID is required') } : {}),
+        appKey: yup.string().required(providerSlug == 'Veryk' ? 'API ID is required' : 'API Key is required'),
+        appSecret: yup.string().required('API Secret is required'),
+        isActive: yup.boolean(),
+    }), [isExtensive, isSellerCloud, providerSlug]);
+
     const { register, handleSubmit, control, formState: { errors }, reset } = useForm({
-        resolver: yupResolver(schema), defaultValues: {
-            appKey: '', appSecret: '',
-            isActive: false
-        }
+        resolver: yupResolver(schema), defaultValues
     });
 
     useEffect(() => {
@@ -35,17 +45,21 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
             reset({
                 appKey: details.appKey || '',
                 appSecret: details.appSecret || '',
+                companyName: details.companyName || '',
+                username: details.username || '',
                 isActive: details.isActive || false
             });
+        } else {
+            reset(defaultValues);
         }
     }, [details, reset]);
 
 
     const onSubmit = (data) => {
         const payload = {
-            ...data,
-            provider: providerSlug,
-            isActive: data.isActive
+            companyName: data.companyName, appKey: data.appKey,
+            appSecret: data.appSecret, username: data.username,
+            provider: providerSlug, isActive: data.isActive
         };
 
         if (details) {
@@ -81,68 +95,89 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-lg">
-                <DialogHeader>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <DialogTitle>Configure {carrier?.name || 'Carrier'}</DialogTitle>
-                            <DialogDescription>
-                                Add API credentials and activate your {carrier?.name || 'carrier'} integration.
-                            </DialogDescription>
+            <DialogContent className="max-w-[min(calc(100vw-2rem),760px)]! gap-0 overflow-hidden p-0">
+                <DialogHeader className="border-b bg-slate-50 px-6 py-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex items-start gap-4">
+                            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-sm font-semibold shadow-sm ${carrier?.logoClass || carrier?.color || 'bg-slate-100'}`}>
+                                {carrier?.logo || carrier?.icon || 'API'}
+                            </div>
+                            <div>
+                                <DialogTitle className="text-xl">Configure {carrier?.name || 'Carrier'}</DialogTitle>
+                                <DialogDescription className="mt-2 max-w-xl">
+                                    Add credentials, verify the provider endpoint, and activate this integration for carrier operations.
+                                </DialogDescription>
+                            </div>
                         </div>
-                        <a href={carrier?.url || '#'} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+                        <a href={carrier?.url || '#'} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border bg-white px-3 py-2 text-sm font-medium text-primary shadow-sm transition hover:bg-slate-100">
                             API Docs
+                            <ExternalLink size={14} />
                         </a>
                     </div>
                 </DialogHeader>
 
-                <form className="space-y-4 pt-4" onSubmit={handleSubmit(onSubmit)}>
-                    {
-                        providerSlug == "Veryk" ? (
+                <form className="px-6 py-5" onSubmit={handleSubmit(onSubmit)}>
+                    <div className="space-y-4">
+                        {
+                            isSellerCloud && (
+                                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                                    Company Name
+                                    <Input
+                                        {...register('companyName')}
+                                        placeholder="Enter company name..."
+                                    />
+                                    {errors.companyName && <span className="text-xs text-destructive">{errors.companyName.message}</span>}
+                                </label>
+                            )
+                        }
+                        {
+                            isExtensive && (
+                                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                                    Email ID
+                                    <Input
+                                        type="email" {...register('username')}
+                                        placeholder="Enter email ID..."
+                                    />
+                                    {errors.username && <span className="text-xs text-destructive">{errors.username.message}</span>}
+                                </label>
+                            )
+                        }
+                        <div className="grid gap-4 sm:grid-cols-2">
                             <label className="grid gap-2 text-sm font-medium text-slate-700">
-                                API ID
+                                {providerSlug == "Veryk" ? "API ID" : "API Key"}
                                 <Input
                                     {...register('appKey')}
-                                    placeholder="Enter API ID..."
+                                    placeholder={isSellerCloud ? "Enter username..." : providerSlug == "Veryk" ? "Enter API ID..." : "Enter API key..."}
                                 />
                                 {errors.appKey && <span className="text-xs text-destructive">{errors.appKey.message}</span>}
                             </label>
-                        ) : (
+
                             <label className="grid gap-2 text-sm font-medium text-slate-700">
-                                API Key
+                                API Secret
                                 <Input
-                                    {...register('appKey')}
-                                    placeholder="Enter API key..."
+                                    type="password" {...register('appSecret')}
+                                    placeholder={isSellerCloud ? "Enter password..." : "Enter API secret..."}
                                 />
-                                {errors.appKey && <span className="text-xs text-destructive">{errors.appKey.message}</span>}
+                                {errors.appSecret && <span className="text-xs text-destructive">{errors.appSecret.message}</span>}
                             </label>
-                        )
-                    }
-
-                    <label className="grid gap-2 text-sm font-medium text-slate-700">
-                        API Secret
-                        <Input
-                            {...register('appSecret')}
-                            placeholder="Enter API secret..."
-                        />
-                        {errors.appSecret && <span className="text-xs text-destructive">{errors.appSecret.message}</span>}
-                    </label>
-
-                    <div className="flex items-center justify-between rounded-2xl bg-slate-100 px-4 py-3">
-                        <div>
-                            <p className="text-sm font-medium text-slate-900">Activate Integration</p>
-                            <p className="text-sm text-slate-500">Enable this carrier for operations.</p>
                         </div>
-                        <Controller control={control} name="isActive" render={({ field }) => (
-                            <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
+
+                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                            <div>
+                                <p className="text-sm font-medium text-slate-900">Activate Integration</p>
+                                <p className="text-sm text-slate-500">Enable this carrier for operations.</p>
+                            </div>
+                            <Controller control={control} name="isActive" render={({ field }) => (
+                                <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                />
+                            )}
                             />
-                        )}
-                        />
+                        </div>
                     </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="-mx-6 -mb-5 mt-5 px-6">
                         <DialogClose >
                             <Button variant="outline" type="button" className="w-full sm:w-auto" onClick={handleClose}>
                                 Cancel

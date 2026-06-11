@@ -10,21 +10,25 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePriceAction, FetchPricesAction, UpdatePriceAction } from "@/services/actions/prices";
 
 const schema = yup.object({
     minPrice: yup.number().typeError("Enter minimum price").min(0, "Minimum price cannot be negative").required("Minimum price is required"),
     maxPrice: yup.number().typeError("Enter maximum price").moreThan(yup.ref("minPrice"), "Maximum price must be greater than minimum price").required("Maximum price is required"),
     serviceCharge: yup.number().typeError("Enter service charge").min(0, "Service charge cannot be negative").required("Service charge is required"),
+    serviceChargeType: yup.string().oneOf(["percentage", "flat"]).required("Service charge type is required"),
     status: yup.string().oneOf(["active", "deactive"])
 });
 
 const getPriceId = (details) => details?.id || details?._id || details?.priceId;
+const getServiceChargeType = (details) => details?.serviceChargeType || details?.chargeType || "flat";
 
 const toFormValues = (details) => ({
     minPrice: details?.minPrice ?? "",
     maxPrice: details?.maxPrice ?? "",
     serviceCharge: details?.serviceCharge ?? "",
+    serviceChargeType: getServiceChargeType(details),
     status: details?.status || "active"
 });
 
@@ -32,7 +36,8 @@ const toPayload = (data, isEdit) => {
     const payload = {
         minPrice: Number(data.minPrice),
         maxPrice: Number(data.maxPrice),
-        serviceCharge: Number(data.serviceCharge)
+        serviceCharge: Number(data.serviceCharge),
+        serviceChargeType: data.serviceChargeType || "flat"
     };
 
     if (isEdit) {
@@ -93,11 +98,33 @@ export default function PriceOperation({ open, details, handleClose }) {
                             </label>
                         </div>
 
-                        <label className="grid gap-2 text-sm font-medium text-slate-700">
-                            Service Charge
-                            <Input type="number" min="0" step="0.01" {...register("serviceCharge")} placeholder="4.50" />
-                            {errors.serviceCharge && <span className="text-xs text-destructive">{errors.serviceCharge.message}</span>}
-                        </label>
+                        <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+                            <label className="grid gap-2 text-sm font-medium text-slate-700">
+                                Service Charge
+                                <Input type="number" min="0" step="0.01" {...register("serviceCharge")} placeholder="4.50" />
+                                {errors.serviceCharge && <span className="text-xs text-destructive">{errors.serviceCharge.message}</span>}
+                            </label>
+
+                            <label className="grid gap-2 text-sm font-medium text-slate-700">
+                                Charge Type
+                                <Controller
+                                    control={control}
+                                    name="serviceChargeType"
+                                    render={({ field }) => (
+                                        <Select value={field.value} onValueChange={field.onChange}>
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue placeholder="Select type" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="flat">Flat</SelectItem>
+                                                <SelectItem value="percentage">Percentage</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                                {errors.serviceChargeType && <span className="text-xs text-destructive">{errors.serviceChargeType.message}</span>}
+                            </label>
+                        </div>
 
                         {isEdit && (
                             <div className="flex items-center justify-between rounded-lg bg-slate-100 px-4 py-3">

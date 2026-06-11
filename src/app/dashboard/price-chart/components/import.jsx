@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import { useDispatch, useSelector } from "react-redux";
@@ -10,19 +10,27 @@ import { Download, Plus, Trash, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FetchPricesAction, ImportPricesAction } from "@/services/actions/prices";
 
 const priceSchema = yup.object({
     minPrice: yup.number().typeError("Enter minimum price").min(0, "Minimum price cannot be negative").required("Minimum price is required"),
     maxPrice: yup.number().typeError("Enter maximum price").moreThan(yup.ref("minPrice"), "Maximum price must be greater than minimum price").required("Maximum price is required"),
-    serviceCharge: yup.number().typeError("Enter service charge").min(0, "Service charge cannot be negative").required("Service charge is required")
+    serviceCharge: yup.number().typeError("Enter service charge").min(0, "Service charge cannot be negative").required("Service charge is required"),
+    serviceChargeType: yup.string().oneOf(["percentage", "flat"]).required("Service charge type is required")
 });
 
 const schema = yup.object({
     priceList: yup.array().of(priceSchema).min(1, "Add at least one price band")
 });
 
-const emptyRow = { minPrice: "", maxPrice: "", serviceCharge: "" };
+const emptyRow = { minPrice: "", maxPrice: "", serviceCharge: "", serviceChargeType: "flat" };
+
+const normalizeChargeType = (value) => {
+    const type = String(value || "flat").trim().toLowerCase();
+
+    return type == "percentage" || type == "percent" || type == "%" ? "percentage" : "flat";
+};
 
 const parseCsv = (text) => {
     const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -33,15 +41,10 @@ const parseCsv = (text) => {
     const dataLines = hasHeader ? lines.slice(1) : lines;
 
     return dataLines.map((line) => {
-        const [minPrice, maxPrice, serviceCharge] = line.split(",").map((value) => value?.trim());
-        return { minPrice, maxPrice, serviceCharge };
+        const [minPrice, maxPrice, serviceCharge, serviceChargeType] = line.split(",").map((value) => value?.trim());
+        return { minPrice, maxPrice, serviceCharge, serviceChargeType: normalizeChargeType(serviceChargeType) };
     }).filter((row) => row.minPrice !== undefined && row.maxPrice !== undefined);
 };
-
-const toPayload = (data) => data.priceList.map((price) => ({
-    minPrice: Number(price.minPrice), maxPrice: Number(price.maxPrice),
-    serviceCharge: Number(price.serviceCharge)
-}));
 
 export default function PriceImport({ open, handleClose }) {
     const dispatch = useDispatch();
@@ -77,10 +80,10 @@ export default function PriceImport({ open, handleClose }) {
 
     const handleDownloadSample = () => {
         const sampleRows = [
-            "minPrice,maxPrice,serviceCharge",
-            "0,100,5",
-            "100.01,250,8.5",
-            "250.01,500,12"
+            "minPrice,maxPrice,serviceCharge,serviceChargeType",
+            "0,100,5,flat",
+            "100.01,250,8.5,percentage",
+            "250.01,500,12,flat"
         ];
         const blob = new Blob([sampleRows.join("\n")], { type: "text/csv;charset=utf-8;" });
         const url = window.URL.createObjectURL(blob);
@@ -95,7 +98,13 @@ export default function PriceImport({ open, handleClose }) {
     };
 
     const onSubmit = (data) => {
-        dispatch(ImportPricesAction({ priceList: toPayload(data) })).then((response) => {
+        dispatch(ImportPricesAction({
+            priceList: data.priceList.map((price) => ({
+                minPrice: Number(price.minPrice), maxPrice: Number(price.maxPrice),
+                serviceCharge: Number(price.serviceCharge),
+                serviceChargeType: price.serviceChargeType || "flat"
+            }))
+        })).then((response) => {
             toast.success(response.data?.message || "Prices imported successfully", { id: "price-import" });
             dispatch(FetchPricesAction());
             handleClose();
@@ -113,7 +122,7 @@ export default function PriceImport({ open, handleClose }) {
 
                 <form className="max-h-[calc(100vh-9rem)] overflow-y-auto px-6 py-5" onSubmit={handleSubmit(onSubmit)}>
                     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm text-slate-500">CSV columns: minPrice, maxPrice, serviceCharge</p>
+                        <p className="text-sm text-slate-500">CSV columns: minPrice, maxPrice, serviceCharge, serviceChargeType</p>
                         <div className="flex gap-2">
                             <Button type="button" variant="outline" size="sm" onClick={handleDownloadSample}>
                                 <Download />
@@ -133,7 +142,7 @@ export default function PriceImport({ open, handleClose }) {
 
                     <div className="space-y-3">
                         {fields.map((field, index) => (
-                            <div key={field.id} className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                            <div key={field.id} className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-[1fr_1fr_1fr_160px_auto]">
                                 <label className="grid gap-1 text-xs font-medium text-slate-600">
                                     Min
                                     <Input type="number" min="0" step="0.01" {...register(`priceList.${index}.minPrice`)} />
@@ -148,6 +157,25 @@ export default function PriceImport({ open, handleClose }) {
                                     Service Charge
                                     <Input type="number" min="0" step="0.01" {...register(`priceList.${index}.serviceCharge`)} />
                                     {errors.priceList?.[index]?.serviceCharge && <span className="text-xs text-destructive">{errors.priceList[index].serviceCharge.message}</span>}
+                                </label>
+                                <label className="grid gap-1 text-xs font-medium text-slate-600">
+                                    Type
+                                    <Controller
+                                        control={control}
+                                        name={`priceList.${index}.serviceChargeType`}
+                                        render={({ field }) => (
+                                            <Select value={field.value} onValueChange={field.onChange}>
+                                                <SelectTrigger className="w-full min-w-0">
+                                                    <SelectValue placeholder="Type" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="flat">Flat</SelectItem>
+                                                    <SelectItem value="percentage">Percentage</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                    {errors.priceList?.[index]?.serviceChargeType && <span className="text-xs text-destructive">{errors.priceList[index].serviceChargeType.message}</span>}
                                 </label>
                                 <Button type="button" variant="outline" size="icon" className="self-end" onClick={() => remove(index)} disabled={fields.length == 1}>
                                     <Trash />

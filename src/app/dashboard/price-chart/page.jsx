@@ -24,6 +24,17 @@ const formatMoney = (value) => {
 };
 
 const getStatus = (price) => price?.status || "active";
+const getServiceChargeType = (price) => price?.serviceChargeType || price?.chargeType || "flat";
+
+const formatServiceCharge = (price) => {
+    const amount = Number(price?.serviceCharge || 0);
+
+    if (getServiceChargeType(price) == "percentage") {
+        return `${amount % 1 == 0 ? amount : amount.toFixed(2)}%`;
+    }
+
+    return formatMoney(amount);
+};
 
 const getStateLabel = (state, index) => {
     if (typeof state == "string") return state;
@@ -92,6 +103,7 @@ export default function PriceChartPage() {
             minPrice: Number(price.minPrice || 0),
             maxPrice: Number(price.maxPrice || 0),
             serviceCharge: Number(price.serviceCharge || 0),
+            serviceChargeType: getServiceChargeType(price),
             status: nextStatus
         })).then((response) => {
             toast.success(response.data?.message || "Price status updated successfully", { id: "price-status" });
@@ -204,6 +216,7 @@ export default function PriceChartPage() {
                                 <th className="py-2 pr-3">Minimum</th>
                                 <th className="py-2 pr-3">Maximum</th>
                                 <th className="py-2 pr-3">Service Charge</th>
+                                <th className="py-2 pr-3">Charge Type</th>
                                 <th className="py-2 pr-3">Status</th>
                                 <th className="py-2 pr-3">Actions</th>
                             </tr>
@@ -211,13 +224,13 @@ export default function PriceChartPage() {
                         <tbody>
                             {loading && (
                                 <tr>
-                                    <td className="py-6 text-center text-muted-foreground" colSpan={6}>Loading price chart...</td>
+                                    <td className="py-6 text-center text-muted-foreground" colSpan={7}>Loading price chart...</td>
                                 </tr>
                             )}
 
                             {!loading && !sortedPrices.length && (
                                 <tr>
-                                    <td className="py-6 text-center text-muted-foreground" colSpan={6}>No price bands found.</td>
+                                    <td className="py-6 text-center text-muted-foreground" colSpan={7}>No price bands found.</td>
                                 </tr>
                             )}
 
@@ -235,9 +248,10 @@ export default function PriceChartPage() {
                                         <td className="py-3 pr-3">{formatMoney(price.maxPrice)}</td>
                                         <td className="py-3 pr-3">
                                             <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-primary">
-                                                {formatMoney(price.serviceCharge)}
+                                                {formatServiceCharge(price)}
                                             </span>
                                         </td>
+                                        <td className="py-3 pr-3 capitalize">{getServiceChargeType(price)}</td>
                                         <td className="py-3 pr-3">
                                             <button
                                                 type="button"

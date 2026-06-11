@@ -17,6 +17,8 @@ const carriers = [
     slug: "USPS",
     subtitle: "United States Postal Service",
     icon: "US",
+    logo: "US",
+    logoClass: "bg-slate-100 text-slate-950",
     color: "bg-slate-100",
     url: "https://api.usps.com/",
     development: "https://developers.usps.com/",
@@ -26,6 +28,8 @@ const carriers = [
     slug: "FedEx",
     subtitle: "Federal Express Corporation",
     icon: "📦",
+    logo: "FX",
+    logoClass: "bg-purple-100 text-purple-950",
     color: "bg-purple-100",
     url: "https://apis.fedex.com/",
     development: "https://developers.fedex.com/"
@@ -35,6 +39,8 @@ const carriers = [
     slug: "UPS",
     subtitle: "United Parcel Service",
     icon: "⬛",
+    logo: "UPS",
+    logoClass: "bg-stone-100 text-stone-950",
     color: "bg-stone-100",
     url: "https://onlinetools.ups.com/api/",
     development: "https://developers.ups.com/"
@@ -44,6 +50,8 @@ const carriers = [
     slug: "GoFo",
     subtitle: "GoFo Last-Mile Delivery",
     icon: "🚀",
+    logo: "GF",
+    logoClass: "bg-red-100 text-red-950",
     color: "bg-red-100",
     url: "https://api.gofo.com/v1/",
     development: "https://www.gofo.com/us/developers"
@@ -53,6 +61,8 @@ const carriers = [
     slug: "DHL",
     subtitle: "DHL Express Worldwide",
     icon: "🌍",
+    logo: "DHL",
+    logoClass: "bg-yellow-100 text-yellow-950",
     color: "bg-yellow-100",
     url: "https://api-eu.dhl.com/",
     development: "https://developer.dhl.com/"
@@ -62,6 +72,8 @@ const carriers = [
     slug: "AmazonLogistics",
     subtitle: "Amazon Logistics Network",
     icon: "📬",
+    logo: "AMZ",
+    logoClass: "bg-orange-100 text-orange-950",
     color: "bg-orange-100",
     url: "https://sellingpartnerapi-na.amazon.com/",
     development: "https://developer.amazonservices.com/"
@@ -71,6 +83,8 @@ const carriers = [
     slug: "LaserShip",
     subtitle: "LaserShip Regional Delivery",
     icon: "⚡",
+    logo: "LS",
+    logoClass: "bg-orange-100 text-orange-950",
     color: "bg-orange-100",
     url: "https://api.lasership.com/",
     development: "https://www.lasership.com/api"
@@ -80,6 +94,8 @@ const carriers = [
     slug: "OnTrac",
     subtitle: "OnTrac Regional Carrier",
     icon: "🔵",
+    logo: "OT",
+    logoClass: "bg-blue-100 text-blue-950",
     color: "bg-blue-200",
     url: "https://www.ontrac.com/trackingres.asp",
     development: "https://www.ontrac.com/developers"
@@ -89,9 +105,33 @@ const carriers = [
     slug: "Veryk",
     subtitle: "Veryk Multi-Carrier Platform — discounted FedEx, USPS & UPS rates",
     icon: "🏷️",
+    logo: "VK",
+    logoClass: "bg-yellow-100 text-yellow-950",
     color: "bg-yellow-100",
     url: "https://api.veryk.com/v1/",
     development: "https://www.veryk.com/api-documentation"
+  },
+  {
+    name: "Extensive",
+    slug: "EETENSIVE",
+    subtitle: "Extensive warehouse and fulfillment operations",
+    icon: "EX",
+    logo: "EX",
+    logoClass: "bg-cyan-100 text-cyan-950",
+    color: "bg-cyan-100",
+    url: "https://api.extensiv.com/",
+    development: "https://developer.extensiv.com/"
+  },
+  {
+    name: "SellerCloud",
+    slug: "SELLERCLOUD",
+    subtitle: "SellerCloud commerce and order management",
+    icon: "SC",
+    logo: "SC",
+    logoClass: "bg-indigo-100 text-slate-950",
+    color: "bg-indigo-100",
+    url: "https://api.sellercloud.com/",
+    development: "https://developer.sellercloud.com/"
   },
 ];
 
@@ -150,8 +190,8 @@ export default function CarrierPage() {
             <div key={carrier.slug} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:shadow-md">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <div className={`flex h-14 w-14 items-center justify-center rounded-2xl border text-lg font-semibold shadow-sm ${carrier.color}`}>
-                    {carrier.icon}
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold shadow-sm ${carrier.logoClass || carrier.color}`}>
+                    {carrier.logo || carrier.icon}
                   </div>
 
                   <div className="flex-1">
