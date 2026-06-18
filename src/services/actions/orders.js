@@ -2,7 +2,7 @@ import axiosInstance from '@/config/axios';
 import { ORDER_CONSTANTS } from '../constants/orders';
 import { API_URL } from '@/utils/constants';
 
-export const SLA_AT_RISK_LIMIT = 10;
+export const SLA_AT_RISK_LIMIT = 5;
 
 export const defaultSlaMetrics = {
     total: {
@@ -32,6 +32,7 @@ export const normalizeSlaDashboard = (responseData) => {
 
     return {
         atRiskOrders: Array.isArray(data.atRiskOrders) ? data.atRiskOrders : [],
+        performance: Array.isArray(data.performance) ? data.performance : [],
         deliveryTrend: Array.isArray(data.deliveryTrend)
             ? data.deliveryTrend.map((item) => ({
                 week: item.week || item.day || item.label || "-",

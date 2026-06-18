@@ -7,6 +7,7 @@ const ORDERS_INIT = {
     data: [],
     slaDashboard: {
         atRiskOrders: [],
+        performance: [],
         deliveryTrend: [],
         pagination: {
             page: 1,

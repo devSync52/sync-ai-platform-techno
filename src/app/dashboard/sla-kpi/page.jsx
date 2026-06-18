@@ -20,16 +20,12 @@ const clientData = [
     { name: "MedSupply", percent: 96, count: 75, color: "bg-green-600" },
 ];
 
-const slaData = [
-    { name: "Next Day", percent: 88, count: "145 pkgs", color: "bg-purple-600" },
-    { name: "2-Day", percent: 93, count: "280 pkgs", color: "bg-green-600" },
-    { name: "Ground", percent: 96, count: "420 pkgs", color: "bg-green-600" },
-    { name: "Economy", percent: 91, count: "180 pkgs", color: "bg-purple-600" },
-];
-
 const ProgressRow = ({ item }) => (
-    <div className="grid grid-cols-[100px_1fr_24px_60px] items-center gap-4 mb-4">
-        <span className="text-sm text-gray-600">{item.name}</span>
+    <div className="mb-4 grid grid-cols-[minmax(120px,180px)_1fr_42px_72px] items-center gap-4">
+        <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-gray-700">{item.name}</div>
+            {item.subLabel && <div className="mt-0.5 truncate text-xs text-gray-500">{item.subLabel}</div>}
+        </div>
 
         <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
             <div
@@ -100,7 +96,7 @@ export default function SlaKpiPage() {
     const dispatch = useDispatch();
     const [page, setPage] = useState(1);
 
-    const details = { atRiskOrders: [], deliveryTrend: [], pagination: defaultSlaPagination, metrics: defaultSlaMetrics, }
+    const details = { atRiskOrders: [], performance: [], deliveryTrend: [], pagination: defaultSlaPagination, metrics: defaultSlaMetrics, }
     const { slaDashboard = details, slaLoading, slaError, message, } = useSelector((state) => state.orders);
 
     const fetchSlaDashboard = useCallback(() => {
@@ -116,9 +112,15 @@ export default function SlaKpiPage() {
     };
 
     const metrics = { ...defaultSlaMetrics, ...(slaDashboard.metrics || {}) };
-    const weeklyTrendData = useMemo(() => slaDashboard.deliveryTrend, [slaDashboard.deliveryTrend]);
-    const atRiskOrders = slaDashboard.atRiskOrders;
-    const pagination = slaDashboard.pagination || defaultSlaPagination;
+
+    const slaPerformance = useMemo(() => (slaDashboard.performance || []).map((item) => ({
+        name: item.name || "-",
+        subLabel: item.carrierName || "-",
+        percent: item.percentage || 0,
+        count: `${item.packages || 0} pkgs`,
+        color: (item.percentage || 0) >= 50 ? "bg-green-600" : (item.percentage || 0) > 0 ? "bg-amber-500" : "bg-slate-300",
+    })), [slaDashboard.performance]);
+
     const error = slaError ? (message || "Unable to fetch SLA data.") : "";
 
     return (
@@ -291,7 +293,7 @@ export default function SlaKpiPage() {
 
                     <div className="mt-6 h-85">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={weeklyTrendData} margin={{ top: 12, right: 18, left: -16, bottom: 22 }} barCategoryGap="18%">
+                            <BarChart data={slaDashboard.deliveryTrend} margin={{ top: 12, right: 18, left: -16, bottom: 22 }} barCategoryGap="18%">
                                 <CartesianGrid stroke="#ece8f2" strokeDasharray="3 4" vertical={false} />
                                 <XAxis dataKey="week" axisLine={false} height={54} interval={0} minTickGap={0} tick={{ fill: "#7d708e", fontSize: 10 }} tickLine={false} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 12 }} />
@@ -347,8 +349,12 @@ export default function SlaKpiPage() {
                         Performance by SLA Type
                     </h2>
 
-                    {slaData.map((item, index) => (
-                        <ProgressRow key={index} item={item} />
+                    {slaLoading ? (
+                        <div className="py-4 text-sm text-slate-500">Loading SLA performance...</div>
+                    ) : !slaPerformance.length ? (
+                        <div className="py-4 text-sm text-slate-500">No SLA performance data found.</div>
+                    ) : slaPerformance.map((item) => (
+                        <ProgressRow key={`${item.name}-${item.subLabel}`} item={item} />
                     ))}
                 </div>
             </div>
@@ -384,13 +390,13 @@ export default function SlaKpiPage() {
                                         Loading at-risk orders...
                                     </td>
                                 </tr>
-                            ) : !atRiskOrders.length ? (
+                            ) : !slaDashboard.atRiskOrders.length ? (
                                 <tr>
                                     <td colSpan={6} className="py-8 text-center text-muted-foreground">
                                         No at-risk orders found.
                                     </td>
                                 </tr>
-                            ) : atRiskOrders.map((order) => {
+                            ) : slaDashboard.atRiskOrders.map((order) => {
                                 const daysLeft = getDaysLeftLabel(order?.estimatedDeliveryDate);
                                 const route = getRouteDetails(order);
 
@@ -443,8 +449,8 @@ export default function SlaKpiPage() {
                     </table>
                 </div>
                 <DashboardPagination
-                    pagination={pagination} currentPage={page} loading={slaLoading}
-                    itemCount={atRiskOrders.length} onPageChange={handlePageChange}
+                    pagination={slaDashboard?.pagination} currentPage={page} loading={slaLoading}
+                    itemCount={slaDashboard?.pagination?.rowCount} onPageChange={handlePageChange}
                 />
             </Card>
         </div>
