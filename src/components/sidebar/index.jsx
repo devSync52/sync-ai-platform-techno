@@ -76,12 +76,12 @@ const navGroups = [
         label: "SLA Rules",
         href: PROJECT_URL.DASHBOARD_SLA_RULES,
         icon: "timer"
-      },
-      {
-        label: "Bulk Import",
-        href: PROJECT_URL.DASHBOARD_BULK_IMPORT,
-        icon: "upload"
-      },
+      }
+      // {
+      //   label: "Bulk Import",
+      //   href: PROJECT_URL.DASHBOARD_BULK_IMPORT,
+      //   icon: "upload"
+      // },
     ],
   },
   {
