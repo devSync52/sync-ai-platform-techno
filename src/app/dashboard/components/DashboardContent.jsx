@@ -8,6 +8,7 @@ import MetricCard from "./MetricCard";
 import { metrics as staticMetrics } from "./data";
 import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics } from "@/services/actions/orders";
 import { useDispatch, useSelector } from "react-redux";
+import Link from "next/link";
 
 const PerformanceChart = dynamic(() => import("./PerformanceChart"), { ssr: false });
 const DiscrepancyDonut = dynamic(() => import("./DiscrepancyDonut"), { ssr: false });
@@ -52,7 +53,7 @@ export default function DashboardContent() {
       {
         label: "At-Risk Orders",
         value: `${slaMetrics.atRisk?.value ?? 0}`,
-        badge: "At Risk",
+        badge: `${slaMetrics.atRisk?.percentage ?? 0}%`,
         color: "amber",
         icon: "clock",
       },
@@ -66,6 +67,7 @@ export default function DashboardContent() {
       day: item.day || item.week,
       onTime: item.onTime || 0,
       late: item.late || 0,
+      atRisk: item.atRisk || 0,
     }))
   ), [deliveryTrend]);
 
@@ -103,7 +105,7 @@ export default function DashboardContent() {
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <DashboardPanel title="Delivery Performance (7 Days)" action="View KPI">
+          <DashboardPanel title="Delivery Performance" action="View KPI">
             <PerformanceChart data={performanceData} />
           </DashboardPanel>
 
@@ -128,10 +130,10 @@ function DashboardPanel({ title, action, children }) {
     <section className="interactive-card motion-scale-in rounded-xl border border-[#ece8f2] bg-white/95 p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)] backdrop-blur">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-base font-semibold">{title}</h2>
-        <a className="flex items-center gap-2 text-xs font-medium text-[#5f5876] transition hover:text-[#6700e7]" href="#">
+        <Link className="flex items-center gap-2 text-xs font-medium text-[#5f5876] transition hover:text-[#6700e7]" href="#">
           {action}
           <IconAsset name="arrowRight" className="h-4 w-4" />
-        </a>
+        </Link>
       </div>
       {children}
     </section>

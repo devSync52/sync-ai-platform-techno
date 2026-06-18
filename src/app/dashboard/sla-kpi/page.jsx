@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import DashboardPagination from "@/components/DashboardPagination";
 import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics, defaultSlaPagination } from "@/services/actions/orders";
 import { useDispatch, useSelector } from "react-redux";
-import { Bot, Car, CircleCheck, CircleX, Clock, Plus, RefreshCw } from 'lucide-react';
+import { ArrowRight, Bot, Car, CircleCheck, CircleX, Clock, MapPin, Plus, RefreshCw } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import moment from "moment";
 
 const atRiskLimit = SLA_AT_RISK_LIMIT;
 
@@ -64,31 +65,35 @@ function TrendTooltip({ active, payload, label }) {
     );
 }
 
-const getLocation = (address) => {
-    return [address.city, address.province?.code || address.province?.name].filter(Boolean).join(", ") || "-";
+const getLocation = (address = {}) => {
+    return [address.city, address.province?.code || address.province?.name, address.postalcode].filter(Boolean).join(", ") || "-";
 };
 
-const getOrderRoute = (order) => {
-    const origin = getLocation(order?.initiation), destination = getLocation(order?.destination);
+const getRouteDetails = (order) => {
+    const origin = order?.initiation || {};
+    const destination = order?.destination || {};
 
-    if (origin == "-" && destination == "-") return "-";
-    return `${origin} -> ${destination}`;
+    return {
+        originName: origin.name || origin.company || "Origin",
+        originLocation: getLocation(origin),
+        destinationName: destination.name || destination.company || "Destination",
+        destinationLocation: getLocation(destination),
+    };
 };
 
 const getDaysLeftLabel = (estimatedDeliveryDate) => {
     if (!estimatedDeliveryDate) return { label: "-", className: "bg-slate-50 text-slate-700 inset-ring-slate-600/10" };
 
-    const today = new Date();
-    const target = new Date(estimatedDeliveryDate);
-    today.setHours(0, 0, 0, 0);
-    target.setHours(0, 0, 0, 0);
+    const target = moment(estimatedDeliveryDate);
+    if (!target.isValid()) return { label: "-", className: "bg-slate-50 text-slate-700 inset-ring-slate-600/10" };
 
-    const daysLeft = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const daysLeft = target.startOf("day").diff(moment().startOf("day"), "days");
+    const dateLabel = target.format("MMM D, YYYY");
 
-    if (daysLeft < 0) return { label: `${Math.abs(daysLeft)}d overdue`, className: "bg-red-50 text-red-700 inset-ring-red-600/10" };
-    if (daysLeft == 0) return { label: "Due Today", className: "bg-red-50 text-red-700 inset-ring-red-600/10" };
-    if (daysLeft == 1) return { label: "1 day left", className: "bg-orange-50 text-orange-700 inset-ring-orange-600/10" };
-    return { label: `${daysLeft} days left`, className: "bg-amber-50 text-amber-700 inset-ring-amber-600/10" };
+    if (daysLeft < 0) return { label: `${Math.abs(daysLeft)}d overdue`, detail: dateLabel, className: "bg-red-50 text-red-700 inset-ring-red-600/10" };
+    if (daysLeft == 0) return { label: "Due today", detail: dateLabel, className: "bg-red-50 text-red-700 inset-ring-red-600/10" };
+    if (daysLeft == 1) return { label: "1 day left", detail: dateLabel, className: "bg-orange-50 text-orange-700 inset-ring-orange-600/10" };
+    return { label: `${daysLeft} days left`, detail: dateLabel, className: "bg-amber-50 text-amber-700 inset-ring-amber-600/10" };
 };
 
 export default function SlaKpiPage() {
@@ -286,9 +291,9 @@ export default function SlaKpiPage() {
 
                     <div className="mt-6 h-85">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={slaDashboard.deliveryTrend} margin={{ top: 12, right: 18, left: -16, bottom: 0 }}>
+                            <BarChart data={weeklyTrendData} margin={{ top: 12, right: 18, left: -16, bottom: 22 }} barCategoryGap="18%">
                                 <CartesianGrid stroke="#ece8f2" strokeDasharray="3 4" vertical={false} />
-                                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 10 }} />
+                                <XAxis dataKey="week" axisLine={false} height={54} interval={0} minTickGap={0} tick={{ fill: "#7d708e", fontSize: 10 }} tickLine={false} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 12 }} />
                                 <Tooltip content={<TrendTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
                                 <Bar dataKey="onTime" stackId="a" fill="#079a35" radius={[0, 0, 0, 0]} />
@@ -368,7 +373,7 @@ export default function SlaKpiPage() {
                                 <th className="py-2 pr-3">Carrier</th>
                                 <th className="py-2 pr-3">Client</th>
                                 <th className="py-2 pr-3">SLA</th>
-                                <th className="py-2 pr-3">Route</th>
+                                <th className="min-w-[340px] py-2 pr-3">Route Details</th>
                                 <th className="py-2 pr-3">Days Left</th>
                             </tr>
                         </thead>
@@ -387,22 +392,49 @@ export default function SlaKpiPage() {
                                 </tr>
                             ) : atRiskOrders.map((order) => {
                                 const daysLeft = getDaysLeftLabel(order?.estimatedDeliveryDate);
+                                const route = getRouteDetails(order);
 
                                 return (
-                                    <tr key={order?.id || order?.orderId || order?.waybillNumber} className="border-b last:border-0">
-                                        <td className="py-2 pr-3 font-medium">{order?.waybillNumber || order?.orderId || "-"}</td>
+                                    <tr key={order?.id || order?.orderId || order?.waybillNumber} className="border-b align-top last:border-0">
+                                        <td className="py-4 pr-3">
+                                            <div className="font-semibold text-slate-950">{order?.waybillNumber || order?.orderId || "-"}</div>
+                                            <div className="mt-1 text-xs text-slate-500">{order?.referenceNumber || order?.orderId || "-"}</div>
+                                        </td>
                                         <td className="py-2 pr-3">
                                             <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-sm font-medium text-blue-700 inset-ring inset-ring-blue-700/10">
                                                 {order?.carrier?.name}
                                             </span>
                                         </td>
-                                        <td className="py-2 pr-3">{order?.destination?.company || order?.destination.name || "-"}</td>
-                                        <td className="py-2 pr-3">{order?.service?.name}</td>
-                                        <td className="py-2 pr-3">{getOrderRoute(order)}</td>
-                                        <td className="py-2 pr-3">
+                                        <td className="py-2 pr-3">{order?.destination?.company || order?.destination?.name || "-"}</td>
+                                        <td className="py-2 pr-3">{order?.service?.name || "-"}</td>
+                                        <td className="py-3 pr-3">
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+                                                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500">
+                                                            <MapPin className="size-3.5 text-blue-500" />
+                                                            From
+                                                        </div>
+                                                        <div className="mt-1 truncate font-semibold text-slate-950">{route.originName}</div>
+                                                        <div className="text-xs text-slate-500">{route.originLocation}</div>
+                                                    </div>
+                                                    <ArrowRight className="size-4 text-slate-400" />
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500">
+                                                            <MapPin className="size-3.5 text-amber-500" />
+                                                            To
+                                                        </div>
+                                                        <div className="mt-1 truncate font-semibold text-slate-950">{route.destinationName}</div>
+                                                        <div className="text-xs text-slate-500">{route.destinationLocation}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 pr-3">
                                             <span className={`inline-flex items-center rounded-md px-2 py-1 text-sm font-medium inset-ring ${daysLeft.className}`}>
                                                 {daysLeft.label}
                                             </span>
+                                            {daysLeft.detail && <div className="mt-1 text-xs text-slate-500">{daysLeft.detail}</div>}
                                         </td>
                                     </tr>
                                 );
