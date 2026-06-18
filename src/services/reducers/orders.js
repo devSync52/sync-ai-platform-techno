@@ -2,8 +2,26 @@ import { ORDER_CONSTANTS } from '../constants/orders';
 
 const ORDERS_INIT = {
     loading: false,
+    slaLoading: false,
     deleting: false,
     data: [],
+    slaDashboard: {
+        atRiskOrders: [],
+        deliveryTrend: [],
+        pagination: {
+            page: 1,
+            rowCount: 10,
+            total: 0,
+            offset: 0,
+            totalPages: 1
+        },
+        metrics: {
+            total: { value: 0, label: "Total", subtitle: "Shipments tracked" },
+            onTime: { value: 0, percentage: 0, label: "On-Time", subtitle: "0 deliveries" },
+            late: { value: 0, percentage: 0, label: "Late", subtitle: "0 deliveries" },
+            atRisk: { value: 0, percentage: 0, label: "At-Risk", subtitle: "Orders at risk" },
+        },
+    },
     states: {},
     pagination: {
         page: 1,
@@ -13,7 +31,8 @@ const ORDERS_INIT = {
         totalPages: 1
     },
     message: null,
-    error: null
+    error: null,
+    slaError: null
 };
 
 export const OrderReducer = (state = ORDERS_INIT, action) => {
@@ -38,6 +57,31 @@ export const OrderReducer = (state = ORDERS_INIT, action) => {
                 loading: false,
                 error: action.payload.error,
                 message: action.payload.message || null
+            };
+
+        case ORDER_CONSTANTS.FETCH_SLA_DASHBOARD_REQUEST:
+            return { ...state, slaLoading: true, message: null, slaError: null };
+
+        case ORDER_CONSTANTS.FETCH_SLA_DASHBOARD_SUCCESS:
+            return {
+                ...state,
+                slaLoading: false,
+                slaDashboard: action.payload.data || ORDERS_INIT.slaDashboard,
+                message: action.payload.message || null,
+                slaError: null
+            };
+
+        case ORDER_CONSTANTS.FETCH_SLA_DASHBOARD_FAILURE:
+            return {
+                ...state,
+                slaLoading: false,
+                slaError: action.payload.error,
+                message: action.payload.message || null,
+                slaDashboard: {
+                    ...state.slaDashboard,
+                    atRiskOrders: [],
+                    pagination: ORDERS_INIT.slaDashboard.pagination
+                }
             };
 
         case ORDER_CONSTANTS.DELETE_ORDER_REQUEST:

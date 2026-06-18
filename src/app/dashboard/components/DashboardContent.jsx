@@ -1,16 +1,74 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import IconAsset from "@/components/IconAsset";
 import AiKpiSummary from "./AiKpiSummary";
 import MetricCard from "./MetricCard";
-import { metrics } from "./data";
+import { metrics as staticMetrics } from "./data";
+import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics } from "@/services/actions/orders";
+import { useDispatch, useSelector } from "react-redux";
 
 const PerformanceChart = dynamic(() => import("./PerformanceChart"), { ssr: false });
 const DiscrepancyDonut = dynamic(() => import("./DiscrepancyDonut"), { ssr: false });
 const CarrierOnTimeChart = dynamic(() => import("./CarrierOnTimeChart"), { ssr: false });
 
 export default function DashboardContent() {
+  const dispatch = useDispatch();
+  const { slaDashboard } = useSelector((state) => state.orders);
+  const slaMetrics = useMemo(() => ({
+    ...defaultSlaMetrics,
+    ...(slaDashboard?.metrics || {}),
+  }), [slaDashboard?.metrics]);
+  const deliveryTrend = useMemo(() => slaDashboard?.deliveryTrend || [], [slaDashboard?.deliveryTrend]);
+
+  useEffect(() => {
+    dispatch(FetchSlaDashboardAction({ page: 1, limit: SLA_AT_RISK_LIMIT })).catch(() => { });
+  }, [dispatch]);
+
+  const dashboardMetrics = useMemo(() => {
+    const liveMetrics = [
+      {
+        label: "Total Shipments",
+        value: `${slaMetrics.total?.value ?? 0}`,
+        badge: "Total",
+        color: "blue",
+        icon: "truck",
+      },
+      {
+        label: "On-Time Deliveries",
+        value: `${slaMetrics.onTime?.value ?? 0}`,
+        badge: `${slaMetrics.onTime?.percentage ?? 0}%`,
+        color: "green",
+        icon: "check",
+      },
+      {
+        label: "Late Deliveries",
+        value: `${slaMetrics.late?.value ?? 0}`,
+        badge: `${slaMetrics.late?.percentage ?? 0}%`,
+        color: "red",
+        icon: "close",
+      },
+      {
+        label: "At-Risk Orders",
+        value: `${slaMetrics.atRisk?.value ?? 0}`,
+        badge: "At Risk",
+        color: "amber",
+        icon: "clock",
+      },
+    ];
+
+    return [...liveMetrics, ...staticMetrics.slice(4)];
+  }, [slaMetrics]);
+
+  const performanceData = useMemo(() => (
+    deliveryTrend.map((item) => ({
+      day: item.day || item.week,
+      onTime: item.onTime || 0,
+      late: item.late || 0,
+    }))
+  ), [deliveryTrend]);
+
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-8 pb-8 pt-7 xl:px-9">
       <div className="mx-auto">
@@ -38,7 +96,7 @@ export default function DashboardContent() {
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {
-            metrics.map((metric, index) => (
+            dashboardMetrics.map((metric, index) => (
               <MetricCard key={metric.label} metric={metric} index={index} />
             ))
           }
@@ -46,7 +104,7 @@ export default function DashboardContent() {
 
         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <DashboardPanel title="Delivery Performance (7 Days)" action="View KPI">
-            <PerformanceChart />
+            <PerformanceChart data={performanceData} />
           </DashboardPanel>
 
           <DashboardPanel title="Discrepancy Types" action="View">

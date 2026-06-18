@@ -26,11 +26,15 @@ function PerformanceTooltip({ active, payload, label }) {
   );
 }
 
-export default function PerformanceChart() {
+export default function PerformanceChart({ data = deliveryData }) {
+  const chartData = data?.length ? data : deliveryData;
+  const maxValue = Math.max(...chartData.map((item) => Math.max(item.onTime || 0, item.late || 0)), 60);
+  const yMax = Math.ceil(maxValue / 10) * 10;
+
   return (
     <div className="h-59.5 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={deliveryData} margin={{ top: 8, right: 18, left: -16, bottom: 0 }}>
+        <LineChart data={chartData} margin={{ top: 8, right: 18, left: -16, bottom: 0 }}>
           <defs>
             <linearGradient id="onTimeFill" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="#7b00f5" stopOpacity={0.18} />
@@ -45,8 +49,7 @@ export default function PerformanceChart() {
             tick={{ fill: "#67607c", fontSize: 11 }}
           />
           <YAxis
-            domain={[0, 60]}
-            ticks={[0, 15, 30, 45, 60]}
+            domain={[0, yMax]}
             axisLine={false}
             tickLine={false}
             tick={{ fill: "#67607c", fontSize: 11 }}

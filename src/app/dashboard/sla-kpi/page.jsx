@@ -1,20 +1,15 @@
 "use client";
 
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, } from '@/components/ui/select'
 import { Button } from "@/components/ui/button";
-
-import { Bot, Car, CircleCheck, CircleX, Clock, Download, Plus } from 'lucide-react';
+import DashboardPagination from "@/components/DashboardPagination";
+import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics, defaultSlaPagination } from "@/services/actions/orders";
+import { useDispatch, useSelector } from "react-redux";
+import { Bot, Car, CircleCheck, CircleX, Clock, Plus, RefreshCw } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const weeklyTrendData = [
-    { week: "W1", onTime: 170, late: 16, atRisk: 9 },
-    { week: "W2", onTime: 162, late: 20, atRisk: 10 },
-    { week: "W3", onTime: 174, late: 14, atRisk: 11 },
-    { week: "W4", onTime: 169, late: 19, atRisk: 12 },
-    { week: "W5", onTime: 182, late: 15, atRisk: 8 },
-    { week: "W6", onTime: 188, late: 13, atRisk: 7 },
-];
+const atRiskLimit = SLA_AT_RISK_LIMIT;
 
 const clientData = [
     { name: "Acme Corp", percent: 94, count: 120, color: "bg-green-600" },
@@ -69,18 +64,68 @@ function TrendTooltip({ active, payload, label }) {
     );
 }
 
+const getLocation = (address) => {
+    return [address.city, address.province?.code || address.province?.name].filter(Boolean).join(", ") || "-";
+};
+
+const getOrderRoute = (order) => {
+    const origin = getLocation(order?.initiation), destination = getLocation(order?.destination);
+
+    if (origin == "-" && destination == "-") return "-";
+    return `${origin} -> ${destination}`;
+};
+
+const getDaysLeftLabel = (estimatedDeliveryDate) => {
+    if (!estimatedDeliveryDate) return { label: "-", className: "bg-slate-50 text-slate-700 inset-ring-slate-600/10" };
+
+    const today = new Date();
+    const target = new Date(estimatedDeliveryDate);
+    today.setHours(0, 0, 0, 0);
+    target.setHours(0, 0, 0, 0);
+
+    const daysLeft = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysLeft < 0) return { label: `${Math.abs(daysLeft)}d overdue`, className: "bg-red-50 text-red-700 inset-ring-red-600/10" };
+    if (daysLeft == 0) return { label: "Due Today", className: "bg-red-50 text-red-700 inset-ring-red-600/10" };
+    if (daysLeft == 1) return { label: "1 day left", className: "bg-orange-50 text-orange-700 inset-ring-orange-600/10" };
+    return { label: `${daysLeft} days left`, className: "bg-amber-50 text-amber-700 inset-ring-amber-600/10" };
+};
 
 export default function SlaKpiPage() {
+    const dispatch = useDispatch();
+    const [page, setPage] = useState(1);
+
+    const details = { atRiskOrders: [], deliveryTrend: [], pagination: defaultSlaPagination, metrics: defaultSlaMetrics, }
+    const { slaDashboard = details, slaLoading, slaError, message, } = useSelector((state) => state.orders);
+
+    const fetchSlaDashboard = useCallback(() => {
+        dispatch(FetchSlaDashboardAction({ page, limit: atRiskLimit })).catch(() => { });
+    }, [dispatch, page]);
+
+    useEffect(() => {
+        fetchSlaDashboard()
+    }, [fetchSlaDashboard, page]);
+
+    const handlePageChange = (nextPage) => {
+        setPage(nextPage);
+    };
+
+    const metrics = { ...defaultSlaMetrics, ...(slaDashboard.metrics || {}) };
+    const weeklyTrendData = useMemo(() => slaDashboard.deliveryTrend, [slaDashboard.deliveryTrend]);
+    const atRiskOrders = slaDashboard.atRiskOrders;
+    const pagination = slaDashboard.pagination || defaultSlaPagination;
+    const error = slaError ? (message || "Unable to fetch SLA data.") : "";
+
     return (
-        <div className="p-6 space-y-6 overflow-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-2 mb-4">
-                    <h1 className="text-2xl font-bold text-primary">SLA & KPI Dashboard</h1>
-                    <p>On-time performance, at-risk orders, and carrier SLA compliance.</p>
+        <div className="min-h-0 flex-1 space-y-6 overflow-auto bg-[#faf9fc] p-6 xl:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-2">
+                    <h1 className="text-3xl font-bold tracking-normal text-[#090514]">SLA & KPI Dashboard</h1>
+                    <p className="max-w-2xl text-sm text-[#68607f]">On-time performance, at-risk orders, and carrier SLA compliance across active shipments.</p>
                 </div>
             </div>
 
-            <Card className="p-4 bg-white">
+            {/* <Card className="p-4 bg-white">
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                     <div className="w-full sm:w-48">
                         <Select className="w-full">
@@ -150,113 +195,112 @@ export default function SlaKpiPage() {
                         </Button>
                     </div>
                 </div>
-            </Card>
+            </Card> */}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
                 {/* Total  */}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-42.5">
+                <div className="min-h-42.5 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
-                            <span className="text-[20px] text-black font-medium">Total</span>
-                            <p className=" text-[16px] text-[#5E6B8A]">
+                            <span className="text-lg font-semibold text-[#090514]">Total</span>
+                            <p className="text-sm text-[#68607f]">
                                 Shipments tracked
                             </p>
                         </div>
-                        <div className="w-15 h-15 rounded-xl bg-blue-100 flex items-center justify-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                             <Car size={30} color="#155dfc" />
                         </div>
                     </div>
-                    <h2 className="text-4xl font-bold text-black leading-none">0</h2>
+                    <h2 className="text-4xl font-bold leading-none text-[#090514]">{metrics.total?.value ?? 0}</h2>
                 </div>
 
                 {/* On-Time */}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-42.5">
+                <div className="min-h-42.5 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
-                            <span className="text-[20px] text-black font-medium">On-Time</span>
-                            <p className="text-[16px] text-[#5E6B8A]">
-                                0 deliveries
+                            <span className="text-lg font-semibold text-[#090514]">On-Time</span>
+                            <p className="text-sm text-[#68607f]">
+                                {metrics.onTime?.subtitle || "0 deliveries"}
                             </p>
                         </div>
-                        <div className="w-15 h-15 rounded-xl bg-green-100 flex items-center justify-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-50 text-green-600">
                             <CircleCheck size={30} color="#047c3b" />
                         </div>
                     </div>
-                    <h2 className="text-4xl font-bold text-green-600 leading-none">0%</h2>
+                    <h2 className="text-4xl font-bold text-green-600 leading-none">{metrics.onTime?.percentage ?? 0}%</h2>
                 </div>
 
                 {/* Late */}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-42.5">
+                <div className="min-h-42.5 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
-                            <span className="text-[20px] text-black font-medium">Late</span>
-                            <p className="text-[16px] text-[#5E6B8A]">
-                                0 deliveries
+                            <span className="text-lg font-semibold text-[#090514]">Late</span>
+                            <p className="text-sm text-[#68607f]">
+                                {metrics.late?.subtitle || "0 deliveries"}
                             </p>
                         </div>
-                        <div className="w-15 h-15 rounded-xl bg-red-100 flex items-center justify-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-50 text-red-600">
                             <CircleX size={30} color="#dc2626" />
                         </div>
                     </div>
-                    <h2 className="text-4xl font-bold text-red-500 leading-none">0%</h2>
+                    <h2 className="text-4xl font-bold text-red-500 leading-none">{metrics.late?.percentage ?? 0}%</h2>
                 </div>
 
                 {/* At-Risk */}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-42.5">
+                <div className="min-h-42.5 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
-                            <span className="text-[20px] text-black font-medium">At-Risk</span>
-                            <p className="text-[16px] text-[#5E6B8A]">
-                                Orders at risk
+                            <span className="text-lg font-semibold text-[#090514]">At-Risk</span>
+                            <p className="text-sm text-[#68607f]">
+                                {metrics.atRisk?.subtitle || "Orders at risk"}
                             </p>
                         </div>
-                        <div className="w-15 h-15 rounded-xl bg-orange-100 flex items-center justify-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
                             <Clock size={30} color="#ea580c" />
                         </div>
                     </div>
-                    <h2 className="text-4xl font-bold text-orange-500 leading-none">0</h2>
+                    <h2 className="text-4xl font-bold text-orange-500 leading-none">{metrics.atRisk?.percentage ?? 0}%</h2>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
                 {/* Left Card */}
-                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 p-6 min-h-50">
-                    <h2 className="text-black font-semibold text-xl">
-                        Weekly Delivery Trend
-                    </h2>
+                <div className="min-h-50 rounded-xl border border-[#ece8f2] bg-white p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)] lg:col-span-2">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <h2 className="text-xl font-semibold text-[#090514]">Weekly Delivery Trend</h2>
+                            <p className="mt-1 text-sm text-[#68607f]">On-time, late, and at-risk shipment volume by week.</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />On Time</span>
+                            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" />Late</span>
+                            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />At Risk</span>
+                        </div>
+                    </div>
 
                     <div className="mt-6 h-85">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={weeklyTrendData} margin={{ top: 12, right: 18, left: -16, bottom: 0 }}>
+                            <BarChart data={slaDashboard.deliveryTrend} margin={{ top: 12, right: 18, left: -16, bottom: 0 }}>
                                 <CartesianGrid stroke="#ece8f2" strokeDasharray="3 4" vertical={false} />
-                                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 12 }} />
+                                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 10 }} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 12 }} />
                                 <Tooltip content={<TrendTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-                                <Bar dataKey="onTime" stackId="a" fill="#079a35" radius={[8, 8, 0, 0]} />
-                                <Bar dataKey="late" stackId="a" fill="#ff3b4f" radius={[8, 8, 0, 0]} />
+                                <Bar dataKey="onTime" stackId="a" fill="#079a35" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="late" stackId="a" fill="#ff3b4f" radius={[0, 0, 0, 0]} />
                                 <Bar dataKey="atRisk" stackId="a" fill="#f6a500" radius={[8, 8, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
-
-                    <div className="flex items-center gap-2 text-sm text-slate-500 justify-center">
-                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                        On Time
-                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-                        Late
-                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
-                        At Risk
-                    </div>
                 </div>
 
                 {/* Right Card */}
-                <div className="bg-[#13002f] rounded-2xl p-6 flex flex-col justify-between min-h-50">
+                <div className="flex min-h-50 flex-col justify-between rounded-xl bg-[#13002f] p-6 shadow-[0_18px_48px_rgba(19,0,47,0.18)]">
 
                     <div>
                         <div className="flex items-center gap-2 mb-6">
@@ -283,7 +327,7 @@ export default function SlaKpiPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
 
                 {/* Left Card */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                <div className="rounded-xl border border-[#ece8f2] bg-white p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <h2 className="text-xl font-semibold text-gray-900 mb-8">
                         Performance by Client
                     </h2>
@@ -293,7 +337,7 @@ export default function SlaKpiPage() {
                 </div>
 
                 {/* Right Card */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                <div className="rounded-xl border border-[#ece8f2] bg-white p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <h2 className="text-xl font-semibold text-gray-900 mb-8">
                         Performance by SLA Type
                     </h2>
@@ -304,8 +348,18 @@ export default function SlaKpiPage() {
                 </div>
             </div>
 
-            <Card className="p-4 bg-white">
-                <div className="mb-3 text-xl font-semibold">At-Risk Orders</div>
+            <Card className="rounded-xl border-[#ece8f2] bg-white p-4 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="text-xl font-semibold">At-Risk Orders</div>
+                    <Button variant="outline" size="icon" type="button" disabled={slaLoading} onClick={fetchSlaDashboard}>
+                        <RefreshCw className={slaLoading ? "animate-spin" : ""} />
+                    </Button>
+                </div>
+                {error && (
+                    <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                        {error}
+                    </div>
+                )}
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="text-muted-foreground">
@@ -319,25 +373,47 @@ export default function SlaKpiPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr className="border-b last:border-0">
-                                <td className="py-2 pr-3 font-medium">1Z999AA10123…</td>
-                                <td className="py-2 pr-3">
-                                    <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-sm font-medium text-blue-700 inset-ring inset-ring-blue-700/10">
-                                        UPS
-                                    </span>
-                                </td>
-                                <td className="py-2 pr-3">Acme Corp</td>
-                                <td className="py-2 pr-3">Next Day</td>
-                                <td className="py-2 pr-3">Los Angeles, CA → New York, NY</td>
-                                <td className="py-2 pr-3">
-                                    <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700 inset-ring inset-ring-red-600/10">
-                                        Due Today
-                                    </span>
-                                </td>
-                            </tr>
+                            {slaLoading ? (
+                                <tr>
+                                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                                        Loading at-risk orders...
+                                    </td>
+                                </tr>
+                            ) : !atRiskOrders.length ? (
+                                <tr>
+                                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                                        No at-risk orders found.
+                                    </td>
+                                </tr>
+                            ) : atRiskOrders.map((order) => {
+                                const daysLeft = getDaysLeftLabel(order?.estimatedDeliveryDate);
+
+                                return (
+                                    <tr key={order?.id || order?.orderId || order?.waybillNumber} className="border-b last:border-0">
+                                        <td className="py-2 pr-3 font-medium">{order?.waybillNumber || order?.orderId || "-"}</td>
+                                        <td className="py-2 pr-3">
+                                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-sm font-medium text-blue-700 inset-ring inset-ring-blue-700/10">
+                                                {order?.carrier?.name}
+                                            </span>
+                                        </td>
+                                        <td className="py-2 pr-3">{order?.destination?.company || order?.destination.name || "-"}</td>
+                                        <td className="py-2 pr-3">{order?.service?.name}</td>
+                                        <td className="py-2 pr-3">{getOrderRoute(order)}</td>
+                                        <td className="py-2 pr-3">
+                                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-sm font-medium inset-ring ${daysLeft.className}`}>
+                                                {daysLeft.label}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
+                <DashboardPagination
+                    pagination={pagination} currentPage={page} loading={slaLoading}
+                    itemCount={atRiskOrders.length} onPageChange={handlePageChange}
+                />
             </Card>
         </div>
     );
