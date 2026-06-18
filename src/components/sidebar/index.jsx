@@ -33,6 +33,11 @@ const navGroups = [
         icon: "package"
       },
       {
+        label: "Generate Quote",
+        href: PROJECT_URL.DASHBOARD_ORDERS_GENERATE,
+        icon: "package"
+      },
+      {
         label: "Inventory",
         href: PROJECT_URL.DASHBOARD_INVENTORY,
         icon: "warehouse"
