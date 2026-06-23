@@ -107,11 +107,11 @@ const navGroups = [
         href: PROJECT_URL.DASHBOARD_RATE_INTELLIGENCE,
         icon: "chart"
       },
-      {
-        label: "Rate Calculator",
-        href: PROJECT_URL.DASHBOARD_RATE_CALCULATOR,
-        icon: "receipt"
-      }
+      // {
+      //   label: "Rate Calculator",
+      //   href: PROJECT_URL.DASHBOARD_RATE_CALCULATOR,
+      //   icon: "receipt"
+      // }
     ],
   },
   {

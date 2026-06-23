@@ -1,7 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
-import GenerateQuoteForm from "../component/generate-quote";
+import GenerateQuoteForm from "./component/generate-quote";
 import { PROJECT_URL } from "@/utils/constants";
 
 export default function GenerateQuotePage() {
