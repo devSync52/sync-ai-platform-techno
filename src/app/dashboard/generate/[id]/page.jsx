@@ -1,8 +1,9 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
-import GenerateQuoteForm from "../../component/generate-quote";
+// import GenerateQuoteForm from "../../component/generate-quote";
 import { PROJECT_URL } from "@/utils/constants";
+import GenerateQuoteForm from "../component/generate-quote";
 
 export default async function UpdateQuotePage({ params }) {
   const { id } = await params;
