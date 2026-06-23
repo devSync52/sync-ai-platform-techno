@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   Timer,
   Truck,
+  Zap,
 } from "lucide-react";
 import SlaRuleOperationPopup from "./components/SlaRuleOperationPopup";
 
@@ -106,11 +107,11 @@ export default function SlaRulesPage() {
   const [operationOpen, setOperationOpen] = useState(false);
 
   return (
-    <div className="space-y-6 p-6">
-      <section className="overflow-hidden rounded-2xl border border-purple-100 bg-white shadow-sm">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-center">
+    <div className="space-y-6 p-6 xl:p-8">
+      <section className="overflow-hidden rounded-2xl border border-purple-100 bg-white shadow-[0_18px_45px_rgba(35,19,62,0.08)]">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_360px] lg:items-stretch">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-primary ring-1 ring-purple-100">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-[0_16px_32px_rgba(103,0,231,0.22)]">
               <FileSliders className="h-6 w-6" />
             </div>
             <div className="max-w-3xl">
@@ -122,21 +123,47 @@ export default function SlaRulesPage() {
               <p className="mt-1 text-sm text-muted-foreground">
                 Define service level agreements by carrier, service type, zone, and client segment.
               </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="rounded-full border border-green-100 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">4 active</span>
+                <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">1 draft</span>
+                <span className="rounded-full border border-purple-100 bg-purple-50 px-3 py-1 text-xs font-semibold text-primary">Carrier overrides enabled</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button variant="outline" size="lg">
-              <RefreshCcw />
-              Refresh
-            </Button>
-            <Button size="lg" onClick={() => setOperationOpen(true)}>
-              <Plus />
-              Create Rule
-            </Button>
+          <div className="rounded-2xl border border-purple-100 bg-[#fbf8ff] p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-slate-950">Policy health</div>
+                <p className="mt-1 text-xs leading-5 text-[#6d607d]">Rules are evaluated from most specific to fallback defaults.</p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-primary shadow-sm">
+                <Zap className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <div className="text-xs text-muted-foreground">Coverage</div>
+                <div className="mt-1 text-xl font-bold text-slate-950">92%</div>
+              </div>
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <div className="text-xs text-muted-foreground">Fallbacks</div>
+                <div className="mt-1 text-xl font-bold text-orange-500">1</div>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <Button variant="outline" size="lg" className="flex-1">
+                <RefreshCcw />
+                Refresh
+              </Button>
+              <Button size="lg" className="flex-1" onClick={() => setOperationOpen(true)}>
+                <Plus />
+                Create
+              </Button>
+            </div>
           </div>
         </div>
-        <div className="grid gap-3 border-t border-purple-100 bg-purple-50/40 px-6 py-3 text-sm text-[#4b3b64] md:grid-cols-3">
+        <div className="grid gap-3 border-t border-purple-100 bg-purple-50/40 px-6 py-4 text-sm text-[#4b3b64] md:grid-cols-3">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-primary" />
             Commitments drive due dates
@@ -157,7 +184,7 @@ export default function SlaRulesPage() {
           const Icon = stat.icon;
 
           return (
-            <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(27,18,44,0.10)]">
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
                   <div className="text-[15px] font-semibold text-[#4B5A8A]">{stat.label}</div>
@@ -173,8 +200,8 @@ export default function SlaRulesPage() {
         })}
       </div>
 
-      <Card className="bg-white p-0 shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-gray-100 p-4 xl:flex-row xl:items-center xl:justify-between">
+      <Card className="overflow-hidden rounded-2xl border-gray-200 bg-white p-0 shadow-[0_14px_35px_rgba(35,19,62,0.06)]">
+        <div className="flex flex-col gap-4 border-b border-gray-100 bg-white p-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <div className="flex items-center gap-2 text-lg font-semibold text-slate-950">
               <Filter className="h-5 w-5 text-primary" />
@@ -196,7 +223,7 @@ export default function SlaRulesPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted-foreground">
+            <thead className="bg-[#faf9fc] text-xs uppercase tracking-wide text-muted-foreground">
               <tr className="border-b text-left">
                 <th className="px-4 py-3">Rule</th>
                 <th className="px-4 py-3">Carrier</th>
