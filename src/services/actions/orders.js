@@ -33,15 +33,14 @@ export const normalizeSlaDashboard = (responseData) => {
     return {
         atRiskOrders: Array.isArray(data.atRiskOrders) ? data.atRiskOrders : [],
         performance: Array.isArray(data.performance) ? data.performance : [],
-        deliveryTrend: Array.isArray(data.deliveryTrend)
-            ? data.deliveryTrend.map((item) => ({
-                week: item.week || item.day || item.label || "-",
-                day: item.day || item.week || item.label || "-",
-                onTime: item.deliveryCounts?.onTime || item.onTime || 0,
-                late: item.deliveryCounts?.delayed || item.deliveryCounts?.late || item.late || 0,
-                atRisk: item.deliveryCounts?.atRisk || item.atRisk || 0,
-            })).reverse()
-            : [],
+        clientPerformance: Array.isArray(data.clientPerformance) ? data.clientPerformance : [],
+        deliveryTrend: Array.isArray(data.deliveryTrend) ? data.deliveryTrend.map((item) => ({
+            week: item.week || item.day || item.label || "-",
+            day: item.day || item.week || item.label || "-",
+            onTime: item.deliveryCounts?.onTime || item.onTime || 0,
+            late: item.deliveryCounts?.delayed || item.deliveryCounts?.late || item.late || 0,
+            atRisk: item.deliveryCounts?.atRisk || item.atRisk || 0,
+        })).reverse() : [],
         pagination: data.pagination || defaultSlaPagination,
         metrics: { ...defaultSlaMetrics, ...(data.metrics || {}) },
     };

@@ -1,197 +1,257 @@
 "use client";
 
-// import "@/styles/daypicker-custom.css";
-
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Button } from "@/components/ui/button";
+} from "@/components/ui/select";
+import DiscrepancyClaimPopup from "./components/DiscrepancyClaimPopup";
+import DiscrepancyOperationPopup from "./components/DiscrepancyOperationPopup";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  CircleDot,
+  Download,
+  FileSearch,
+  Filter,
+  Plus,
+  Search,
+  ShieldAlert,
+  Sparkles,
+  TrendingDown,
+} from "lucide-react";
 
-import { Bot, Car, Check, CircleCheck, CircleX, Clock, Download, Plus, RefreshCcw, ShieldAlert } from 'lucide-react';
+const discrepancyStats = [
+  {
+    label: "Total Discrepancies",
+    value: "1",
+    helper: "Detected from invoice audit",
+    icon: FileSearch,
+    iconClass: "bg-slate-100 text-slate-700 ring-slate-200",
+    valueClass: "text-slate-950",
+  },
+  {
+    label: "Total Variance",
+    value: "$100",
+    helper: "Potential claim amount",
+    icon: TrendingDown,
+    iconClass: "bg-red-50 text-red-600 ring-red-100",
+    valueClass: "text-red-500",
+  },
+  {
+    label: "Open",
+    value: "1",
+    helper: "Needs review",
+    icon: CircleDot,
+    iconClass: "bg-orange-50 text-orange-600 ring-orange-100",
+    valueClass: "text-orange-500",
+  },
+  {
+    label: "High Severity",
+    value: "0",
+    helper: "At-risk billing events",
+    icon: ShieldAlert,
+    iconClass: "bg-rose-50 text-rose-600 ring-rose-100",
+    valueClass: "text-red-500",
+  },
+];
 
+const discrepancies = [
+  {
+    id: "#DSC-0001",
+    carrier: "UPS",
+    type: "Overcharge",
+    tracking: "500",
+    amount: "$100.00",
+    status: "Open",
+    severity: "Medium",
+    created: "May 7, 2026",
+  },
+];
 
 export default function Discrepancies() {
-
+  const [discrepancyPopupOpen, setDiscrepancyPopupOpen] = useState(false);
+  const [claimPopup, setClaimPopup] = useState({ open: false, discrepancy: null });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-6">
+      <section className="overflow-hidden rounded-2xl border border-purple-100 bg-white shadow-sm">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-primary ring-1 ring-purple-100">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <div className="max-w-3xl">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-primary">
+                Invoice variance monitor
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </div>
+              <h1 className="text-2xl font-bold text-primary">Discrepancy Analysis</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Billing variances categorized by type - create claims directly from any discrepancy.
+              </p>
+            </div>
+          </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2 mb-4">
-          <h1 className="text-2xl font-bold text-primary">Discrepancy Analysis</h1>
-          <p>Billing variances categorized by type — create claims directly from any discrepancy.</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button variant="outline" size="lg">
+              <Download />
+              Export CSV
+            </Button>
+            <Button variant="outline" size="lg" onClick={() => setDiscrepancyPopupOpen(true)}>
+              <Plus />
+              New Discrepancy
+            </Button>
+            <Button size="lg" onClick={() => setClaimPopup({ open: true, discrepancy: discrepancies[0] })}>
+              <Plus />
+              Create Claim
+            </Button>
+          </div>
         </div>
-        <div>
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+        <div className="grid gap-3 border-t border-purple-100 bg-purple-50/40 px-6 py-3 text-sm text-[#4b3b64] md:grid-cols-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            AI-ready discrepancy explanations
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-primary" />
+            Filter by carrier, severity, status, and type
+          </div>
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-primary" />
+            Prioritize recoverable billing events
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {discrepancyStats.map((stat) => {
+          const Icon = stat.icon;
+
+          return (
+            <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[15px] font-semibold text-[#4B5A8A]">{stat.label}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{stat.helper}</div>
+                </div>
+                <div className={`flex h-11 w-11 items-center justify-center rounded-xl ring-1 ${stat.iconClass}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+              </div>
+              <h2 className={`text-4xl font-bold leading-none ${stat.valueClass}`}>{stat.value}</h2>
+            </div>
+          );
+        })}
+      </div>
+
+      <Card className="bg-white p-0 shadow-sm">
+        <div className="border-b border-gray-100 p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <Button variant="outline" size="lg">
-                <Download />
-                Export CSV
-              </Button>
+              <div className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+                <FileSearch className="h-5 w-5 text-primary" />
+                Filters
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">Narrow discrepancies by billing category and claim readiness.</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[220px_180px_180px_180px_180px]">
+              <div className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-muted-foreground">
+                <Search className="h-4 w-4" />
+                Search tracking
+              </div>
+              <FilterSelect placeholder="All Type" items={["All Type", "Dim Weight", "Rate Mismatch", "Fuel Surcharge", "Residential"]} />
+              <FilterSelect placeholder="All Severity" items={["All Severity", "High", "Medium", "Low"]} />
+              <FilterSelect placeholder="All Status" items={["All Status", "Open", "In Review", "Claimed", "Resolved"]} />
+              <FilterSelect placeholder="All Carrier" items={["All Carrier", "UPS", "FedEx", "USPS", "Veryk"]} />
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-
-        {/* Open  */}
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="flex items-center gap-3 mb-5">
-            <span className="text-[18px] text-[#4B5A8A] font-medium">Total Discrepancies</span>
-          </div>
-
-          <h2 className="text-4xl font-bold text-black leading-none">0</h2>
-
-        </div>
-
-
-
-        {/* n Progress  */}
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="flex items-center gap-3 mb-5">
-            <span className="text-[18px] text-[#4B5A8A] font-medium">Total Variance</span>
-          </div>
-
-          <h2 className="text-4xl font-bold text-red-500 leading-none">0</h2>
-
-        </div>
-
-        {/* Resolved */}
-
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="flex items-center gap-3 mb-5">
-            <span className="text-[18px] text-[#4B5A8A] font-medium">Open</span>
-          </div>
-
-          <h2 className="text-4xl font-bold text-orange-500 leading-none">0</h2>
-
-        </div>
-
-        {/* Total Value */}
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="flex items-center gap-3 mb-5">
-            <span className="text-[18px] text-[#4B5A8A] font-medium">High Severity</span>
-          </div>
-
-          <h2 className="text-4xl font-bold text-red-500 leading-none">0</h2>
-
-
-        </div>
-
-      </div>
-
-      <Card className="p-4 bg-white">
-        <div className="flex justify-between items-center mb-3">
-          <div className="text-lg font-medium">Filters</div>
-          <div>
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <div className="w-full sm:w-48">
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="dimweight" defaultChecked>Dim Weight</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-full sm:w-48">
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Severity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="allseverity" defaultChecked>All Severity</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-full sm:w-48">
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="open" defaultChecked>Open</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-full sm:w-48">
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Carrier" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ups" defaultChecked>UPS</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-muted-foreground">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr className="border-b text-left">
-                <th className="py-2 pr-3">ID </th>
-                <th className="py-2 pr-3">Carrier</th>
-                <th className="py-2 pr-3">Type</th>
-                <th className="py-2 pr-3">Tracking</th>
-                <th className="py-2 pr-3">Amount</th>
-                <th className="py-2 pr-3">Status</th>
-                <th className="py-2 pr-3">Created</th>
-                <th className="py-2 pr-3">Actions</th>
+                <th className="px-4 py-3">ID</th>
+                <th className="px-4 py-3">Carrier</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Tracking</th>
+                <th className="px-4 py-3">Variance</th>
+                <th className="px-4 py-3">Severity</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Created</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b last:border-0">
-                <td className="py-2 pr-3 font-medium">#1</td>
-                <td className="py-2 pr-3">
-                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-sm font-medium text-blue-700 inset-ring inset-ring-blue-700/10">
-                    UPS
-                  </span>
-                </td>
-                <td className="py-2 pr-3">overcharge</td>
-                <td className="py-2 pr-3">500</td>
-                <td className="py-2 pr-3">$100</td>
-                <td className="py-2 pr-3">
-                  <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700 inset-ring inset-ring-red-600/10">
-                    Open
-                  </span>
-                </td>
-                <td className="py-2 pr-3">5/7/2026</td>
-                <td className="py-2 pr-3 w-48">
-                  <div className="w-48">
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="open" defaultChecked>Open</SelectItem>
-                        <SelectItem value="in-progress">In Progress</SelectItem>
-                        <SelectItem value="resolved">Resolved</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </td>
-              </tr>
+              {discrepancies.map((item) => (
+                <tr key={item.id} className="border-b last:border-0 hover:bg-purple-50/40">
+                  <td className="px-4 py-4 font-semibold text-slate-950">{item.id}</td>
+                  <td className="px-4 py-4">
+                    <span className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-sm font-medium text-blue-700 ring-1 ring-blue-700/10">
+                      {item.carrier}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-slate-700">{item.type}</td>
+                  <td className="px-4 py-4 font-mono text-slate-700">{item.tracking}</td>
+                  <td className="px-4 py-4 font-semibold text-red-600">{item.amount}</td>
+                  <td className="px-4 py-4">
+                    <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-700 ring-1 ring-amber-600/10">
+                      {item.severity}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="inline-flex items-center rounded-md bg-orange-50 px-2.5 py-1 text-sm font-medium text-orange-700 ring-1 ring-orange-600/10">
+                      {item.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-muted-foreground">{item.created}</td>
+                  <td className="px-4 py-4">
+                    <Button variant="outline" size="sm" onClick={() => setClaimPopup({ open: true, discrepancy: item })}>
+                      <Plus />
+                      Claim
+                    </Button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </Card>
 
+      <DiscrepancyOperationPopup
+        open={discrepancyPopupOpen}
+        onOpenChange={setDiscrepancyPopupOpen}
+      />
 
+      <DiscrepancyClaimPopup
+        open={claimPopup.open}
+        discrepancy={claimPopup.discrepancy}
+        onOpenChange={(open) => setClaimPopup({ open, discrepancy: open ? claimPopup.discrepancy : null })}
+      />
     </div>
+  );
+}
+
+function FilterSelect({ placeholder, items }) {
+  return (
+    <Select>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item} value={item.toLowerCase().replaceAll(" ", "-")}>
+            {item}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

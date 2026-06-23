@@ -3,14 +3,19 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import DashboardPagination from "@/components/DashboardPagination";
 import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics, defaultSlaPagination } from "@/services/actions/orders";
 import { useDispatch, useSelector } from "react-redux";
-import { ArrowRight, Bot, Car, CircleCheck, CircleX, Clock, MapPin, Plus, RefreshCw } from 'lucide-react';
+import { ArrowRight, Bot, CalendarDays, Car, CircleCheck, CircleX, Clock, MapPin, Plus, RefreshCw, X } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import moment from "moment";
 
 const atRiskLimit = SLA_AT_RISK_LIMIT;
+const initialDateRange = {
+    fromDate: moment().subtract(1, "month").format("YYYY-MM-DD"),
+    toDate: moment().format("YYYY-MM-DD"),
+};
 
 const clientData = [
     { name: "Acme Corp", percent: 94, count: 120, color: "bg-green-600" },
@@ -95,31 +100,57 @@ const getDaysLeftLabel = (estimatedDeliveryDate) => {
 export default function SlaKpiPage() {
     const dispatch = useDispatch();
     const [page, setPage] = useState(1);
+    const [draftDateRange, setDraftDateRange] = useState(initialDateRange);
+    const [appliedDateRange, setAppliedDateRange] = useState(initialDateRange);
 
     const details = { atRiskOrders: [], performance: [], deliveryTrend: [], pagination: defaultSlaPagination, metrics: defaultSlaMetrics, }
     const { slaDashboard = details, slaLoading, slaError, message, } = useSelector((state) => state.orders);
 
     const fetchSlaDashboard = useCallback(() => {
-        dispatch(FetchSlaDashboardAction({ page, limit: atRiskLimit })).catch(() => { });
-    }, [dispatch, page]);
+        const dateParams = {
+            ...(appliedDateRange.fromDate ? { fromDate: appliedDateRange.fromDate } : {}),
+            ...(appliedDateRange.toDate ? { toDate: appliedDateRange.toDate } : {}),
+        };
+
+        dispatch(FetchSlaDashboardAction({ page, limit: atRiskLimit, ...dateParams })).catch(() => { });
+    }, [appliedDateRange.fromDate, appliedDateRange.toDate, dispatch, page]);
 
     useEffect(() => {
         fetchSlaDashboard()
-    }, [fetchSlaDashboard, page]);
+    }, [fetchSlaDashboard]);
 
     const handlePageChange = (nextPage) => {
         setPage(nextPage);
     };
 
+    const handleDateChange = (key, value) => {
+        setDraftDateRange((current) => ({ ...current, [key]: value }));
+    };
+
+    const handleApplyDateRange = () => {
+        setPage(1);
+        setAppliedDateRange(draftDateRange);
+    };
+
+    const handleResetDateRange = () => {
+        setPage(1);
+        setDraftDateRange(initialDateRange);
+        setAppliedDateRange(initialDateRange);
+    };
+
     const metrics = { ...defaultSlaMetrics, ...(slaDashboard.metrics || {}) };
 
     const slaPerformance = useMemo(() => (slaDashboard.performance || []).map((item) => ({
-        name: item.name || "-",
-        subLabel: item.carrierName || "-",
-        percent: item.percentage || 0,
-        count: `${item.packages || 0} pkgs`,
+        name: item.name || "-", subLabel: item.carrierName || "-",
+        percent: item.percentage || 0, count: `${item.packages || 0} pkgs`,
         color: (item.percentage || 0) >= 50 ? "bg-green-600" : (item.percentage || 0) > 0 ? "bg-amber-500" : "bg-slate-300",
     })), [slaDashboard.performance]);
+
+    const clientPerformance = useMemo(() => (slaDashboard.clientPerformance || []).map((item) => ({
+        name: item.name || "-", subLabel: item.email || "-",
+        percent: item.percentage || 0, count: `${item.packages || 0} pkgs`,
+        color: (item.percentage || 0) >= 50 ? "bg-green-600" : (item.percentage || 0) > 0 ? "bg-amber-500" : "bg-slate-300",
+    })), [slaDashboard.clientPerformance]);
 
     const error = slaError ? (message || "Unable to fetch SLA data.") : "";
 
@@ -131,6 +162,53 @@ export default function SlaKpiPage() {
                     <p className="max-w-2xl text-sm text-[#68607f]">On-time performance, at-risk orders, and carrier SLA compliance across active shipments.</p>
                 </div>
             </div>
+
+            <Card className="rounded-xl border-[#ece8f2] bg-white p-4 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                        <div className="flex items-center gap-2 text-base font-semibold text-[#090514]">
+                            <CalendarDays className="size-4 text-primary" />
+                            Date Range
+                        </div>
+                        <p className="mt-1 text-sm text-[#68607f]">
+                            Filter SLA metrics by order date using <span className="font-medium">fromDate</span> and <span className="font-medium">toDate</span>.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-[minmax(160px,190px)_minmax(160px,190px)_auto_auto] sm:items-end">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-[#4b4260]" htmlFor="sla-from-date">From Date</label>
+                            <Input
+                                id="sla-from-date"
+                                type="date"
+                                value={draftDateRange.fromDate}
+                                max={draftDateRange.toDate || undefined}
+                                onChange={(event) => handleDateChange("fromDate", event.target.value)}
+                                className="bg-white py-2"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-[#4b4260]" htmlFor="sla-to-date">To Date</label>
+                            <Input
+                                id="sla-to-date"
+                                type="date"
+                                value={draftDateRange.toDate}
+                                min={draftDateRange.fromDate || undefined}
+                                onChange={(event) => handleDateChange("toDate", event.target.value)}
+                                className="bg-white py-2"
+                            />
+                        </div>
+                        <Button type="button" onClick={handleApplyDateRange} disabled={slaLoading}>
+                            <CalendarDays />
+                            Apply
+                        </Button>
+                        <Button type="button" variant="outline" onClick={handleResetDateRange} disabled={slaLoading}>
+                            <X />
+                            Reset
+                        </Button>
+                    </div>
+                </div>
+            </Card>
 
             {/* <Card className="p-4 bg-white">
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
@@ -338,8 +416,12 @@ export default function SlaKpiPage() {
                     <h2 className="text-xl font-semibold text-gray-900 mb-8">
                         Performance by Client
                     </h2>
-                    {clientData.map((item, index) => (
-                        <ProgressRow key={index} item={item} />
+                    {slaLoading ? (
+                        <div className="py-4 text-sm text-slate-500">Loading SLA performance...</div>
+                    ) : !clientPerformance.length ? (
+                        <div className="py-4 text-sm text-slate-500">No SLA performance data found.</div>
+                    ) : clientPerformance.map((item) => (
+                        <ProgressRow key={`${item.name}-${item.subLabel}`} item={item} />
                     ))}
                 </div>
 
@@ -379,7 +461,7 @@ export default function SlaKpiPage() {
                                 <th className="py-2 pr-3">Carrier</th>
                                 <th className="py-2 pr-3">Client</th>
                                 <th className="py-2 pr-3">SLA</th>
-                                <th className="min-w-[340px] py-2 pr-3">Route Details</th>
+                                <th className="min-w-85 py-2 pr-3">Route Details</th>
                                 <th className="py-2 pr-3">Days Left</th>
                             </tr>
                         </thead>
