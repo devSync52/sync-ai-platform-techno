@@ -15,10 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import axiosInstance from "@/config/axios";
+import { API_URL } from "@/utils/constants";
 
 const carrierRules = {
     fedex: {
-        label: "FedEx / Veryk",
+        label: "FedEx",
         accent: "text-indigo-600",
         badge: "bg-indigo-50 text-indigo-700",
         dimDivisor: "139 (domestic packages)",
@@ -49,7 +51,7 @@ const carrierRules = {
         notes: [
             ["Base", "Fuel % applied to base transportation rate"],
             ["Surcharges", "Most surcharges are not subject to fuel, except AHS and oversize"],
-            ["Source of Truth", "Uploaded Veryk rate card Excel file"],
+            ["Source of Truth", "FedEx rate card or connected provider API"],
         ],
     },
     ups: {
@@ -139,59 +141,60 @@ const toNumber = (value) => {
     return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getBaseRate = (carrier, zone, billableWeight) => {
-    const carrierMultiplier = carrier == "ups" ? 1.06 : carrier == "usps" ? 0.82 : 1;
-    const zoneRate = Math.max(toNumber(zone), 2) * 1.85;
-    const weightRate = Math.max(billableWeight, 1) * (carrier == "usps" ? 1.18 : 1.42);
-
-    return (zoneRate + weightRate + 4.75) * carrierMultiplier;
-};
-
 export default function RateIntelligencePage() {
     const [activeCarrier, setActiveCarrier] = useState("fedex");
     const [form, setForm] = useState({
         carrier: "fedex",
         weight: "12",
-        zone: "5",
+        sourceZip: "90210",
+        destinationZip: "10001",
         length: "18",
         width: "14",
         height: "10",
-        fuel: "18.5",
         residential: true,
     });
-    const [calculated, setCalculated] = useState(false);
+    const [liveEstimate, setLiveEstimate] = useState(null);
+    const [rateError, setRateError] = useState("");
+    const [isCalculating, setIsCalculating] = useState(false);
 
     const selectedRule = carrierRules[activeCarrier];
 
-    const estimate = useMemo(() => {
+    const shipment = useMemo(() => {
         const carrier = form.carrier;
         const divisor = carrier == "usps" ? 166 : 139;
         const dimWeight = Math.ceil((toNumber(form.length) * toNumber(form.width) * toNumber(form.height)) / divisor);
         const billableWeight = Math.max(Math.ceil(toNumber(form.weight)), dimWeight, 1);
-        const baseRate = getBaseRate(carrier, form.zone, billableWeight);
-        const residential = form.residential ? (carrier == "ups" ? 6.3 : carrier == "usps" ? 0 : 6.4) : 0;
-        const ahs = billableWeight > 70 || Math.max(toNumber(form.length), toNumber(form.width), toNumber(form.height)) > 48 ? (carrier == "ups" ? 37.5 : carrier == "usps" ? 0 : 38.5) : 0;
-        const das = carrier == "usps" ? 0 : form.residential ? (carrier == "ups" ? 4.75 : 4.9) : 3.4;
-        const fuel = carrier == "usps" ? 0 : baseRate * (toNumber(form.fuel) / 100);
-        const total = baseRate + fuel + residential + das + ahs;
-
-        return {
-            dimWeight,
-            billableWeight,
-            baseRate,
-            fuel,
-            residential,
-            das,
-            ahs,
-            total,
-            divisor,
-        };
+        return { dimWeight, billableWeight, divisor };
     }, [form]);
 
     const updateForm = (key, value) => {
-        setCalculated(false);
+        setLiveEstimate(null);
+        setRateError("");
         setForm((current) => ({ ...current, [key]: value }));
         if (key == "carrier") setActiveCarrier(value);
+    };
+
+    const calculateRate = async () => {
+        setRateError("");
+        setIsCalculating(true);
+        try {
+            const response = await axiosInstance.post(API_URL.PRICE_ESTIMATE, {
+                provider: form.carrier == "fedex" ? "FedEx" : form.carrier.toUpperCase(),
+                sourceZip: form.sourceZip,
+                destinationZip: form.destinationZip,
+                weight: toNumber(form.weight),
+                length: toNumber(form.length),
+                width: toNumber(form.width),
+                height: toNumber(form.height),
+                residential: form.residential,
+            });
+            setLiveEstimate(response.data?.data || null);
+        } catch (error) {
+            setLiveEstimate(null);
+            setRateError(error?.response?.data?.message || "Unable to fetch the provider rate.");
+        } finally {
+            setIsCalculating(false);
+        }
     };
 
     return (
@@ -284,20 +287,7 @@ export default function RateIntelligencePage() {
                         </div>
                     </div>
 
-                    <div className="grid gap-4 lg:grid-cols-2">
-                        <div className="rounded-xl border border-gray-200 bg-white p-4">
-                            <div className="mb-3 text-sm font-semibold text-slate-950">Common Surcharges</div>
-                            <div className="space-y-2">
-                                {selectedRule.surcharges.map(([label, value]) => (
-                                    <div key={`${selectedRule.label}-${label}`} className="flex items-start justify-between gap-4 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                                        <span className="text-sm font-medium text-slate-800">{label}</span>
-                                        <span className="max-w-[60%] text-right text-sm text-muted-foreground">{value}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-4">
+                    <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-4">
                             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-950">
                                 <Info className="h-4 w-4 text-primary" />
                                 Rule Notes
@@ -310,7 +300,6 @@ export default function RateIntelligencePage() {
                                     </div>
                                 ))}
                             </div>
-                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -327,26 +316,33 @@ export default function RateIntelligencePage() {
                     <CardContent className="space-y-5">
                         <div className="grid gap-4 md:grid-cols-3">
                             <div className="space-y-2">
-                                <Label>Carrier</Label>
+                                <Label>Provider</Label>
                                 <select
                                     value={form.carrier}
                                     onChange={(event) => updateForm("carrier", event.target.value)}
                                     className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                                 >
-                                    <option value="fedex">FedEx / Veryk</option>
+                                    <option value="fedex">FedEx</option>
                                     <option value="ups">UPS</option>
                                     <option value="usps">USPS</option>
                                 </select>
                             </div>
                             <Field label="Actual Weight (lbs)" value={form.weight} onChange={(value) => updateForm("weight", value)} />
-                            <Field label="Zone (2-8)" value={form.zone} onChange={(value) => updateForm("zone", value)} />
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                <div className="text-xs text-muted-foreground">Provider Service</div>
+                                <div className="mt-1 truncate text-base font-bold text-slate-950">{liveEstimate?.service || "Calculated by provider"}</div>
+                            </div>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <ZipField label="Source address ZIP code" value={form.sourceZip} onChange={(value) => updateForm("sourceZip", value)} />
+                            <ZipField label="Destination address ZIP code" value={form.destinationZip} onChange={(value) => updateForm("destinationZip", value)} />
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-3">
                             <Field label="Length (in)" value={form.length} onChange={(value) => updateForm("length", value)} />
                             <Field label="Width (in)" value={form.width} onChange={(value) => updateForm("width", value)} />
                             <Field label="Height (in)" value={form.height} onChange={(value) => updateForm("height", value)} />
-                            <Field label="Fuel Surcharge %" value={form.fuel} onChange={(value) => updateForm("fuel", value)} disabled={form.carrier == "usps"} />
                         </div>
 
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -359,11 +355,12 @@ export default function RateIntelligencePage() {
                                 />
                                 Residential delivery
                             </label>
-                            <Button type="button" onClick={() => setCalculated(true)}>
+                            <Button type="button" onClick={calculateRate} disabled={isCalculating}>
                                 <Calculator className="h-4 w-4" />
-                                Calculate
+                                {isCalculating ? "Getting live rate..." : "Calculate"}
                             </Button>
                         </div>
+                        {rateError && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{rateError}</div>}
                     </CardContent>
                 </Card>
 
@@ -377,27 +374,36 @@ export default function RateIntelligencePage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-2 gap-3">
-                            <Metric label="Billable Weight" value={`${estimate.billableWeight} lbs`} />
-                            <Metric label="Dim Weight" value={`${estimate.dimWeight} lbs`} muted />
+                            <Metric label="Billable Weight" value={`${shipment.billableWeight} lbs`} />
+                            <Metric label="Dim Weight" value={`${shipment.dimWeight} lbs`} muted />
                         </div>
 
                         <div className="rounded-xl border border-purple-100 bg-purple-50 p-4 text-center">
                             <div className="text-xs font-semibold uppercase text-primary">Grand Total</div>
-                            <div className="mt-1 text-3xl font-bold text-slate-950">{currencyFormatter.format(estimate.total)}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">{calculated ? "Calculated from current inputs" : "Preview updates as you type"}</div>
+                            <div className="mt-1 text-3xl font-bold text-slate-950">{liveEstimate ? currencyFormatter.format(liveEstimate.total) : "—"}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">{liveEstimate ? `Live ${liveEstimate.provider} API rate` : "Calculate to request a live provider rate"}</div>
                         </div>
 
                         <div className="space-y-2">
                             <div className="text-sm font-semibold text-slate-950">Charge Breakdown</div>
-                            <BreakdownRow label="Base rate" value={estimate.baseRate} />
-                            <BreakdownRow label="Fuel surcharge" value={estimate.fuel} />
-                            <BreakdownRow label="Residential delivery" value={estimate.residential} />
-                            <BreakdownRow label="Delivery area surcharge" value={estimate.das} />
-                            <BreakdownRow label="AHS surcharge" value={estimate.ahs} />
+                            {(liveEstimate?.breakdown?.length
+                                ? liveEstimate.breakdown
+                                : [{ label: "Provider rate", value: liveEstimate?.amount || 0 }]
+                            ).map((charge, index) => (
+                                <ApiBreakdownRow
+                                    key={`${charge.label}-${index}`}
+                                    label={charge.label}
+                                    value={charge.amount ?? charge.value}
+                                />
+                            ))}
                             <div className="flex items-center justify-between border-t border-gray-200 pt-2 text-sm font-bold text-slate-950">
                                 <span>Total</span>
-                                <span>{currencyFormatter.format(estimate.total)}</span>
+                                <span>{liveEstimate ? currencyFormatter.format(liveEstimate.total) : "—"}</span>
                             </div>
+                        </div>
+                        <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>This is an estimate only. The final price may vary when you place the order based on the provider&apos;s live rate, address validation, and applicable fees.</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -443,6 +449,23 @@ function Field({ label, value, onChange, disabled = false }) {
     );
 }
 
+function ZipField({ label, value, onChange }) {
+    return (
+        <div className="space-y-2">
+            <Label>{label}</Label>
+            <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={5}
+                value={value}
+                placeholder="e.g. 10001"
+                onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 5))}
+                className="bg-white py-2"
+            />
+        </div>
+    );
+}
+
 function Metric({ label, value, muted = false }) {
     return (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-center">
@@ -452,11 +475,11 @@ function Metric({ label, value, muted = false }) {
     );
 }
 
-function BreakdownRow({ label, value }) {
+function ApiBreakdownRow({ label, value }) {
     return (
-        <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-muted-foreground">{label}</span>
-            <span className="font-semibold text-slate-900">{currencyFormatter.format(value)}</span>
+        <div className="flex items-start justify-between gap-3 text-sm">
+            <span className="break-all text-muted-foreground">{label}</span>
+            <span className="shrink-0 font-semibold text-slate-900">{String(value)}</span>
         </div>
     );
 }

@@ -12,6 +12,7 @@ const API_URL = Object.freeze({
     PRICE_BY_ID: (id) => `/prices/${id}`,
     PRICES_IMPORT: "/prices/import",
     PRICES_EXPORT: "/prices/export",
+    PRICE_ESTIMATE: "/prices/estimate",
     USERS: "/users",
     USER_LOGIN: "/users/login",
     USER_REGISTER: "/users/register",

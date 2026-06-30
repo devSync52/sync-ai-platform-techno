@@ -25,16 +25,18 @@ const defaultValues = {
 
 export default function ConfigurationComponent({ open, handleClose, carrier, details }) {
     const providerSlug = carrier?.slug || '', isSellerCloud = providerSlug == 'SELLERCLOUD', isExtensive = providerSlug == 'EXTENSIVE';
+    const needsCarrierAccount = providerSlug == 'FedEx' || providerSlug == 'UPS';
 
     const dispatch = useDispatch();
 
     const schema = useMemo(() => yup.object({
         ...(isSellerCloud ? { companyName: yup.string().required('Company name is required') } : {}),
+        ...(needsCarrierAccount ? { companyName: yup.string().required('Carrier account number is required') } : {}),
         ...(isExtensive ? { username: yup.string().email('Enter a valid email').required('Email ID is required') } : {}),
         appKey: yup.string().required(providerSlug == 'Veryk' ? 'API ID is required' : 'API Key is required'),
         appSecret: yup.string().required('API Secret is required'),
         isActive: yup.boolean(),
-    }), [isExtensive, isSellerCloud, providerSlug]);
+    }), [isExtensive, isSellerCloud, needsCarrierAccount, providerSlug]);
 
     const { register, handleSubmit, control, formState: { errors }, reset } = useForm({
         resolver: yupResolver(schema), defaultValues
@@ -119,12 +121,12 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
                 <form className="px-6 py-5" onSubmit={handleSubmit(onSubmit)}>
                     <div className="space-y-4">
                         {
-                            isSellerCloud && (
+                            (isSellerCloud || needsCarrierAccount) && (
                                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                                    Company Name
+                                    {needsCarrierAccount ? "Carrier Account Number" : "Company Name"}
                                     <Input
                                         {...register('companyName')}
-                                        placeholder="Enter company name..."
+                                        placeholder={needsCarrierAccount ? "Enter carrier account number..." : "Enter company name..."}
                                     />
                                     {errors.companyName && <span className="text-xs text-destructive">{errors.companyName.message}</span>}
                                 </label>
