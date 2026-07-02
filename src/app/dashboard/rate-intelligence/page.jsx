@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import CarrierBrand from "@/components/carrier-brand";
 import { Label } from "@/components/ui/label";
 import axiosInstance from "@/config/axios";
 import { API_URL } from "@/utils/constants";
@@ -242,7 +243,7 @@ export default function RateIntelligencePage() {
                                 onClick={() => setActiveCarrier(key)}
                                 className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${activeCarrier == key ? "border-primary bg-purple-50 text-primary shadow-sm" : "border-gray-200 bg-white text-gray-600 hover:border-purple-200 hover:bg-purple-50"}`}
                             >
-                                {carrier.label}
+                                <CarrierBrand name={carrier.label} logoClassName="h-6 w-6" />
                             </button>
                         ))}
                     </div>

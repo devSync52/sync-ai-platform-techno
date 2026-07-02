@@ -28,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FetchIntegrationsAction } from "@/services/actions/integrations";
 import { PROJECT_URL } from "@/utils/constants";
+import CarrierBrand from "@/components/carrier-brand";
 
 const fallbackUser = {
   firstName: "Soumallya",
@@ -420,7 +421,7 @@ export default function SettingsPage() {
 
                   {!integrationsLoading && integrations?.map((integration) => (
                     <tr key={integration.id || integration.provider} className="border-b last:border-0">
-                      <td className="py-3 pr-3 font-semibold">{integration.provider || "-"}</td>
+                      <td className="py-3 pr-3 font-semibold"><CarrierBrand name={integration.provider || "-"} /></td>
                       <td className="py-3 pr-3"><StatusPill active={integration.isActive} /></td>
                       <td className="py-3 pr-3">{integration.environment || integration.mode || "Production"}</td>
                       <td className="py-3 pr-3">{integration.accountNumber || integration.clientId || "-"}</td>
