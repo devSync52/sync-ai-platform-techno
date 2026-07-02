@@ -191,7 +191,7 @@ export default function CarrierPage() {
             <div key={carrier.slug} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:shadow-md">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <CarrierBrand name={carrier.name} showName={false} logoClassName="h-14 w-14 rounded-2xl p-2.5" />
+                  <CarrierBrand name={carrier.name} showName={false} logoClassName="h-14 w-14 rounded-2xl p-1.5" />
 
                   <div className="flex-1">
                     <h3 className="text-xl font-bold text-gray-900">
