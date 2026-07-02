@@ -10,6 +10,7 @@ import axiosInstance from "@/config/axios";
 import { toast } from "react-hot-toast";
 import Link from "next/link";
 import { API_URL } from "@/utils/constants";
+import CarrierBrand from "@/components/carrier-brand";
 
 const carriers = [
   {
@@ -190,9 +191,7 @@ export default function CarrierPage() {
             <div key={carrier.slug} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:shadow-md">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold shadow-sm ${carrier.logoClass || carrier.color}`}>
-                    {carrier.logo || carrier.icon}
-                  </div>
+                  <CarrierBrand name={carrier.name} showName={false} logoClassName="h-14 w-14 rounded-2xl p-2.5" />
 
                   <div className="flex-1">
                     <h3 className="text-xl font-bold text-gray-900">

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import DiscrepancyClaimPopup from "./components/DiscrepancyClaimPopup";
 import DiscrepancyOperationPopup from "./components/DiscrepancyOperationPopup";
+import CarrierBrand from "@/components/carrier-brand";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -195,7 +196,7 @@ export default function Discrepancies() {
                   <td className="px-4 py-4 font-semibold text-slate-950">{item.id}</td>
                   <td className="px-4 py-4">
                     <span className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-sm font-medium text-blue-700 ring-1 ring-blue-700/10">
-                      {item.carrier}
+                      <CarrierBrand name={item.carrier} />
                     </span>
                   </td>
                   <td className="px-4 py-4 text-slate-700">{item.type}</td>

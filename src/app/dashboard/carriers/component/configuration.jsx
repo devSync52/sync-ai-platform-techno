@@ -12,6 +12,7 @@ import { FetchIntegrationsAction } from '@/services/actions/integrations';
 import { useDispatch } from 'react-redux';
 import { API_URL } from '@/utils/constants';
 import { ExternalLink } from 'lucide-react';
+import CarrierBrand from '@/components/carrier-brand';
 
 const defaultValues = {
     appKey: '',
@@ -101,9 +102,7 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
                 <DialogHeader className="border-b bg-slate-50 px-6 py-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex items-start gap-4">
-                            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-sm font-semibold shadow-sm ${carrier?.logoClass || carrier?.color || 'bg-slate-100'}`}>
-                                {carrier?.logo || carrier?.icon || 'API'}
-                            </div>
+                            <CarrierBrand name={carrier?.name} showName={false} logoClassName="h-12 w-12 rounded-xl p-2" />
                             <div>
                                 <DialogTitle className="text-xl">Configure {carrier?.name || 'Carrier'}</DialogTitle>
                                 <DialogDescription className="mt-2 max-w-xl">

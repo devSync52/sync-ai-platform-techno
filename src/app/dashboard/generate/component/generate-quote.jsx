@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import axiosInstance from "@/config/axios";
 import { API_URL } from "@/utils/constants";
+import CarrierBrand from "@/components/carrier-brand";
 
 const defaultPackage = {
   inventoryId: "",
@@ -161,7 +162,7 @@ function QuoteResults({ carriers, loadingPriceBands, priceBands }) {
                   <div className="min-w-0">
                     <h3 className="text-lg font-bold text-slate-950">{service.name || service.code || carrier.name}</h3>
                     <div className="mt-1 grid gap-1 text-sm text-slate-700">
-                      <div><span className="font-medium">Carrier:</span> {carrier.name || "-"}</div>
+                      <div className="flex items-center gap-2"><span className="font-medium">Carrier:</span> <CarrierBrand name={carrier.name || "-"} /></div>
                       <div><span className="font-medium">Code:</span> {service.code || "-"}</div>
                       <div><span className="font-medium">ETA:</span> <span className="text-red-500">{service.eta || "Not Guaranteed"}</span></div>
                       <div><span className="font-medium">Zone:</span> {service.zone_id || "-"}</div>
@@ -223,7 +224,7 @@ function QuoteResults({ carriers, loadingPriceBands, priceBands }) {
               <div>
                 <div className="flex items-center gap-2 text-lg font-bold text-amber-600">
                   <AlertTriangle className="size-5" />
-                  Warning({carrier.name || "Carrier"}):
+                  <span className="inline-flex items-center gap-1">Warning (<CarrierBrand name={carrier.name || "Carrier"} logoClassName="h-6 w-6" />):</span>
                 </div>
                 <p className="text-sm text-red-500">{carrier.message || "This service is not available for the selected conditions."}</p>
                 <p className="text-sm text-blue-600">Change the address or package details and generate a new quote.</p>

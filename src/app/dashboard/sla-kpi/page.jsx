@@ -10,6 +10,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { ArrowRight, Bot, CalendarDays, Car, CircleCheck, CircleX, Clock, MapPin, Plus, RefreshCw, X } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import moment from "moment";
+import CarrierBrand from "@/components/carrier-brand";
 
 const atRiskLimit = SLA_AT_RISK_LIMIT;
 const initialDateRange = {
@@ -490,7 +491,7 @@ export default function SlaKpiPage() {
                                         </td>
                                         <td className="py-2 pr-3">
                                             <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-sm font-medium text-blue-700 inset-ring inset-ring-blue-700/10">
-                                                {order?.carrier?.name}
+                                                <CarrierBrand name={order?.carrier?.name} />
                                             </span>
                                         </td>
                                         <td className="py-2 pr-3">{order?.destination?.company || order?.destination?.name || "-"}</td>

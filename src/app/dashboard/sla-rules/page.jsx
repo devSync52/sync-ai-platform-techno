@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import CarrierBrand from "@/components/carrier-brand";
 import {
   CalendarClock,
   CheckCircle2,
@@ -245,7 +246,7 @@ export default function SlaRulesPage() {
                   </td>
                   <td className="px-4 py-4">
                     <span className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-sm font-medium text-blue-700 ring-1 ring-blue-700/10">
-                      {rule.carrier}
+                      <CarrierBrand name={rule.carrier} />
                     </span>
                   </td>
                   <td className="px-4 py-4 text-slate-700">{rule.service}</td>

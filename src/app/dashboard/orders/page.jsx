@@ -11,6 +11,7 @@ import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import { DeleteOrderAction, FetchOrdersAction } from "@/services/actions/orders";
 import moment from "moment-timezone";
 import { PROJECT_URL } from "@/utils/constants";
+import CarrierBrand from "@/components/carrier-brand";
 
 const rowCount = 10;
 
@@ -216,7 +217,7 @@ export default function OrdersPage() {
                           {order?.service?.carrier?.name.split(" ")[0]?.slice(0, 5) || "Ship"}
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-lg font-semibold text-slate-950">{order?.service?.carrier?.name}</div>
+                          <CarrierBrand name={order?.service?.carrier?.name} className="text-lg font-semibold text-slate-950" />
                           <div className="text-xs font-medium text-slate-500">{order?.service?.name}</div>
                         </div>
                       </div>
