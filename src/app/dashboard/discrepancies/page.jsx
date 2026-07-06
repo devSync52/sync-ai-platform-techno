@@ -1,258 +1,163 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import axiosInstance from "@/config/axios";
+import { API_URL } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import CarrierBrand from "@/components/carrier-brand";
 import DiscrepancyClaimPopup from "./components/DiscrepancyClaimPopup";
 import DiscrepancyOperationPopup from "./components/DiscrepancyOperationPopup";
-import CarrierBrand from "@/components/carrier-brand";
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  CircleDot,
-  Download,
-  FileSearch,
-  Filter,
-  Plus,
-  Search,
-  ShieldAlert,
-  Sparkles,
-  TrendingDown,
-} from "lucide-react";
+import toast from "react-hot-toast";
+import { AlertTriangle, CircleDot, Download, FileSearch, Plus, Search, ShieldAlert, TrendingDown } from "lucide-react";
 
-const discrepancyStats = [
-  {
-    label: "Total Discrepancies",
-    value: "1",
-    helper: "Detected from invoice audit",
-    icon: FileSearch,
-    iconClass: "bg-slate-100 text-slate-700 ring-slate-200",
-    valueClass: "text-slate-950",
-  },
-  {
-    label: "Total Variance",
-    value: "$100",
-    helper: "Potential claim amount",
-    icon: TrendingDown,
-    iconClass: "bg-red-50 text-red-600 ring-red-100",
-    valueClass: "text-red-500",
-  },
-  {
-    label: "Open",
-    value: "1",
-    helper: "Needs review",
-    icon: CircleDot,
-    iconClass: "bg-orange-50 text-orange-600 ring-orange-100",
-    valueClass: "text-orange-500",
-  },
-  {
-    label: "High Severity",
-    value: "0",
-    helper: "At-risk billing events",
-    icon: ShieldAlert,
-    iconClass: "bg-rose-50 text-rose-600 ring-rose-100",
-    valueClass: "text-red-500",
-  },
-];
-
-const discrepancies = [
-  {
-    id: "#DSC-0001",
-    carrier: "UPS",
-    type: "Overcharge",
-    tracking: "500",
-    amount: "$100.00",
-    status: "Open",
-    severity: "Medium",
-    created: "May 7, 2026",
-  },
-];
+const emptyStats = { total: 0, totalVariance: 0, open: 0, highSeverity: 0 };
+const initialFilters = { search: "", type: "all", severity: "all", status: "all", carrier: "all" };
 
 export default function Discrepancies() {
-  const [discrepancyPopupOpen, setDiscrepancyPopupOpen] = useState(false);
+  const [rows, setRows] = useState([]);
+  const [stats, setStats] = useState(emptyStats);
+  const [filters, setFilters] = useState(initialFilters);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [operationOpen, setOperationOpen] = useState(false);
   const [claimPopup, setClaimPopup] = useState({ open: false, discrepancy: null });
+
+  const fetchRows = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value && value !== "all"));
+      const { data } = await axiosInstance.get(API_URL.DISCREPANCIES, { params });
+      setRows((data.data || []).map(normalize));
+      setStats(data.stats || emptyStats);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Could not load discrepancies");
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    const timer = setTimeout(fetchRows, filters.search ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [fetchRows, filters.search]);
+
+  const statCards = useMemo(() => [
+    { label: "Total Discrepancies", value: stats.total, icon: FileSearch, color: "text-slate-950" },
+    { label: "Total Variance", value: money(stats.totalVariance), icon: TrendingDown, color: "text-red-500" },
+    { label: "Open", value: stats.open, icon: CircleDot, color: "text-orange-500" },
+    { label: "High Severity", value: stats.highSeverity, icon: ShieldAlert, color: "text-red-500" },
+  ], [stats]);
+
+  const createDiscrepancy = async (payload) => {
+    setSaving(true);
+    try {
+      await axiosInstance.post(API_URL.DISCREPANCIES, payload);
+      toast.success("Discrepancy created");
+      setOperationOpen(false);
+      await fetchRows();
+    } catch (error) {
+      toast.error(apiError(error));
+    } finally { setSaving(false); }
+  };
+
+  const createClaim = async (payload) => {
+    setSaving(true);
+    try {
+      await axiosInstance.post(API_URL.DISCREPANCY_CLAIMS(claimPopup.discrepancy.id), payload);
+      toast.success("Claim created and discrepancy marked as claimed");
+      setClaimPopup({ open: false, discrepancy: null });
+      await fetchRows();
+    } catch (error) {
+      toast.error(apiError(error));
+    } finally { setSaving(false); }
+  };
+
+  const updateStatus = async (row, status) => {
+    try {
+      await axiosInstance.patch(API_URL.DISCREPANCY_BY_ID(row.id), { status });
+      setRows((current) => current.map((item) => item.id === row.id ? { ...item, status } : item));
+      await fetchRows();
+      toast.success("Status updated");
+    } catch (error) { toast.error(apiError(error)); }
+  };
+
+  const exportCsv = () => {
+    if (!rows.length) return toast.error("There are no filtered discrepancies to export");
+    const headings = ["ID","Carrier","Type","Tracking","Invoice ID","Expected","Billed","Variance","Severity","Status","Created"];
+    const values = rows.map((row) => [row.displayId,label(row.carrier),label(row.type),row.trackingNumber,row.invoiceId || "",row.expectedAmount,row.billedAmount,row.variance,label(row.severity),label(row.status),new Date(row.createdAt).toISOString()]);
+    const csv = [headings, ...values].map((line) => line.map(csvCell).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `discrepancies-${new Date().toISOString().slice(0,10)}.csv`; anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
 
   return (
     <div className="space-y-6 p-6">
-      <section className="overflow-hidden rounded-2xl border border-purple-100 bg-white shadow-sm">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-center">
+      <section className="rounded-2xl border border-purple-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-primary ring-1 ring-purple-100">
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-            <div className="max-w-3xl">
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-primary">
-                Invoice variance monitor
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </div>
-              <h1 className="text-2xl font-bold text-primary">Discrepancy Analysis</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Billing variances categorized by type - create claims directly from any discrepancy.
-              </p>
-            </div>
+            <div className="rounded-2xl bg-purple-50 p-3 text-primary"><AlertTriangle /></div>
+            <div><h1 className="text-2xl font-bold text-primary">Discrepancy Analysis</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Review billing variances and turn recoverable discrepancies into claims.</p></div>
           </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button variant="outline" size="lg">
-              <Download />
-              Export CSV
-            </Button>
-            <Button variant="outline" size="lg" onClick={() => setDiscrepancyPopupOpen(true)}>
-              <Plus />
-              New Discrepancy
-            </Button>
-            <Button size="lg" onClick={() => setClaimPopup({ open: true, discrepancy: discrepancies[0] })}>
-              <Plus />
-              Create Claim
-            </Button>
-          </div>
-        </div>
-        <div className="grid gap-3 border-t border-purple-100 bg-purple-50/40 px-6 py-3 text-sm text-[#4b3b64] md:grid-cols-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            AI-ready discrepancy explanations
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-primary" />
-            Filter by carrier, severity, status, and type
-          </div>
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-primary" />
-            Prioritize recoverable billing events
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" size="lg" onClick={exportCsv}><Download />Export CSV</Button>
+            <Button size="lg" onClick={() => setOperationOpen(true)}><Plus />New Discrepancy</Button>
           </div>
         </div>
       </section>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {discrepancyStats.map((stat) => {
-          const Icon = stat.icon;
-
-          return (
-            <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-              <div className="mb-5 flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[15px] font-semibold text-[#4B5A8A]">{stat.label}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{stat.helper}</div>
-                </div>
-                <div className={`flex h-11 w-11 items-center justify-center rounded-xl ring-1 ${stat.iconClass}`}>
-                  <Icon className="h-5 w-5" />
-                </div>
-              </div>
-              <h2 className={`text-4xl font-bold leading-none ${stat.valueClass}`}>{stat.value}</h2>
-            </div>
-          );
-        })}
+        {statCards.map(({ label: text, value, icon: Icon, color }) => <div key={text} className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex justify-between"><span className="font-semibold text-[#4B5A8A]">{text}</span><Icon className="h-5 w-5 text-primary" /></div>
+          <div className={`mt-5 text-4xl font-bold ${color}`}>{value}</div>
+        </div>)}
       </div>
 
       <Card className="bg-white p-0 shadow-sm">
-        <div className="border-b border-gray-100 p-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-lg font-semibold text-slate-950">
-                <FileSearch className="h-5 w-5 text-primary" />
-                Filters
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">Narrow discrepancies by billing category and claim readiness.</p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[220px_180px_180px_180px_180px]">
-              <div className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-muted-foreground">
-                <Search className="h-4 w-4" />
-                Search tracking
-              </div>
-              <FilterSelect placeholder="All Type" items={["All Type", "Dim Weight", "Rate Mismatch", "Fuel Surcharge", "Residential"]} />
-              <FilterSelect placeholder="All Severity" items={["All Severity", "High", "Medium", "Low"]} />
-              <FilterSelect placeholder="All Status" items={["All Status", "Open", "In Review", "Claimed", "Resolved"]} />
-              <FilterSelect placeholder="All Carrier" items={["All Carrier", "UPS", "FedEx", "USPS", "Veryk"]} />
-            </div>
-          </div>
+        <div className="grid gap-3 border-b p-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input className="pl-9" value={filters.search} onChange={(e) => setFilter("search", e.target.value)} placeholder="Tracking, invoice, carrier..." /></div>
+          <Filter value={filters.type} onChange={(v) => setFilter("type", v)} options={[["all","All Types"],["overcharge","Overcharge"],["dim-weight","Dim Weight"],["rate-mismatch","Rate Mismatch"],["fuel-surcharge","Fuel Surcharge"],["residential","Residential"]]} />
+          <Filter value={filters.severity} onChange={(v) => setFilter("severity", v)} options={[["all","All Severities"],["high","High"],["medium","Medium"],["low","Low"]]} />
+          <Filter value={filters.status} onChange={(v) => setFilter("status", v)} options={[["all","All Statuses"],["open","Open"],["in-review","In Review"],["claimed","Claimed"],["resolved","Resolved"]]} />
+          <Filter value={filters.carrier} onChange={(v) => setFilter("carrier", v)} options={[["all","All Carriers"],["ups","UPS"],["fedex","FedEx"],["usps","USPS"],["veryk","Veryk"]]} />
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted-foreground">
-              <tr className="border-b text-left">
-                <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">Carrier</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Tracking</th>
-                <th className="px-4 py-3">Variance</th>
-                <th className="px-4 py-3">Severity</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
+            <thead className="bg-gray-50 text-left text-xs uppercase text-muted-foreground"><tr>{["ID","Carrier","Type","Tracking","Variance","Severity","Status","Created","Actions"].map((item) => <th key={item} className="px-4 py-3">{item}</th>)}</tr></thead>
             <tbody>
-              {discrepancies.map((item) => (
-                <tr key={item.id} className="border-b last:border-0 hover:bg-purple-50/40">
-                  <td className="px-4 py-4 font-semibold text-slate-950">{item.id}</td>
-                  <td className="px-4 py-4">
-                    <span className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-sm font-medium text-blue-700 ring-1 ring-blue-700/10">
-                      <CarrierBrand name={item.carrier} />
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-slate-700">{item.type}</td>
-                  <td className="px-4 py-4 font-mono text-slate-700">{item.tracking}</td>
-                  <td className="px-4 py-4 font-semibold text-red-600">{item.amount}</td>
-                  <td className="px-4 py-4">
-                    <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-700 ring-1 ring-amber-600/10">
-                      {item.severity}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className="inline-flex items-center rounded-md bg-orange-50 px-2.5 py-1 text-sm font-medium text-orange-700 ring-1 ring-orange-600/10">
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-muted-foreground">{item.created}</td>
-                  <td className="px-4 py-4">
-                    <Button variant="outline" size="sm" onClick={() => setClaimPopup({ open: true, discrepancy: item })}>
-                      <Plus />
-                      Claim
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {loading ? <tr><td colSpan={9} className="p-10 text-center text-muted-foreground">Loading discrepancies…</td></tr>
+                : !rows.length ? <tr><td colSpan={9} className="p-10 text-center text-muted-foreground">No discrepancies match these filters.</td></tr>
+                : rows.map((row) => <tr key={row.id} className="border-b hover:bg-purple-50/40">
+                  <td className="px-4 py-4 font-semibold">{row.displayId}</td>
+                  <td className="px-4 py-4"><CarrierBrand name={label(row.carrier)} /></td>
+                  <td className="px-4 py-4">{label(row.type)}</td><td className="px-4 py-4 font-mono">{row.trackingNumber}</td>
+                  <td className="px-4 py-4 font-semibold text-red-600">{money(row.variance)}</td>
+                  <td className="px-4 py-4"><Badge value={row.severity} /></td>
+                  <td className="px-4 py-4"><Filter value={row.status} onChange={(v) => updateStatus(row, v)} disabled={row.status === "claimed"} options={[["open","Open"],["in-review","In Review"],["claimed","Claimed"],["resolved","Resolved"]]} /></td>
+                  <td className="px-4 py-4 text-muted-foreground">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(row.createdAt))}</td>
+                  <td className="px-4 py-4"><Button variant="outline" size="sm" disabled={Boolean(row.claim) || row.status === "claimed"} onClick={() => setClaimPopup({ open: true, discrepancy: row })}><Plus />{row.claim ? "Claimed" : "Claim"}</Button></td>
+                </tr>)}
             </tbody>
           </table>
         </div>
       </Card>
-
-      <DiscrepancyOperationPopup
-        open={discrepancyPopupOpen}
-        onOpenChange={setDiscrepancyPopupOpen}
-      />
-
-      <DiscrepancyClaimPopup
-        open={claimPopup.open}
-        discrepancy={claimPopup.discrepancy}
-        onOpenChange={(open) => setClaimPopup({ open, discrepancy: open ? claimPopup.discrepancy : null })}
-      />
+      <DiscrepancyOperationPopup open={operationOpen} onOpenChange={setOperationOpen} onSubmit={createDiscrepancy} saving={saving} />
+      <DiscrepancyClaimPopup open={claimPopup.open} discrepancy={claimPopup.discrepancy} onOpenChange={(open) => setClaimPopup((current) => ({ open, discrepancy: open ? current.discrepancy : null }))} onSubmit={createClaim} saving={saving} />
     </div>
   );
 }
 
-function FilterSelect({ placeholder, items }) {
-  return (
-    <Select>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((item) => (
-          <SelectItem key={item} value={item.toLowerCase().replaceAll(" ", "-")}>
-            {item}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
+function Filter({ value, onChange, options, disabled }) { return <Select value={value} onValueChange={onChange} disabled={disabled}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{options.map(([v,l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select>; }
+function Badge({ value }) { const style = value === "high" ? "bg-red-50 text-red-700" : value === "medium" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"; return <span className={`rounded-md px-2.5 py-1 font-medium ${style}`}>{label(value)}</span>; }
+function normalize(row) { return { ...row, displayId: `#DSC-${row.id.slice(0, 8).toUpperCase()}`, expectedAmount: Number(row.expectedAmount), billedAmount: Number(row.billedAmount), variance: Math.abs(Number(row.billedAmount) - Number(row.expectedAmount)) }; }
+function label(value = "") { return value.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" "); }
+function money(value) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0); }
+function csvCell(value) { return `"${String(value ?? "").replaceAll('"', '""')}"`; }
+function apiError(error) { return error.response?.data?.message || error.response?.data?.errors?.[0]?.msg || "Something went wrong"; }
