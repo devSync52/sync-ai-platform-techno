@@ -8,18 +8,23 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import CarrierBrand from "@/components/carrier-brand";
+import DashboardPagination from "@/components/DashboardPagination";
 import DiscrepancyClaimPopup from "./components/DiscrepancyClaimPopup";
 import DiscrepancyOperationPopup from "./components/DiscrepancyOperationPopup";
 import toast from "react-hot-toast";
-import { AlertTriangle, CircleDot, Download, FileSearch, Plus, Search, ShieldAlert, TrendingDown } from "lucide-react";
+import { AlertTriangle, CircleDot, Download, FileSearch, Plus, RefreshCw, Search, ShieldAlert, TrendingDown } from "lucide-react";
 
 const emptyStats = { total: 0, totalVariance: 0, open: 0, highSeverity: 0 };
-const initialFilters = { search: "", type: "all", severity: "all", status: "all", carrier: "all" };
+const initialFilters = { search: "", type: "all", severity: "all", status: "active", carrier: "all" };
+const pageLimit = 10;
+const initialPagination = { page: 1, rowCount: pageLimit, total: 0, offset: 0, totalPages: 1 };
 
 export default function Discrepancies() {
   const [rows, setRows] = useState([]);
   const [stats, setStats] = useState(emptyStats);
   const [filters, setFilters] = useState(initialFilters);
+  const [pagination, setPagination] = useState(initialPagination);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [operationOpen, setOperationOpen] = useState(false);
@@ -28,16 +33,21 @@ export default function Discrepancies() {
   const fetchRows = useCallback(async () => {
     setLoading(true);
     try {
-      const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value && value !== "all"));
+      const params = {
+        ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value && value !== "all")),
+        page,
+        limit: pageLimit,
+      };
       const { data } = await axiosInstance.get(API_URL.DISCREPANCIES, { params });
       setRows((data.data || []).map(normalize));
       setStats(data.stats || emptyStats);
+      setPagination(data.pagination || initialPagination);
     } catch (error) {
       toast.error(error.response?.data?.message || "Could not load discrepancies");
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, page, pagination.rowCount]);
 
   useEffect(() => {
     const timer = setTimeout(fetchRows, filters.search ? 300 : 0);
@@ -94,7 +104,10 @@ export default function Discrepancies() {
     URL.revokeObjectURL(url);
   };
 
-  const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const setFilter = (key, value) => {
+    setPage(1);
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -106,6 +119,10 @@ export default function Discrepancies() {
               <p className="mt-1 text-sm text-muted-foreground">Review billing variances and turn recoverable discrepancies into claims.</p></div>
           </div>
           <div className="flex flex-wrap gap-3">
+            <Button variant="outline" size="lg" onClick={fetchRows} disabled={loading}>
+              <RefreshCw className={loading ? "animate-spin" : ""} />
+              Refresh
+            </Button>
             <Button variant="outline" size="lg" onClick={exportCsv}><Download />Export CSV</Button>
             <Button size="lg" onClick={() => setOperationOpen(true)}><Plus />New Discrepancy</Button>
           </div>
@@ -125,7 +142,7 @@ export default function Discrepancies() {
             <Input className="pl-9" value={filters.search} onChange={(e) => setFilter("search", e.target.value)} placeholder="Tracking, invoice, carrier..." /></div>
           <Filter value={filters.type} onChange={(v) => setFilter("type", v)} options={[["all","All Types"],["overcharge","Overcharge"],["dim-weight","Dim Weight"],["rate-mismatch","Rate Mismatch"],["fuel-surcharge","Fuel Surcharge"],["residential","Residential"]]} />
           <Filter value={filters.severity} onChange={(v) => setFilter("severity", v)} options={[["all","All Severities"],["high","High"],["medium","Medium"],["low","Low"]]} />
-          <Filter value={filters.status} onChange={(v) => setFilter("status", v)} options={[["all","All Statuses"],["open","Open"],["in-review","In Review"],["claimed","Claimed"],["resolved","Resolved"]]} />
+          <Filter value={filters.status} onChange={(v) => setFilter("status", v)} options={[["active","Active"],["all","All Statuses"],["open","Open"],["in-review","In Review"],["claimed","Claimed"],["resolved","Resolved"]]} />
           <Filter value={filters.carrier} onChange={(v) => setFilter("carrier", v)} options={[["all","All Carriers"],["ups","UPS"],["fedex","FedEx"],["usps","USPS"],["veryk","Veryk"]]} />
         </div>
         <div className="overflow-x-auto">
@@ -142,11 +159,18 @@ export default function Discrepancies() {
                   <td className="px-4 py-4"><Badge value={row.severity} /></td>
                   <td className="px-4 py-4"><Filter value={row.status} onChange={(v) => updateStatus(row, v)} disabled={row.status === "claimed"} options={[["open","Open"],["in-review","In Review"],["claimed","Claimed"],["resolved","Resolved"]]} /></td>
                   <td className="px-4 py-4 text-muted-foreground">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(row.createdAt))}</td>
-                  <td className="px-4 py-4"><Button variant="outline" size="sm" disabled={Boolean(row.claim) || row.status === "claimed"} onClick={() => setClaimPopup({ open: true, discrepancy: row })}><Plus />{row.claim ? "Claimed" : "Claim"}</Button></td>
+                  <td className="px-4 py-4"><Button variant="outline" size="sm" disabled={Boolean(row.claim) || ["claimed", "resolved"].includes(row.status)} onClick={() => setClaimPopup({ open: true, discrepancy: row })}><Plus />{row.claim ? "Claimed" : "Claim"}</Button></td>
                 </tr>)}
             </tbody>
           </table>
         </div>
+        <DashboardPagination
+          className="mx-4 mb-4"
+          pagination={pagination}
+          itemCount={rows.length}
+          loading={loading}
+          onPageChange={setPage}
+        />
       </Card>
       <DiscrepancyOperationPopup open={operationOpen} onOpenChange={setOperationOpen} onSubmit={createDiscrepancy} saving={saving} />
       <DiscrepancyClaimPopup open={claimPopup.open} discrepancy={claimPopup.discrepancy} onOpenChange={(open) => setClaimPopup((current) => ({ open, discrepancy: open ? current.discrepancy : null }))} onSubmit={createClaim} saving={saving} />
