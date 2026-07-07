@@ -39,6 +39,8 @@ const API_URL = Object.freeze({
     DISCREPANCIES: "/discrepancies",
     DISCREPANCY_BY_ID: (id) => `/discrepancies/${id}`,
     DISCREPANCY_CLAIMS: (id) => `/discrepancies/${id}/claims`,
+    CLAIMS: "/claims",
+    CLAIM_BY_ID: (id) => `/claims/${id}`,
     ADDRESSES: "/addresses",
     ADDRESS_BY_ID: (id) => `/addresses/${id}`,
     ADDRESSES_FETCH: "/addresses/fetch",
