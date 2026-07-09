@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useDispatch, useSelector } from "react-redux"
 import { useRouter } from "next/navigation"
-import { ArrowRight, CalendarClock, Check, CreditCard, FileText, Gauge, LayoutDashboard, ReceiptText, ShieldCheck, Sparkles, WalletCards, XCircle } from "lucide-react"
+import { ArrowRight, CalendarClock, Check, CreditCard, Download, FileText, Gauge, LayoutDashboard, Loader2, ReceiptText, ShieldCheck, Sparkles, WalletCards, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "react-hot-toast"
 import axiosInstance from "@/config/axios"
@@ -23,11 +23,6 @@ const getActiveSubscription = (user) => {
             : []
 
     return subscriptions.find((item) => item.status?.toLowerCase() === "active") || subscriptions[0] || null
-}
-
-const getInvoiceList = (user) => {
-    if (!user) return []
-    return Array.isArray(user.invoices) ? user.invoices : []
 }
 
 const formatDate = (value) => {
@@ -52,9 +47,10 @@ export default function SubscriptionPage() {
     const router = useRouter()
     const { user } = useSelector((state) => state.authorization)
     const [loadingItems, setLoadingItems] = useState({})
+    const [invoices, setInvoices] = useState([])
+    const [invoicesLoading, setInvoicesLoading] = useState(false)
 
     const subscription = getActiveSubscription(user)
-    const invoices = getInvoiceList(user)
     const hasSubscription = Boolean(subscription)
     const isActive = subscription?.status?.toLowerCase() === "active"
     const price = subscription?.price || {}
@@ -93,6 +89,32 @@ export default function SubscriptionPage() {
     ]
 
     const updateUser = (payload) => dispatch({ type: USER_LOGIN_CONSTANTS.UPDATE_USER, payload })
+
+    const fetchInvoices = useCallback(async () => {
+        setInvoicesLoading(true)
+        try {
+            const response = await axiosInstance.get(API_URL.SUBSCRIPTION_INVOICES, {
+                params: { page: 1, limit: 10 },
+            })
+            setInvoices(Array.isArray(response.data?.data) ? response.data.data : [])
+        } catch (error) {
+            toast.error(error?.response?.data?.message || "Unable to fetch invoices")
+        } finally {
+            setInvoicesLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!hasSubscription) return
+
+        const timer = window.setTimeout(() => {
+            fetchInvoices()
+        }, 0)
+
+        return () => {
+            window.clearTimeout(timer)
+        }
+    }, [fetchInvoices, hasSubscription])
 
     const handleAction = async (currentSubscriptionId, action) => {
         if (!currentSubscriptionId) {
@@ -303,7 +325,12 @@ export default function SubscriptionPage() {
                                 </Button>
                             </div>
 
-                            {invoices.length === 0 ? (
+                            {invoicesLoading ? (
+                                <div className="mt-8 flex items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 p-8 text-sm font-semibold text-gray-600">
+                                    <Loader2 className="mr-2 size-4 animate-spin" />
+                                    Loading invoices
+                                </div>
+                            ) : invoices.length === 0 ? (
                                 <div className="mt-8 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-600">
                                     <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-lg bg-white text-gray-500 shadow-sm">
                                         <ReceiptText className="size-5" />
@@ -320,18 +347,29 @@ export default function SubscriptionPage() {
                                                 <th className="px-4 py-3 font-bold">Date</th>
                                                 <th className="px-4 py-3 font-bold">Amount</th>
                                                 <th className="px-4 py-3 font-bold">Status</th>
+                                                <th className="px-4 py-3 text-right font-bold">Download</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 bg-white">
                                             {invoices.map((invoice) => (
                                                 <tr key={invoice.id || invoice.invoiceNumber || invoice.invoiceId}>
-                                                    <td className="px-4 py-4 font-semibold text-gray-800">{invoice.invoiceNumber || invoice.invoiceId || invoice.id || "-"}</td>
-                                                    <td className="px-4 py-4 text-gray-500">{formatDate(invoice.date || invoice.createdAt || invoice.updatedAt)}</td>
+                                                    <td className="px-4 py-4 font-semibold text-gray-800">{invoice.invoiceNumber || invoice.stripeInvoiceId || invoice.id || "-"}</td>
+                                                    <td className="px-4 py-4 text-gray-500">{formatDate(invoice.paidAt || invoice.createdAt || invoice.updatedAt)}</td>
                                                     <td className="px-4 py-4 font-semibold text-gray-800">{formatMoney(invoice.amount, invoice.currency)}</td>
                                                     <td className="px-4 py-4">
                                                         <span className="inline-flex rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
                                                             {(invoice.status || "Paid").toUpperCase()}
                                                         </span>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-right">
+                                                        {invoice.invoicePdf || invoice.hostedInvoiceUrl ? (
+                                                            <a href={invoice.invoicePdf || invoice.hostedInvoiceUrl} target="_blank" rel="noreferrer" className="inline-flex h-7 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-[0.8rem] font-medium text-gray-700 transition hover:bg-gray-50">
+                                                                <Download className="size-4" />
+                                                                Download
+                                                            </a>
+                                                        ) : (
+                                                            <span className="text-xs font-semibold text-gray-400">Pending</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}

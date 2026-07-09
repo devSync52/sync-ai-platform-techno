@@ -26,6 +26,7 @@ const API_URL = Object.freeze({
 
     USER_SUBSCRIPTION: "/users/subscription",
     SUBSCRIPTION_CREATE: "/subscription/create",
+    SUBSCRIPTION_INVOICES: "/subscription/invoices",
     WALLET: "/wallet",
     WALLET_CHECKOUT_SESSION: "/wallet/checkout-session",
     WALLET_CHECKOUT_SESSION_SYNC: "/wallet/checkout-session/sync",
