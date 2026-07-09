@@ -6,7 +6,7 @@ import IconAsset from "@/components/IconAsset";
 import AiKpiSummary from "./AiKpiSummary";
 import MetricCard from "./MetricCard";
 import { metrics as staticMetrics } from "./data";
-import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics } from "@/services/actions/orders";
+import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics, normalizeSlaDashboard } from "@/services/actions/orders";
 import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
 
@@ -14,14 +14,30 @@ const PerformanceChart = dynamic(() => import("./PerformanceChart"), { ssr: fals
 const DiscrepancyDonut = dynamic(() => import("./DiscrepancyDonut"), { ssr: false });
 const CarrierOnTimeChart = dynamic(() => import("./CarrierOnTimeChart"), { ssr: false });
 
-export default function DashboardContent() {
+const formatMoney = (amount) => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(Number(amount || 0));
+};
+
+export default function DashboardContent({ initialSlaDashboard = null, initialCounts = null, initialDiscrepancyTypes = [], initialCarrierOnTimeRate = [] }) {
   const dispatch = useDispatch();
   const { slaDashboard } = useSelector((state) => state.orders);
+  const serverSlaDashboard = useMemo(() => initialSlaDashboard ? normalizeSlaDashboard(initialSlaDashboard) : null, [initialSlaDashboard]);
+  const hasClientDashboardData = Boolean(
+    slaDashboard?.deliveryTrend?.length ||
+    slaDashboard?.atRiskOrders?.length ||
+    slaDashboard?.performance?.length ||
+    slaDashboard?.metrics?.total?.value
+  );
+  const dashboardData = hasClientDashboardData ? slaDashboard : serverSlaDashboard;
   const slaMetrics = useMemo(() => ({
     ...defaultSlaMetrics,
-    ...(slaDashboard?.metrics || {}),
-  }), [slaDashboard?.metrics]);
-  const deliveryTrend = useMemo(() => slaDashboard?.deliveryTrend || [], [slaDashboard?.deliveryTrend]);
+    ...(dashboardData?.metrics || {}),
+  }), [dashboardData?.metrics]);
+  const deliveryTrend = useMemo(() => dashboardData?.deliveryTrend || [], [dashboardData?.deliveryTrend]);
 
   useEffect(() => {
     dispatch(FetchSlaDashboardAction({ page: 1, limit: SLA_AT_RISK_LIMIT })).catch(() => { });
@@ -59,8 +75,27 @@ export default function DashboardContent() {
       },
     ];
 
-    return [...liveMetrics, ...staticMetrics.slice(4)];
-  }, [slaMetrics]);
+    const financeMetrics = [
+      {
+        ...staticMetrics[4],
+        value: formatMoney(initialCounts?.creditBalance),
+      },
+      {
+        ...staticMetrics[5],
+        value: `${initialCounts?.openClaims ?? 0}`,
+      },
+      {
+        ...staticMetrics[6],
+        value: `${initialCounts?.processedInvoices ?? 0}`,
+      },
+      {
+        ...staticMetrics[7],
+        value: formatMoney(initialCounts?.totalVariance),
+      },
+    ];
+
+    return [...liveMetrics, ...financeMetrics];
+  }, [slaMetrics, initialCounts]);
 
   const performanceData = useMemo(() => (
     deliveryTrend.map((item) => ({
@@ -110,13 +145,13 @@ export default function DashboardContent() {
           </DashboardPanel>
 
           <DashboardPanel title="Discrepancy Types" action="View">
-            <DiscrepancyDonut />
+            <DiscrepancyDonut data={initialDiscrepancyTypes} />
           </DashboardPanel>
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <DashboardPanel title="Carrier On-Time Rate" action="Manage">
-            <CarrierOnTimeChart />
+            <CarrierOnTimeChart data={initialCarrierOnTimeRate} />
           </DashboardPanel>
           <AiKpiSummary />
         </div>

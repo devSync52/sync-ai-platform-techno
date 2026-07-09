@@ -6,7 +6,8 @@ import IconAsset from "@/components/IconAsset";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { UserLogoutAction } from "@/services/actions/authorization";
-import { PROJECT_URL } from "@/utils/constants";
+import { API_URL, PROJECT_URL } from "@/utils/constants";
+import axiosInstance from "@/config/axios";
 
 const navGroups = [
   {
@@ -87,11 +88,6 @@ const navGroups = [
   {
     label: "RECONCILIATION",
     items: [
-      {
-        label: "Conciliation",
-        href: PROJECT_URL.DASHBOARD_CONCILIATION,
-        icon: "file"
-      },
       {
         label: "Discrepancies",
         href: PROJECT_URL.DASHBOARD_DISCREPANCIES,
@@ -186,11 +182,17 @@ const getInitials = (name, email) => {
   const words = String(source || "U").split(/[\s@._-]+/).filter(Boolean);
   return words.slice(0, 2).map((word) => word.charAt(0).toUpperCase()).join("") || "U";
 };
+const formatMoney = (amount) => new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+}).format(Number(amount || 0));
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [compressed, setCompressed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [creditBalance, setCreditBalance] = useState(0);
   const accountRef = useRef(null);
   const { user } = useSelector((state) => state.authorization);
   const displayName = getDisplayName(user);
@@ -220,6 +222,29 @@ export default function Sidebar() {
       document.removeEventListener("touchstart", handleOutsideClick);
     };
   }, [accountOpen]);
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchCreditBalance = async () => {
+      try {
+        const response = await axiosInstance.get(API_URL.WALLET, {
+          params: { page: 1, limit: 1 },
+        });
+        if (active) {
+          setCreditBalance(response.data?.data?.summary?.balance || 0);
+        }
+      } catch {
+        if (active) setCreditBalance(0);
+      }
+    };
+
+    fetchCreditBalance();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const isActive = (href) => {
     if (href == PROJECT_URL.DASHBOARD && pathname == PROJECT_URL.DASHBOARD) return true;
@@ -301,7 +326,7 @@ export default function Sidebar() {
             <IconAsset name="wallet" className="h-3.5 w-3.5" />
             {!compressed && <span>Credits</span>}
           </div>
-          {!compressed && <span className="font-semibold text-white">$0.00</span>}
+          {!compressed && <span className="font-semibold text-white">{formatMoney(creditBalance)}</span>}
         </div>
         <div ref={accountRef} className="relative w-full">
           <button onClick={() => setAccountOpen((open) => !open)} className={`flex items-center gap-3 rounded-xl border border-white/10 bg-[#12061f] px-3 py-2 text-left transition-all duration-200 ${compressed ? "justify-center px-0 py-0" : "w-full"}`} title="Account menu">

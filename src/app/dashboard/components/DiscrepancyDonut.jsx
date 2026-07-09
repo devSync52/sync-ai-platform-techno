@@ -13,14 +13,16 @@ function DiscrepancyTooltip({ active, payload }) {
   );
 }
 
-export default function DiscrepancyDonut() {
+export default function DiscrepancyDonut({ data = [] }) {
+  const chartData = data.length ? data : discrepancyData;
+
   return (
     <div className="grid h-[245px] grid-rows-[1fr_auto]">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Tooltip content={<DiscrepancyTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
           <Pie
-            data={discrepancyData}
+            data={chartData}
             dataKey="value"
             cx="50%"
             cy="50%"
@@ -29,7 +31,7 @@ export default function DiscrepancyDonut() {
             paddingAngle={2}
             stroke="none"
           >
-            {discrepancyData.map((entry) => (
+            {chartData.map((entry) => (
               <Cell key={entry.name} fill={entry.color} />
             ))}
           </Pie>
@@ -37,7 +39,7 @@ export default function DiscrepancyDonut() {
       </ResponsiveContainer>
 
       <div className="space-y-2 pb-1">
-        {discrepancyData.map((entry) => (
+        {chartData.map((entry) => (
           <div key={entry.name} className="flex items-center justify-between text-[11px]">
             <div className="flex items-center gap-2 text-[#635c78]">
               <span className="h-2 w-2 rounded-full" style={{ background: entry.color }} />
