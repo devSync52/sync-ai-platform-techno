@@ -43,6 +43,7 @@ export const normalizeSlaDashboard = (responseData) => {
         })).reverse() : [],
         pagination: data.pagination || defaultSlaPagination,
         metrics: { ...defaultSlaMetrics, ...(data.metrics || {}) },
+        settings: data.settings || { orderRiskThresholdDays: 3 },
     };
 };
 

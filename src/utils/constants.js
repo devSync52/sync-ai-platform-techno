@@ -21,6 +21,9 @@ const API_URL = Object.freeze({
     USER_RESEND_ACTIVATION: "/users/resend-activation",
     USER_FORGOT_PASSWORD: "/users/forgot-password",
     USER_CHANGE_PASSWORD: "/users/change-password",
+    USER_PROFILE: "/users/profile",
+    USER_SETTINGS: "/users/settings",
+    USER_SETTINGS_SHIPPING: "/users/settings/shipping",
     USER_COMPLETE_ONBOARDING: "/users/complete-onboarding",
 
 

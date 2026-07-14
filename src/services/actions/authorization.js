@@ -168,6 +168,19 @@ export const UserChangePasswordAction = async (data, dispatch, user) => {
     return response;
 }
 
+export const UserUpdateProfileAction = async (data, dispatch) => {
+    const response = await axiosInstance.put(API_URL.USER_PROFILE, data);
+
+    if (response.data?.success) {
+        dispatch({
+            type: USER_LOGIN_CONSTANTS.UPDATE_USER,
+            payload: response.data.data
+        });
+    }
+
+    return response;
+}
+
 export const UserLogoutAction = (dispatch) => {
     dispatch({ type: USER_LOGOUT_CONSTANTS.USER_LOGOUT_REQUEST })
     removeCookies('auth-token')

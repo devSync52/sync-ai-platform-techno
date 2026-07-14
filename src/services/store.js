@@ -12,6 +12,7 @@ import { PlanReducer } from "./reducers/plans"
 import { PriceReducer } from "./reducers/prices"
 import { InventoryReducer } from "./reducers/inventory"
 import { WalletReducer } from "./reducers/wallet"
+import { SettingsReducer } from "./reducers/settings"
 import { USER_LOGOUT_CONSTANTS } from "./constants/authorization";
 import { getCookies } from "@/lib/cookies";
 
@@ -26,6 +27,7 @@ const appReducer = combineReducers({
     addresses: AddressReducer,
     orders: OrderReducer,
     wallet: WalletReducer,
+    settings: SettingsReducer,
     plans: PlanReducer,
     prices: PriceReducer,
     inventory: InventoryReducer

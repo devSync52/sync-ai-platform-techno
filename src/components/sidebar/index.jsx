@@ -143,7 +143,8 @@ const navGroups = [
       {
         label: "Notifications",
         href: PROJECT_URL.DASHBOARD_NOTIFICATIONS,
-        icon: "notification"
+        icon: "notification",
+        hidden: true
       },
       {
         label: "Settings",
@@ -202,7 +203,7 @@ export default function Sidebar() {
   const dispatch = useDispatch()
   const visibleNavGroups = navGroups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.superAdminOnly || isSuperAdmin(user))
+    items: group.items.filter((item) => !item.hidden && (!item.superAdminOnly || isSuperAdmin(user)))
   })).filter((group) => group.items.length);
 
   useEffect(() => {
