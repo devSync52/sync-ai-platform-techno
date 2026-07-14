@@ -13,6 +13,7 @@ const logos = {
   lasership: "https://www.google.com/s2/favicons?domain=lasership.com&sz=128",
   ontrac: "https://www.google.com/s2/favicons?domain=ontrac.com&sz=128",
   veryk: "https://www.google.com/s2/favicons?domain=veryk.com&sz=128",
+  uniuni: "https://www.google.com/s2/favicons?domain=uniuni.com&sz=128",
   extensive: "https://www.google.com/s2/favicons?domain=extensiv.com&sz=128",
   sellercloud: "https://www.google.com/s2/favicons?domain=sellercloud.com&sz=128",
 };
@@ -28,6 +29,7 @@ function normalizeCarrier(name = "") {
   if (value.includes("lasership")) return "lasership";
   if (value.includes("ontrac")) return "ontrac";
   if (value.includes("veryk")) return "veryk";
+  if (value.includes("uniuni")) return "uniuni";
   if (value.includes("extensiv")) return "extensive";
   if (value.includes("sellercloud")) return "sellercloud";
   return value;

@@ -112,6 +112,36 @@ export const FetchSlaDashboardAction = (params = {}) => async (dispatch) => {
     }
 };
 
+export const FetchLabelQuotesAction = (params = {}, options = {}) => async (dispatch) => {
+    dispatch({ type: ORDER_CONSTANTS.FETCH_LABEL_QUOTES_REQUEST, payload: { append: Boolean(options.append) } });
+
+    try {
+        const response = await axiosInstance.get(API_URL.ORDER_LABEL_QUOTES, { params });
+        const data = Array.isArray(response.data?.data) ? response.data.data : [];
+
+        dispatch({
+            type: ORDER_CONSTANTS.FETCH_LABEL_QUOTES_SUCCESS,
+            payload: {
+                data,
+                pagination: response.data?.pagination || null,
+                append: Boolean(options.append),
+                message: response.data?.message || null
+            }
+        });
+
+        return response;
+    } catch (error) {
+        dispatch({
+            type: ORDER_CONSTANTS.FETCH_LABEL_QUOTES_FAILURE,
+            payload: {
+                message: error?.response?.data?.message || error?.message || "Unable to fetch saved quotes.",
+                error
+            }
+        });
+        throw error;
+    }
+};
+
 export const DeleteOrderAction = (orderId) => async (dispatch) => {
     dispatch({ type: ORDER_CONSTANTS.DELETE_ORDER_REQUEST });
 

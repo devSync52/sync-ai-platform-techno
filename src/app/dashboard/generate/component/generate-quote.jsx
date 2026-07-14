@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import axiosInstance from "@/config/axios";
 import { API_URL } from "@/utils/constants";
 import CarrierBrand from "@/components/carrier-brand";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
+import InventoryAutocomplete from "@/components/InventoryAutocomplete";
 
 const defaultPackage = {
   inventoryId: "",
@@ -53,19 +55,12 @@ const schema = yup.object({
   }),
 });
 
-const getAddressId = (address) => address?.id || address?._id || address?.addressId;
-const getAddressLabel = (address) => {
-  const name = address?.name || address?.company;
-  return [name, address?.city, address?.postalcode].filter(Boolean).join(" - ") || getAddressId(address) || "Address";
-};
-
 const getInventoryId = (item) => {
   const id = item?.id || item?._id || item?.inventoryId;
   return id == null ? "" : String(id);
 };
 const getInventorySku = (item) => item?.productSku || item?.productId || item?.metadata?.ID || "";
 const getInventoryName = (item) => item?.name || item?.metadata?.ProductName || getInventorySku(item) || "Inventory item";
-const getInventoryLabel = (item) => [getInventoryName(item), getInventorySku(item)].filter(Boolean).join(" - ");
 
 const getQuoteAddressValue = (value) => {
   if (!value) return "";
@@ -238,12 +233,8 @@ function QuoteResults({ carriers, loadingPriceBands, priceBands }) {
 }
 
 export default function GenerateQuoteForm({ quoteId }) {
-  const [addresses, setAddresses] = useState([]);
   const [inventories, setInventories] = useState([]);
   const [selectedInventoryId, setSelectedInventoryId] = useState("");
-  const [inventorySearch, setInventorySearch] = useState("");
-  const [loadingAddresses, setLoadingAddresses] = useState(true);
-  const [loadingInventories, setLoadingInventories] = useState(true);
   const [loadingQuote, setLoadingQuote] = useState(Boolean(quoteId));
   const [quoteCarriers, setQuoteCarriers] = useState([]);
   const [priceBands, setPriceBands] = useState([]);
@@ -260,45 +251,9 @@ export default function GenerateQuoteForm({ quoteId }) {
     name: "packageList.packages",
   });
 
-  const initiation = useWatch({ control, name: "initiation" });
-  const destination = useWatch({ control, name: "destination" });
   const packageType = useWatch({ control, name: "packageList.type" });
 
-  const selectedInitiation = useMemo(() => addresses.find((address) => getAddressId(address) == initiation), [addresses, initiation]);
-  const selectedDestination = useMemo(() => addresses.find((address) => getAddressId(address) == destination), [addresses, destination]);
   const formLocked = quoteGenerated;
-
-  useEffect(() => {
-    axiosInstance.get(API_URL.ADDRESSES_FETCH).then((response) => {
-      if (response.data.success) {
-        setAddresses(response.data?.data || []);
-      } else {
-        setAddresses([]);
-      }
-    }).catch((error) => {
-      toast.error(error?.response?.data?.message || "Unable to fetch addresses", { id: "quote-addresses" });
-    }).finally(() => {
-      setLoadingAddresses(false);
-    });
-  }, []);
-
-  useEffect(() => {
-    const search = inventorySearch.trim();
-    const timeoutId = setTimeout(() => {
-      setLoadingInventories(true);
-      axiosInstance.get(API_URL.INVENTORY, { params: { page: 1, rowCount: 100, ...(search ? { search } : {}) } }).then((response) => {
-        const payload = response.data?.data ?? [];
-        setInventories(Array.isArray(payload) ? payload : [payload].filter(Boolean));
-      }).catch((error) => {
-        toast.error(error?.response?.data?.message || "Unable to fetch inventory", { id: "quote-inventory" });
-        setInventories([]);
-      }).finally(() => {
-        setLoadingInventories(false);
-      });
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [inventorySearch]);
 
   useEffect(() => {
     if (!quoteId) return;
@@ -379,12 +334,12 @@ export default function GenerateQuoteForm({ quoteId }) {
   });
 
   const handleInventoryChange = (inventoryId) => {
-    const selectedInventory = inventories.find((item) => getInventoryId(item) == inventoryId);
+    const selectedInventory = typeof inventoryId === "object" ? inventoryId : inventories.find((item) => getInventoryId(item) == inventoryId);
     if (!selectedInventory) return;
 
+    setInventories((current) => current.some((item) => getInventoryId(item) === getInventoryId(selectedInventory)) ? current : [selectedInventory, ...current]);
     append(getPackageFromInventory(selectedInventory));
     setSelectedInventoryId("");
-    setInventorySearch("");
   };
 
   return (
@@ -395,43 +350,31 @@ export default function GenerateQuoteForm({ quoteId }) {
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Initiation Address
               <Controller control={control} name="initiation" render={({ field }) => (
-                <Select disabled={loadingAddresses || loadingQuote || formLocked} value={field.value || ""} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full min-w-0">
-                    <span className={`min-w-0 flex-1 truncate text-left ${selectedInitiation ? "" : "text-muted-foreground"}`}>
-                      {selectedInitiation ? getAddressLabel(selectedInitiation) : loadingAddresses || loadingQuote ? "Loading..." : "Select initiation address"}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {addresses.map((address) => (
-                      <SelectItem key={getAddressId(address)} value={getAddressId(address)}>
-                        {getAddressLabel(address)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AddressAutocomplete
+                  disabled={loadingQuote || formLocked}
+                  error={Boolean(errors.initiation)}
+                  helperText={errors.initiation?.message}
+                  label="Initiation address"
+                  onChange={field.onChange}
+                  placeholder="Initiation address"
+                  value={field.value || ""}
+                />
               )} />
-              {errors.initiation && <span className="text-xs text-destructive">{errors.initiation.message}</span>}
             </label>
 
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Destination Address
               <Controller control={control} name="destination" render={({ field }) => (
-                <Select disabled={loadingAddresses || loadingQuote || formLocked} value={field.value || ""} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full min-w-0">
-                    <span className={`min-w-0 flex-1 truncate text-left ${selectedDestination ? "" : "text-muted-foreground"}`}>
-                      {selectedDestination ? getAddressLabel(selectedDestination) : loadingAddresses || loadingQuote ? "Loading..." : "Select destination address"}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {addresses.map((address) => (
-                      <SelectItem key={getAddressId(address)} value={getAddressId(address)}>
-                        {getAddressLabel(address)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AddressAutocomplete
+                  disabled={loadingQuote || formLocked}
+                  error={Boolean(errors.destination)}
+                  helperText={errors.destination?.message}
+                  label="Destination address"
+                  onChange={field.onChange}
+                  placeholder="Destination address"
+                  value={field.value || ""}
+                />
               )} />
-              {errors.destination && <span className="text-xs text-destructive">{errors.destination.message}</span>}
             </label>
           </div>
 
@@ -457,28 +400,14 @@ export default function GenerateQuoteForm({ quoteId }) {
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-medium">Packages</h2>
               <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-                <Input
-                  className="w-full sm:w-56"
-                  disabled={loadingQuote || loadingInventories || formLocked}
-                  value={inventorySearch}
-                  onChange={(event) => setInventorySearch(event.target.value)}
-                  placeholder="Search inventory"
-                />
-
-                <Select disabled={loadingQuote || loadingInventories || formLocked} value={selectedInventoryId} onValueChange={handleInventoryChange}>
-                  <SelectTrigger className="w-full min-w-0 sm:w-72">
-                    <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">
-                      {loadingInventories ? "Loading inventory..." : inventories.length ? "Choose inventory" : "No inventory found"}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {inventories.map((item) => (
-                      <SelectItem key={getInventoryId(item)} value={getInventoryId(item)}>
-                        {getInventoryLabel(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="w-full sm:w-72">
+                  <InventoryAutocomplete
+                    disabled={loadingQuote || formLocked}
+                    value={selectedInventoryId}
+                    onChange={handleInventoryChange}
+                    placeholder="Choose inventory"
+                  />
+                </div>
 
                 <Button type="button" variant="outline" disabled={loadingQuote || formLocked} onClick={() => append(defaultPackage)}>
                   <Plus />
@@ -547,7 +476,7 @@ export default function GenerateQuoteForm({ quoteId }) {
               Reset Quote
             </Button>
           )}
-          <Button type="submit" className="min-w-40 whitespace-nowrap px-4" disabled={loadingAddresses || loadingQuote || isSubmitting || formLocked}>
+          <Button type="submit" className="min-w-40 whitespace-nowrap px-4" disabled={loadingQuote || isSubmitting || formLocked}>
             {loadingQuote ? "Loading Quote..." : isSubmitting ? "Generating..." : "Generate Quote"}
           </Button>
         </div>

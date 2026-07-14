@@ -56,6 +56,8 @@ const API_URL = Object.freeze({
     ORDERS_SLA: "/orders/sla",
     ORDER_BY_ID: (id) => `/orders/${id}`,
     ORDER_QUOTE: "/orders/quote",
+    ORDER_LABELS: "/orders/labels",
+    ORDER_LABEL_QUOTES: "/orders/label-quotes",
 })
 
 const PROJECT_URL = Object.freeze({

@@ -3,8 +3,10 @@ import { ORDER_CONSTANTS } from '../constants/orders';
 const ORDERS_INIT = {
     loading: false,
     slaLoading: false,
+    labelQuotesLoading: false,
     deleting: false,
     data: [],
+    labelQuotes: [],
     slaDashboard: {
         atRiskOrders: [],
         performance: [],
@@ -31,8 +33,16 @@ const ORDERS_INIT = {
         offset: 0,
         totalPages: 1
     },
+    labelQuotesPagination: {
+        page: 1,
+        rowCount: 10,
+        total: 0,
+        offset: 0,
+        totalPages: 1
+    },
     message: null,
     error: null,
+    labelQuotesError: null,
     slaError: null
 };
 
@@ -83,6 +93,27 @@ export const OrderReducer = (state = ORDERS_INIT, action) => {
                     atRiskOrders: [],
                     pagination: ORDERS_INIT.slaDashboard.pagination
                 }
+            };
+
+        case ORDER_CONSTANTS.FETCH_LABEL_QUOTES_REQUEST:
+            return { ...state, labelQuotesLoading: true, message: null, labelQuotesError: null };
+
+        case ORDER_CONSTANTS.FETCH_LABEL_QUOTES_SUCCESS:
+            return {
+                ...state,
+                labelQuotesLoading: false,
+                labelQuotes: action.payload.append ? [...state.labelQuotes, ...action.payload.data] : action.payload.data,
+                labelQuotesPagination: action.payload.pagination || state.labelQuotesPagination || ORDERS_INIT.pagination,
+                message: action.payload.message || null,
+                labelQuotesError: null
+            };
+
+        case ORDER_CONSTANTS.FETCH_LABEL_QUOTES_FAILURE:
+            return {
+                ...state,
+                labelQuotesLoading: false,
+                labelQuotesError: action.payload.error,
+                message: action.payload.message || null
             };
 
         case ORDER_CONSTANTS.DELETE_ORDER_REQUEST:

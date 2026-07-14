@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import axiosInstance from "@/config/axios";
 import { API_URL } from "@/utils/constants";
 import CarrierBrand from "@/components/carrier-brand";
+import InventoryAutocomplete from "@/components/InventoryAutocomplete";
 
 const defaultPackage = {
   inventoryId: "",
@@ -65,7 +66,6 @@ const getInventoryId = (item) => {
 };
 const getInventorySku = (item) => item?.productSku || item?.productId || item?.metadata?.ID || "";
 const getInventoryName = (item) => item?.name || item?.metadata?.ProductName || getInventorySku(item) || "Inventory item";
-const getInventoryLabel = (item) => [getInventoryName(item), getInventorySku(item)].filter(Boolean).join(" - ");
 
 const getQuoteAddressValue = (value) => {
   if (!value) return "";
@@ -241,9 +241,7 @@ export default function GenerateQuoteForm({ quoteId }) {
   const [addresses, setAddresses] = useState([]);
   const [inventories, setInventories] = useState([]);
   const [selectedInventoryId, setSelectedInventoryId] = useState("");
-  const [inventorySearch, setInventorySearch] = useState("");
   const [loadingAddresses, setLoadingAddresses] = useState(true);
-  const [loadingInventories, setLoadingInventories] = useState(true);
   const [loadingQuote, setLoadingQuote] = useState(Boolean(quoteId));
   const [quoteCarriers, setQuoteCarriers] = useState([]);
   const [priceBands, setPriceBands] = useState([]);
@@ -281,24 +279,6 @@ export default function GenerateQuoteForm({ quoteId }) {
       setLoadingAddresses(false);
     });
   }, []);
-
-  useEffect(() => {
-    const search = inventorySearch.trim();
-    const timeoutId = setTimeout(() => {
-      setLoadingInventories(true);
-      axiosInstance.get(API_URL.INVENTORY, { params: { page: 1, rowCount: 100, ...(search ? { search } : {}) } }).then((response) => {
-        const payload = response.data?.data ?? [];
-        setInventories(Array.isArray(payload) ? payload : [payload].filter(Boolean));
-      }).catch((error) => {
-        toast.error(error?.response?.data?.message || "Unable to fetch inventory", { id: "quote-inventory" });
-        setInventories([]);
-      }).finally(() => {
-        setLoadingInventories(false);
-      });
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [inventorySearch]);
 
   useEffect(() => {
     if (!quoteId) return;
@@ -379,12 +359,12 @@ export default function GenerateQuoteForm({ quoteId }) {
   });
 
   const handleInventoryChange = (inventoryId) => {
-    const selectedInventory = inventories.find((item) => getInventoryId(item) == inventoryId);
+    const selectedInventory = typeof inventoryId === "object" ? inventoryId : inventories.find((item) => getInventoryId(item) == inventoryId);
     if (!selectedInventory) return;
 
+    setInventories((current) => current.some((item) => getInventoryId(item) === getInventoryId(selectedInventory)) ? current : [selectedInventory, ...current]);
     append(getPackageFromInventory(selectedInventory));
     setSelectedInventoryId("");
-    setInventorySearch("");
   };
 
   return (
@@ -457,28 +437,14 @@ export default function GenerateQuoteForm({ quoteId }) {
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-medium">Packages</h2>
               <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-                <Input
-                  className="w-full sm:w-56"
-                  disabled={loadingQuote || loadingInventories || formLocked}
-                  value={inventorySearch}
-                  onChange={(event) => setInventorySearch(event.target.value)}
-                  placeholder="Search inventory"
-                />
-
-                <Select disabled={loadingQuote || loadingInventories || formLocked} value={selectedInventoryId} onValueChange={handleInventoryChange}>
-                  <SelectTrigger className="w-full min-w-0 sm:w-72">
-                    <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">
-                      {loadingInventories ? "Loading inventory..." : inventories.length ? "Choose inventory" : "No inventory found"}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {inventories.map((item) => (
-                      <SelectItem key={getInventoryId(item)} value={getInventoryId(item)}>
-                        {getInventoryLabel(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="w-full sm:w-72">
+                  <InventoryAutocomplete
+                    disabled={loadingQuote || formLocked}
+                    value={selectedInventoryId}
+                    onChange={handleInventoryChange}
+                    placeholder="Choose inventory"
+                  />
+                </div>
 
                 <Button type="button" variant="outline" disabled={loadingQuote || formLocked} onClick={() => append(defaultPackage)}>
                   <Plus />

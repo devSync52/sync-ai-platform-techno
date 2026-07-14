@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@hookform/resolvers": "^3.1.0",
+    "@mui/material": "^9.2.0",
     "@redux-devtools/extension": "^4.0.0",
     "@stripe/react-stripe-js": "^6.6.0",
     "@stripe/stripe-js": "^9.7.0",
@@ -26,6 +29,7 @@
     "react-dom": "19.2.4",
     "react-hook-form": "^7.0.0",
     "react-hot-toast": "^2.4.0",
+    "react-infinite-scroll-component": "^7.2.1",
     "react-redux": "^9.2.0",
     "recharts": "^3.8.1",
     "redux": "^5.0.1",

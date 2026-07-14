@@ -11,6 +11,7 @@ import CarrierBrand from "@/components/carrier-brand";
 import DashboardPagination from "@/components/DashboardPagination";
 import DiscrepancyClaimPopup from "./components/DiscrepancyClaimPopup";
 import DiscrepancyOperationPopup from "./components/DiscrepancyOperationPopup";
+import useDebounce from "@/hooks/useDebounce";
 import toast from "react-hot-toast";
 import { AlertTriangle, CircleDot, Download, FileSearch, Plus, RefreshCw, Search, ShieldAlert, TrendingDown } from "lucide-react";
 
@@ -29,12 +30,15 @@ export default function Discrepancies() {
   const [saving, setSaving] = useState(false);
   const [operationOpen, setOperationOpen] = useState(false);
   const [claimPopup, setClaimPopup] = useState({ open: false, discrepancy: null });
+  const debouncedSearch = useDebounce(filters.search, 300);
+  const { type, severity, status, carrier } = filters;
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
     try {
+      const effectiveFilters = { search: debouncedSearch, type, severity, status, carrier };
       const params = {
-        ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value && value !== "all")),
+        ...Object.fromEntries(Object.entries(effectiveFilters).filter(([, value]) => value && value !== "all")),
         page,
         limit: pageLimit,
       };
@@ -47,12 +51,11 @@ export default function Discrepancies() {
     } finally {
       setLoading(false);
     }
-  }, [filters, page, pagination.rowCount]);
+  }, [carrier, debouncedSearch, page, severity, status, type]);
 
   useEffect(() => {
-    const timer = setTimeout(fetchRows, filters.search ? 300 : 0);
-    return () => clearTimeout(timer);
-  }, [fetchRows, filters.search]);
+    queueMicrotask(fetchRows);
+  }, [fetchRows]);
 
   const statCards = useMemo(() => [
     { label: "Total Discrepancies", value: stats.total, icon: FileSearch, color: "text-slate-950" },

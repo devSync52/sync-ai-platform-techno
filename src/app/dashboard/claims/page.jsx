@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import DashboardPagination from "@/components/DashboardPagination";
 import CarrierBrand from "@/components/carrier-brand";
+import useDebounce from "@/hooks/useDebounce";
 import toast from "react-hot-toast";
 import {
   ArrowUpRight,
@@ -35,12 +36,15 @@ export default function ClaimsPage() {
   const [filters, setFilters] = useState({ search: "", status: "all", carrier: "all" });
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState("");
+  const debouncedSearch = useDebounce(filters.search, 300);
+  const { status, carrier } = filters;
 
   const fetchClaims = useCallback(async () => {
     setLoading(true);
     try {
+      const effectiveFilters = { search: debouncedSearch, status, carrier };
       const params = {
-        ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value && value !== "all")),
+        ...Object.fromEntries(Object.entries(effectiveFilters).filter(([, value]) => value && value !== "all")),
         page,
         limit: pageLimit,
       };
@@ -53,12 +57,11 @@ export default function ClaimsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters, page]);
+  }, [carrier, debouncedSearch, page, status]);
 
   useEffect(() => {
-    const timer = setTimeout(fetchClaims, filters.search ? 300 : 0);
-    return () => clearTimeout(timer);
-  }, [fetchClaims, filters.search]);
+    queueMicrotask(fetchClaims);
+  }, [fetchClaims]);
 
   const statCards = useMemo(() => [
     {
