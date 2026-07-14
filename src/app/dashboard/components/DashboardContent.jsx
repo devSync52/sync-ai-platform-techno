@@ -9,6 +9,7 @@ import { metrics as staticMetrics } from "./data";
 import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics, normalizeSlaDashboard } from "@/services/actions/orders";
 import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
+import { PROJECT_URL } from "@/utils/constants";
 
 const PerformanceChart = dynamic(() => import("./PerformanceChart"), { ssr: false });
 const DiscrepancyDonut = dynamic(() => import("./DiscrepancyDonut"), { ssr: false });
@@ -120,14 +121,10 @@ export default function DashboardContent({ initialSlaDashboard = null, initialCo
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="flex h-9 items-center gap-2 rounded-md border border-[#d9d4e4] bg-white px-4 text-xs font-semibold text-[#090514] shadow-sm transition hover:-translate-y-0.5 hover:border-[#bda6df] hover:shadow-md">
-              <IconAsset name="invoice" className="h-4 w-4" />
-              Upload Invoice
-            </button>
-            <button className="flex h-9 items-center gap-2 rounded-md bg-[#7900e8] px-4 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#6500c4] hover:shadow-lg hover:shadow-violet-700/20">
+            <Link href={PROJECT_URL.DASHBOARD_LABEL_GENERATOR} className="flex h-9 items-center gap-2 rounded-md bg-[#7900e8] px-4 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#6500c4] hover:shadow-lg hover:shadow-violet-700/20">
               <IconAsset name="plusTag" className="h-4 w-4" />
               New Label
-            </button>
+            </Link>
           </div>
         </header>
 
