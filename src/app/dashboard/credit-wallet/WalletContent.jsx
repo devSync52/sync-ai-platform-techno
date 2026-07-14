@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, CreditCard, Download, FileText, Loader2, Plus, RefreshCw, Wallet } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "react-hot-toast";
@@ -9,6 +10,7 @@ import { API_URL } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FetchSettingsAction } from "@/services/actions/settings";
 
 const quickAmounts = [25, 50, 100, 250];
 
@@ -46,6 +48,8 @@ const formatChartDate = (value) => {
 };
 
 export default function WalletContent({ initialWallet = emptyWallet }) {
+  const dispatch = useDispatch();
+  const { data: settings } = useSelector((state) => state.settings);
   const [wallet, setWallet] = useState({
     ...emptyWallet,
     ...initialWallet,
@@ -57,7 +61,8 @@ export default function WalletContent({ initialWallet = emptyWallet }) {
   const [topUpLoading, setTopUpLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  const lowBalance = Number(wallet.summary.balance || 0) < 10;
+  const walletThreshold = Number(settings?.walletThreshold ?? 10);
+  const lowBalance = Number(wallet.summary.balance || 0) < walletThreshold;
 
   const fetchWallet = useCallback(async (page = 1) => {
     setLoading(true);
@@ -72,6 +77,10 @@ export default function WalletContent({ initialWallet = emptyWallet }) {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    dispatch(FetchSettingsAction()).catch(() => { });
+  }, [dispatch]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -168,7 +177,7 @@ export default function WalletContent({ initialWallet = emptyWallet }) {
               <AlertTriangle className="mt-0.5 size-5 shrink-0" />
               <div>
                 <p className="font-bold">Low credit balance: {formatMoney(wallet.summary.balance)} remaining</p>
-                <p className="mt-1 text-sm text-amber-800">Top up your wallet to keep generating labels without interruption.</p>
+                <p className="mt-1 text-sm text-amber-800">Your configured low-wallet threshold is {formatMoney(walletThreshold)}.</p>
               </div>
             </div>
             <Button onClick={handleTopUp} disabled={topUpLoading} className="gap-2 bg-amber-700 text-white hover:bg-amber-800">

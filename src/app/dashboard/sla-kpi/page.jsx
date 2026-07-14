@@ -104,7 +104,7 @@ export default function SlaKpiPage() {
     const [draftDateRange, setDraftDateRange] = useState(initialDateRange);
     const [appliedDateRange, setAppliedDateRange] = useState(initialDateRange);
 
-    const details = { atRiskOrders: [], performance: [], deliveryTrend: [], pagination: defaultSlaPagination, metrics: defaultSlaMetrics, settings: { orderRiskThresholdDays: 3 } }
+    const details = { atRiskOrders: [], performance: [], deliveryTrend: [], pagination: defaultSlaPagination, metrics: defaultSlaMetrics }
     const { slaDashboard = details, slaLoading, slaError, message, } = useSelector((state) => state.orders);
 
     const fetchSlaDashboard = useCallback(() => {
@@ -160,9 +160,7 @@ export default function SlaKpiPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-2">
                     <h1 className="text-3xl font-bold tracking-normal text-[#090514]">SLA & KPI Dashboard</h1>
-                    <p className="max-w-2xl text-sm text-[#68607f]">
-                        On-time performance, at-risk orders, and carrier SLA compliance across active shipments. At-risk starts after {slaDashboard.settings?.orderRiskThresholdDays || 3} overdue day(s).
-                    </p>
+                    <p className="max-w-2xl text-sm text-[#68607f]">On-time performance, at-risk orders, and carrier SLA compliance across active shipments.</p>
                 </div>
             </div>
 

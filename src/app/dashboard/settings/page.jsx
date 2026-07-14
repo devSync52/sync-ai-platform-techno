@@ -24,8 +24,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CarrierBrand from "@/components/carrier-brand";
 import { FetchIntegrationsAction } from "@/services/actions/integrations";
@@ -34,34 +32,9 @@ import { FetchSettingsAction, UpdateShippingSettingsAction } from "@/services/ac
 import { PROJECT_URL } from "@/utils/constants";
 
 const defaultShippingSettings = {
-  defaultCarrier: "best-rate",
-  labelFormat: "4x6",
-  billingMode: "prepaid",
   walletThreshold: 10,
   verykCustomerCareEmail: "support@veryk.com",
-  orderRiskThresholdDays: 3,
-  autoCarrierSelection: true,
-  autoLabelRefresh: true,
-  walletGuard: true,
 };
-
-const automationSettings = [
-  {
-    key: "autoCarrierSelection",
-    title: "Auto carrier selection",
-    description: "Prefer the best active carrier based on price, SLA, and warehouse.",
-  },
-  {
-    key: "autoLabelRefresh",
-    title: "Refresh rates before label",
-    description: "Recheck carrier pricing before a saved quote is converted to a label.",
-  },
-  {
-    key: "walletGuard",
-    title: "Wallet guard",
-    description: "Block label generation when available credits are below the selected service total.",
-  },
-];
 
 function getUserDetails(user) {
   return user?.data?.user || user?.data || user || {};
@@ -119,18 +92,6 @@ function settingValue(settings, draft, key) {
   return draft[key] ?? settings?.[key] ?? defaultShippingSettings[key];
 }
 
-function SettingToggle({ checked, description, onCheckedChange, title }) {
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-      <div className="min-w-0">
-        <h3 className="font-semibold text-gray-950">{title}</h3>
-        <p className="mt-1 text-sm text-gray-500">{description}</p>
-      </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </div>
-  );
-}
-
 function StatusPill({ active }) {
   return (
     <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
@@ -168,7 +129,7 @@ export default function SettingsPage() {
   const { data: settings, loading: settingsLoading, saving: savingSettings } = useSelector((state) => state.settings);
 
   const userSnapshot = useMemo(() => getUserSnapshot(user), [user]);
-  const isAdminUser = userSnapshot.role !== "client";
+  const isSuperAdmin = userSnapshot.role === "super_admin";
   const connectedCarriers = useMemo(() => (integrations || []).filter((integration) => integration.isActive), [integrations]);
   const userInitials = getInitials(userSnapshot.name, userSnapshot.email);
 
@@ -219,15 +180,8 @@ export default function SettingsPage() {
     event.preventDefault();
     try {
       await dispatch(UpdateShippingSettingsAction({
-        defaultCarrier: getShippingValue("defaultCarrier"),
-        labelFormat: getShippingValue("labelFormat"),
-        billingMode: getShippingValue("billingMode"),
         walletThreshold: Number(getShippingValue("walletThreshold") || 0),
         verykCustomerCareEmail: getShippingValue("verykCustomerCareEmail"),
-        orderRiskThresholdDays: Number(getShippingValue("orderRiskThresholdDays") || 0),
-        autoCarrierSelection: Boolean(getShippingValue("autoCarrierSelection")),
-        autoLabelRefresh: Boolean(getShippingValue("autoLabelRefresh")),
-        walletGuard: Boolean(getShippingValue("walletGuard")),
       }));
       setShippingDraft({});
       toast.success("Shipping settings saved", { id: "shipping-save" });
@@ -317,17 +271,17 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={BadgeCheck} label="Account Status" value={userLoading ? "Loading" : "Active"} tone="text-emerald-700" />
         <MetricCard icon={Truck} label="Connected Carriers" value={connectedCarriers.length} tone="text-violet-700" />
-        <MetricCard icon={PackageCheck} label="Label Format" value={getShippingValue("labelFormat")} />
+        <MetricCard icon={PackageCheck} label="Shipping Controls" value={isSuperAdmin ? "Enabled" : "Admin"} />
         <MetricCard icon={ShieldCheck} label="Security" value="Protected" tone="text-emerald-700" />
       </div>
 
       <Tabs defaultValue="profile" className="gap-5">
-        <TabsList className={`grid h-auto w-full grid-cols-1 gap-2 rounded-lg bg-[#efedf8] p-1 md:w-fit ${isAdminUser ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
+        <TabsList className={`grid h-auto w-full grid-cols-1 gap-2 rounded-lg bg-[#efedf8] p-1 md:w-fit ${isSuperAdmin ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
           <TabsTrigger value="profile" className="h-10 px-4">
             <User />
             Profile
           </TabsTrigger>
-          {isAdminUser && (
+          {isSuperAdmin && (
             <TabsTrigger value="shipping" className="h-10 px-4">
               <Route />
               Shipping Details
@@ -435,9 +389,9 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {isAdminUser && (
+        {isSuperAdmin && (
           <TabsContent value="shipping">
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
               <Card className="bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 text-violet-700">
@@ -451,57 +405,8 @@ export default function SettingsPage() {
 
                 <form className="grid grid-cols-1 gap-5 md:grid-cols-2" onSubmit={handleSaveShipping}>
                   <div>
-                    <Label className="mb-2 block text-sm font-semibold text-gray-700">Default Carrier Logic</Label>
-                    <Select value={getShippingValue("defaultCarrier")} onValueChange={(value) => updateShippingField("defaultCarrier", value)}>
-                      <SelectTrigger className="w-full py-6">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="best-rate">Best rate</SelectItem>
-                          <SelectItem value="fastest-sla">Fastest SLA</SelectItem>
-                          <SelectItem value="manual">Manual selection</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="mb-2 block text-sm font-semibold text-gray-700">Label Format</Label>
-                    <Select value={getShippingValue("labelFormat")} onValueChange={(value) => updateShippingField("labelFormat", value)}>
-                      <SelectTrigger className="w-full py-6">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="4x6">4x6 thermal</SelectItem>
-                          <SelectItem value="a4">A4 sheet</SelectItem>
-                          <SelectItem value="letter">US letter</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="mb-2 block text-sm font-semibold text-gray-700">Billing Mode</Label>
-                    <Select value={getShippingValue("billingMode")} onValueChange={(value) => updateShippingField("billingMode", value)}>
-                      <SelectTrigger className="w-full py-6">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="prepaid">Credit wallet prepaid</SelectItem>
-                          <SelectItem value="carrier-account">Carrier account billing</SelectItem>
-                          <SelectItem value="client-account">Client account billing</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
                     <Label className="mb-2 block text-sm font-semibold text-gray-700">Low Wallet Threshold</Label>
                     <Input type="number" min="0" value={getShippingValue("walletThreshold")} onChange={(event) => updateShippingField("walletThreshold", event.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block text-sm font-semibold text-gray-700">Order on Risk Threshold</Label>
-                    <Input type="number" min="0" step="0.5" value={getShippingValue("orderRiskThresholdDays")} onChange={(event) => updateShippingField("orderRiskThresholdDays", event.target.value)} />
                   </div>
                   <div>
                     <Label className="mb-2 block text-sm font-semibold text-gray-700">Veryk Customer Care Email</Label>
@@ -522,20 +427,19 @@ export default function SettingsPage() {
                     <Route className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-950">Automation</h2>
-                    <p className="text-sm text-gray-500">Controls used by quote, label, wallet, and SLA flows.</p>
+                    <h2 className="text-xl font-semibold text-gray-950">Saved Controls</h2>
+                    <p className="text-sm text-gray-500">These values are used by wallet and carrier support workflows.</p>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  {automationSettings.map((setting) => (
-                    <SettingToggle
-                      key={setting.key}
-                      title={setting.title}
-                      description={setting.description}
-                      checked={Boolean(getShippingValue(setting.key))}
-                      onCheckedChange={(checked) => updateShippingField(setting.key, checked)}
-                    />
-                  ))}
+                <div className="space-y-3 text-sm">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="font-semibold text-gray-950">Low wallet alert</div>
+                    <div className="mt-1 text-gray-500">${getShippingValue("walletThreshold")} threshold</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="font-semibold text-gray-950">Veryk support</div>
+                    <div className="mt-1 break-all text-gray-500">{getShippingValue("verykCustomerCareEmail")}</div>
+                  </div>
                 </div>
               </Card>
             </div>

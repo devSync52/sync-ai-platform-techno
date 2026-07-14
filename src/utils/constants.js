@@ -57,6 +57,8 @@ const API_URL = Object.freeze({
     ADDRESSES_FETCH: "/addresses/fetch",
     ORDERS: "/orders",
     ORDERS_SLA: "/orders/sla",
+    SLA_RULES: "/sla-rules",
+    SLA_RULE_BY_ID: (id) => `/sla-rules/${id}`,
     ORDER_BY_ID: (id) => `/orders/${id}`,
     ORDER_QUOTE: "/orders/quote",
     ORDER_LABELS: "/orders/labels",

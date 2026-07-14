@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,10 +15,86 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { CalendarClock, Clock, Plus, Route, ShieldCheck, Truck } from "lucide-react";
+import { CalendarClock, Clock, Loader2, Plus, ShieldCheck, Truck } from "lucide-react";
+import { createSlaRule, updateSlaRule } from "@/services/actions/sla-rules";
 
-export default function SlaRuleOperationPopup({ open, onOpenChange }) {
+const emptyForm = {
+  carrierId: "all",
+  serviceId: "all",
+  commitmentDays: "3",
+  riskDays: "3",
+  priority: "medium",
+  status: "active",
+  notes: "",
+};
+
+const getInitialForm = (rule) => rule ? {
+  carrierId: rule.carrierId || "all",
+  serviceId: rule.serviceId || "all",
+  commitmentDays: String(rule.commitmentDays ?? 3),
+  riskDays: String(rule.riskDays ?? 3),
+  priority: rule.priority || "medium",
+  status: rule.status || "active",
+  notes: rule.notes || "",
+} : emptyForm;
+
+export default function SlaRuleOperationPopup({ carriers = [], open, onOpenChange, onSaved, rule }) {
+  const [form, setForm] = useState(() => getInitialForm(rule));
+  const [saving, setSaving] = useState(false);
+  const editing = Boolean(rule?.id);
+
+  const services = useMemo(() => {
+    if (form.carrierId && form.carrierId !== "all") {
+      return carriers.find((carrier) => carrier.id === form.carrierId)?.services || [];
+    }
+    return carriers.flatMap((carrier) => carrier.services || []);
+  }, [carriers, form.carrierId]);
+  const selectedCarrierName = form.carrierId === "all"
+    ? "All carriers"
+    : carriers.find((carrier) => carrier.id === form.carrierId)?.name || "Select carrier";
+  const selectedServiceName = form.serviceId === "all"
+    ? "All services"
+    : services.find((service) => service.id === form.serviceId)?.name || "Select service";
+  const generatedRuleName = `${selectedCarrierName} - ${selectedServiceName}`;
+
+  const updateField = (key, value) => {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "carrierId" ? { serviceId: "all" } : {})
+    }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        name: generatedRuleName,
+        carrierId: form.carrierId === "all" ? null : form.carrierId,
+        serviceId: form.serviceId === "all" ? null : form.serviceId,
+        commitmentDays: Number(form.commitmentDays || 0),
+        riskDays: Number(form.riskDays || 0),
+        priority: form.priority,
+        status: form.status,
+        notes: form.notes,
+      };
+
+      if (editing) {
+        await updateSlaRule(rule.id, payload);
+        toast.success("SLA rule updated");
+      } else {
+        await createSlaRule(payload);
+        toast.success("SLA rule created");
+      }
+
+      onSaved?.();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to save SLA rule");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[min(calc(100vw-2rem),900px)]! gap-0 overflow-hidden rounded-2xl bg-white p-0 shadow-[0_28px_90px_rgba(25,10,50,0.24)]">
@@ -26,14 +104,13 @@ export default function SlaRuleOperationPopup({ open, onOpenChange }) {
               <CalendarClock className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <DialogTitle className="text-xl font-bold text-slate-950">Create SLA rule</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-slate-950">{editing ? "Edit SLA rule" : "Create SLA rule"}</DialogTitle>
               <DialogDescription className="mt-2 max-w-2xl">
-                Define delivery commitments by carrier, service level, zone, and client priority.
+                Define delivery commitments by carrier and service. Risk date controls when late orders become at-risk.
               </DialogDescription>
               <div className="mt-4 flex flex-wrap gap-2">
                 <HeaderPill icon={Truck} label="Carrier policy" />
-                <HeaderPill icon={Route} label="Zone window" />
-                <HeaderPill icon={ShieldCheck} label="Risk threshold" />
+                <HeaderPill icon={ShieldCheck} label="Risk date" />
               </div>
             </div>
           </div>
@@ -44,50 +121,35 @@ export default function SlaRuleOperationPopup({ open, onOpenChange }) {
             <div className="space-y-5">
               <FormSection icon={Truck} title="Scope">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <FormField label="Rule name" className="md:col-span-2">
-                    <Input placeholder="e.g. UPS Ground - Standard" className="h-11 bg-white py-2" />
-                  </FormField>
+                  <div className="md:col-span-2 rounded-lg border border-purple-100 bg-purple-50 px-4 py-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-primary">Rule name</div>
+                    <div className="mt-1 truncate text-sm font-semibold text-slate-950">{generatedRuleName}</div>
+                  </div>
 
                   <FormField label="Carrier">
-                    <Select>
+                    <Select value={form.carrierId} onValueChange={(value) => updateField("carrierId", value)}>
                       <SelectTrigger className="h-11 w-full">
-                        <SelectValue placeholder="Select carrier" />
+                        <span className="truncate">{selectedCarrierName}</span>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All carriers</SelectItem>
-                        <SelectItem value="ups">UPS</SelectItem>
-                        <SelectItem value="fedex">FedEx</SelectItem>
-                        <SelectItem value="usps">USPS</SelectItem>
-                        <SelectItem value="veryk">Veryk</SelectItem>
+                        {carriers.map((carrier) => (
+                          <SelectItem key={carrier.id} value={carrier.id}>{carrier.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormField>
 
                   <FormField label="Service level">
-                    <Select>
+                    <Select value={form.serviceId} onValueChange={(value) => updateField("serviceId", value)}>
                       <SelectTrigger className="h-11 w-full">
-                        <SelectValue placeholder="Select service" />
+                        <span className="truncate">{selectedServiceName}</span>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All services</SelectItem>
-                        <SelectItem value="ground">Ground</SelectItem>
-                        <SelectItem value="home-delivery">Home Delivery</SelectItem>
-                        <SelectItem value="priority">Priority</SelectItem>
-                        <SelectItem value="express">Express</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormField>
-
-                  <FormField label="Client segment" className="md:col-span-2">
-                    <Select>
-                      <SelectTrigger className="h-11 w-full">
-                        <SelectValue placeholder="Select client segment" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All clients</SelectItem>
-                        <SelectItem value="enterprise">Enterprise</SelectItem>
-                        <SelectItem value="standard">Standard</SelectItem>
-                        <SelectItem value="priority">Priority accounts</SelectItem>
+                        {services.map((service) => (
+                          <SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormField>
@@ -96,24 +158,16 @@ export default function SlaRuleOperationPopup({ open, onOpenChange }) {
 
               <FormSection icon={Clock} title="Commitment">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <FormField label="Zone from">
-                    <Input type="number" min="1" placeholder="2" className="h-11 bg-white py-2" />
-                  </FormField>
-
-                  <FormField label="Zone to">
-                    <Input type="number" min="1" placeholder="8" className="h-11 bg-white py-2" />
-                  </FormField>
-
                   <FormField label="Commitment days">
-                    <Input type="number" min="1" placeholder="3" className="h-11 bg-white py-2" />
+                    <Input type="number" min="0" step="0.5" value={form.commitmentDays} onChange={(event) => updateField("commitmentDays", event.target.value)} className="h-11 bg-white py-2" />
                   </FormField>
 
-                  <FormField label="Warning threshold">
-                    <Input type="number" min="0" placeholder="1" className="h-11 bg-white py-2" />
+                  <FormField label="Risk date">
+                    <Input type="number" min="0" step="0.5" value={form.riskDays} onChange={(event) => updateField("riskDays", event.target.value)} className="h-11 bg-white py-2" />
                   </FormField>
 
-                  <FormField label="Rule priority" className="md:col-span-2">
-                    <Select>
+                  <FormField label="Rule priority">
+                    <Select value={form.priority} onValueChange={(value) => updateField("priority", value)}>
                       <SelectTrigger className="h-11 w-full">
                         <SelectValue placeholder="Select priority" />
                       </SelectTrigger>
@@ -124,6 +178,19 @@ export default function SlaRuleOperationPopup({ open, onOpenChange }) {
                       </SelectContent>
                     </Select>
                   </FormField>
+
+                  <FormField label="Status">
+                    <Select value={form.status} onValueChange={(value) => updateField("status", value)}>
+                      <SelectTrigger className="h-11 w-full">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="disabled">Disabled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
                 </div>
               </FormSection>
 
@@ -131,6 +198,8 @@ export default function SlaRuleOperationPopup({ open, onOpenChange }) {
                 <Label>Notes</Label>
                 <textarea
                   rows={4}
+                  value={form.notes}
+                  onChange={(event) => updateField("notes", event.target.value)}
                   placeholder="Add special handling notes, exceptions, or policy context."
                   className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                 />
@@ -144,26 +213,16 @@ export default function SlaRuleOperationPopup({ open, onOpenChange }) {
                 </div>
                 <div className="text-sm font-semibold text-slate-950">Rule behavior</div>
                 <p className="mt-2 text-sm leading-6 text-[#6d607d]">
-                  The commitment window is used to calculate the delivery due date. The warning threshold marks shipments as at-risk before breach.
+                  A shipment is late after the estimated delivery date. It becomes at-risk once it passes the configured risk date.
                 </p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-950">Enable rule</div>
-                    <div className="mt-1 text-xs text-muted-foreground">Use this rule in SLA calculations.</div>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                 <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</div>
                 <div className="mt-3 space-y-3 text-sm">
-                  <PreviewRow label="Scope" value="Carrier + Service" />
-                  <PreviewRow label="Zone" value="2 - 8" />
-                  <PreviewRow label="At-risk" value="Before breach" />
+                  <PreviewRow label="Scope" value={`${form.carrierId === "all" ? "All carriers" : "Carrier"} + ${form.serviceId === "all" ? "All services" : "Service"}`} />
+                  <PreviewRow label="Commitment" value={`${form.commitmentDays || 0} days`} />
+                  <PreviewRow label="Risk date" value={`${form.riskDays || 0} days`} />
                 </div>
               </div>
             </aside>
@@ -174,9 +233,9 @@ export default function SlaRuleOperationPopup({ open, onOpenChange }) {
           <DialogClose>
             <Button variant="outline" type="button" className="min-w-24">Cancel</Button>
           </DialogClose>
-          <Button type="button" onClick={() => onOpenChange(false)} className="min-w-36">
-            <Plus />
-            Create Rule
+          <Button type="button" onClick={handleSave} disabled={saving} className="min-w-36">
+            {saving ? <Loader2 className="animate-spin" /> : <Plus />}
+            {editing ? "Save Rule" : "Create Rule"}
           </Button>
         </DialogFooter>
       </DialogContent>
