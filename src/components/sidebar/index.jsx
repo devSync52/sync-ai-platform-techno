@@ -116,7 +116,7 @@ const navGroups = [
       {
         label: "Subscription",
         href: PROJECT_URL.DASHBOARD_SUBSCRIPTION,
-        icon: "wallet"
+        icon: "receipt"
       },
       {
         label: "Credit Wallet",
