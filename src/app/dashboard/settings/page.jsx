@@ -4,22 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-hot-toast";
-import {
-  BadgeCheck,
-  Building2,
-  CheckCircle2,
-  Globe,
-  KeyRound,
-  Loader2,
-  LockKeyhole,
-  PackageCheck,
-  Route,
-  Save,
-  ShieldCheck,
-  Truck,
-  User,
-  Wallet,
-} from "lucide-react";
+import { BadgeCheck, Building2, CheckCircle2, Eye, EyeOff, Globe, KeyRound, Loader2, LockKeyhole, PackageCheck, Route, Save, ShieldCheck, Truck, User, Wallet, } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +20,29 @@ const defaultShippingSettings = {
   walletThreshold: 10,
   verykCustomerCareEmail: "support@veryk.com",
 };
+
+function PasswordInput({ name, value, visible, setPasswordForm, setVisiblePasswords }) {
+  return (
+    <div className="relative">
+      <Input
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={(event) => setPasswordForm((current) => ({ ...current, [name]: event.target.value }))}
+        className="pr-10"
+        required
+      />
+      <button
+        type="button"
+        onClick={() => setVisiblePasswords((current) => ({ ...current, [name]: !current[name] }))}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-500 hover:text-gray-800"
+        aria-label={visible ? "Hide password" : "Show password"}
+        aria-pressed={visible}
+      >
+        {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
+  );
+}
 
 function getUserDetails(user) {
   return user?.data?.user || user?.data || user || {};
@@ -123,6 +131,11 @@ export default function SettingsPage() {
     confirmPassword: "",
   });
   const [changingPassword, setChangingPassword] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState({
+    currentPassword: false,
+    newPassword: false,
+    confirmPassword: false,
+  });
 
   const { user, loading: userLoading } = useSelector((state) => state.authorization);
   const { data: integrations, loading: integrationsLoading } = useSelector((state) => state.integrations);
@@ -510,15 +523,15 @@ export default function SettingsPage() {
               <form className="grid grid-cols-1 gap-5 md:grid-cols-2" onSubmit={handleChangePassword}>
                 <div className="md:col-span-2">
                   <Label className="mb-2 block text-sm font-semibold text-gray-700">Current Password</Label>
-                  <Input type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))} required />
+                  <PasswordInput name="currentPassword" value={passwordForm.currentPassword} visible={visiblePasswords.currentPassword} setPasswordForm={setPasswordForm} setVisiblePasswords={setVisiblePasswords} />
                 </div>
                 <div>
                   <Label className="mb-2 block text-sm font-semibold text-gray-700">New Password</Label>
-                  <Input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))} required />
+                  <PasswordInput name="newPassword" value={passwordForm.newPassword} visible={visiblePasswords.newPassword} setPasswordForm={setPasswordForm} setVisiblePasswords={setVisiblePasswords} />
                 </div>
                 <div>
                   <Label className="mb-2 block text-sm font-semibold text-gray-700">Confirm Password</Label>
-                  <Input type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))} required />
+                  <PasswordInput name="confirmPassword" value={passwordForm.confirmPassword} visible={visiblePasswords.confirmPassword} setPasswordForm={setPasswordForm} setVisiblePasswords={setVisiblePasswords} />
                 </div>
                 <div className="md:col-span-2">
                   <Button type="submit" disabled={changingPassword}>

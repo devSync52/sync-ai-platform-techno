@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
@@ -11,7 +11,7 @@ import { toast } from 'react-hot-toast';
 import { FetchIntegrationsAction } from '@/services/actions/integrations';
 import { useDispatch } from 'react-redux';
 import { API_URL } from '@/utils/constants';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import CarrierBrand from '@/components/carrier-brand';
 
 const defaultValues = {
@@ -25,6 +25,7 @@ const defaultValues = {
 };
 
 export default function ConfigurationComponent({ open, handleClose, carrier, details }) {
+    const [showSecret, setShowSecret] = useState(false);
     const providerSlug = carrier?.slug || '', isSellerCloud = providerSlug == 'SELLERCLOUD', isExtensive = providerSlug == 'EXTENSIVE';
     const needsCarrierAccount = providerSlug == 'FedEx' || providerSlug == 'UPS';
 
@@ -155,10 +156,22 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
 
                             <label className="grid gap-2 text-sm font-medium text-slate-700">
                                 API Secret
-                                <Input
-                                    type="password" {...register('appSecret')}
-                                    placeholder={isSellerCloud ? "Enter password..." : "Enter API secret..."}
-                                />
+                                <div className="relative">
+                                    <Input
+                                        type={showSecret ? "text" : "password"} {...register('appSecret')}
+                                        className="pr-10"
+                                        placeholder={isSellerCloud ? "Enter password..." : "Enter API secret..."}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowSecret((current) => !current)}
+                                        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-slate-800"
+                                        aria-label={showSecret ? "Hide API secret" : "Show API secret"}
+                                        aria-pressed={showSecret}
+                                    >
+                                        {showSecret ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
                                 {errors.appSecret && <span className="text-xs text-destructive">{errors.appSecret.message}</span>}
                             </label>
                         </div>
