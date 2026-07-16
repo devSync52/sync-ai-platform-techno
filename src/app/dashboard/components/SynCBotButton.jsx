@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
+import { getCookies } from "@/lib/cookies";
+import { AI_API_URL } from "@/utils/constants";
 import { ArrowUp, Bot, Check, ChevronLeft, Clock3, Copy, History, Maximize2, Minimize2, MessageSquareText, Paperclip, Plus, Search, Sparkles, Trash2, X, } from "lucide-react";
 
 const starterSessions = [
-  { id: 1, title: "Late delivery analysis", preview: "Review orders delayed this week", time: "2m", group: "Today" },
-  { id: 2, title: "Carrier performance", preview: "Compare FedEx and UPS SLA", time: "1h", group: "Today" },
-  { id: 3, title: "Warehouse stock summary", preview: "Low-stock inventory report", time: "Yesterday", group: "Yesterday" },
-  { id: 4, title: "Invoice discrepancies", preview: "Find unusual carrier charges", time: "Mon", group: "Previous 7 days" },
+  { id: "late-delivery-analysis", title: "Late delivery analysis", preview: "Review orders delayed this week", time: "2m", group: "Today" },
+  { id: "carrier-performance", title: "Carrier performance", preview: "Compare FedEx and UPS SLA", time: "1h", group: "Today" },
+  { id: "warehouse-stock-summary", title: "Warehouse stock summary", preview: "Low-stock inventory report", time: "Yesterday", group: "Yesterday" },
+  { id: "invoice-discrepancies", title: "Invoice discrepancies", preview: "Find unusual carrier charges", time: "Mon", group: "Previous 7 days" },
 ];
 
 const suggestions = [
@@ -36,6 +39,7 @@ export default function SynCBotButton() {
   const [sessionSearch, setSessionSearch] = useState("");
   const [copied, setCopied] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
 
   const filteredSessions = useMemo(
@@ -59,35 +63,65 @@ export default function SynCBotButton() {
     setQuery("");
   };
 
-  const sendMessage = (value = query) => {
+  const sendMessage = async (value = query) => {
     const text = value.trim();
-    if (!text) return;
+    if (!text || sending) return;
+    const threadId = activeSession || crypto.randomUUID();
     const userMessage = { id: Date.now(), role: "user", text };
     setMessages((current) => [...current, userMessage]);
     setQuery("");
+    setSending(true);
 
     if (!activeSession) {
       const session = {
-        id: Date.now(),
+        id: threadId,
         title: text.length > 34 ? `${text.slice(0, 34)}…` : text,
         preview: text,
         time: "Now",
         group: "Today",
       };
       setSessions((current) => [session, ...current]);
-      setActiveSession(session.id);
+      setActiveSession(threadId);
     }
 
-    window.setTimeout(() => {
+    try {
+      const token = getCookies("auth-token");
+      const { data } = await axios.post(
+        AI_API_URL.CHAT,
+        { message: text, thread_id: threadId },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
       setMessages((current) => [
         ...current,
         {
           id: Date.now() + 1,
           role: "assistant",
-          text: "I’ve started reviewing your SynC workspace. Connect this interface to your assistant API to return live order, carrier, inventory, and billing insights here.",
+          text: data.response,
         },
       ]);
-    }, 650);
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      const errorMessage = Array.isArray(detail)
+        ? detail.map((item) => item.msg).join(", ")
+        : detail || error.response?.data?.message || "SynC Bot could not process your request. Please try again.";
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          role: "error",
+          text: errorMessage,
+        },
+      ]);
+    } finally {
+      setSending(false);
+    }
   };
 
   const selectSession = (session) => {
@@ -232,9 +266,9 @@ export default function SynCBotButton() {
                   <div className="mx-auto max-w-[620px] space-y-6 py-7">
                     {messages.map((message) => (
                       <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}>
-                        {message.role === "assistant" && <BotMark small />}
+                        {message.role !== "user" && <BotMark small />}
                         <div className={`max-w-[82%] ${message.role === "user" ? "rounded-2xl rounded-br-md bg-[#7d20e9] px-4 py-3 text-white shadow-[0_8px_20px_rgba(125,32,233,.18)]" : ""}`}>
-                          <p className={`text-xs leading-5 ${message.role === "assistant" ? "rounded-2xl rounded-tl-md border border-[#ece7f1] bg-white px-4 py-3 text-[#51465b] shadow-sm" : ""}`}>{message.text}</p>
+                          <p className={`whitespace-pre-wrap text-xs leading-5 ${message.role === "assistant" ? "rounded-2xl rounded-tl-md border border-[#ece7f1] bg-white px-4 py-3 text-[#51465b] shadow-sm" : ""} ${message.role === "error" ? "rounded-2xl rounded-tl-md border border-red-200 bg-red-50 px-4 py-3 text-red-600" : ""}`}>{message.text}</p>
                           {message.role === "assistant" && (
                             <button onClick={() => { navigator.clipboard?.writeText(message.text); setCopied(message.id); }} className="mt-2 flex items-center gap-1 text-[9px] text-[#9a8da5] hover:text-[#6f1bd4]">
                               {copied === message.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -244,6 +278,16 @@ export default function SynCBotButton() {
                         </div>
                       </div>
                     ))}
+                    {sending && (
+                      <div className="flex items-center gap-3">
+                        <BotMark small />
+                        <div className="flex items-center gap-1 rounded-2xl rounded-tl-md border border-[#ece7f1] bg-white px-4 py-4 shadow-sm">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8b35e8]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8b35e8] [animation-delay:120ms]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#8b35e8] [animation-delay:240ms]" />
+                        </div>
+                      </div>
+                    )}
                     <div ref={bottomRef} />
                   </div>
                 )}
@@ -269,7 +313,7 @@ export default function SynCBotButton() {
                       <Paperclip className="h-4 w-4" />
                     </button>
                     <span className="ml-1 hidden items-center gap-1 text-[9px] text-[#aaa0b3] sm:flex"><Clock3 className="h-3 w-3" /> SynC data updates live</span>
-                    <button onClick={() => sendMessage()} disabled={!query.trim()} className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#7620e9] to-[#a42cf1] text-white shadow-[0_7px_16px_rgba(118,32,233,.25)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35">
+                    <button onClick={() => sendMessage()} disabled={!query.trim() || sending} className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#7620e9] to-[#a42cf1] text-white shadow-[0_7px_16px_rgba(118,32,233,.25)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35">
                       <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
                     </button>
                   </div>

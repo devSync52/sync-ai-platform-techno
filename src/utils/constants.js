@@ -1,6 +1,8 @@
 const DEFAULT_API_BASE_URL = "https://middleware-aws-api.teexponent.com";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_BASE_URL;
 const API_ROOT = `${API_BASE_URL}/api/v1`;
+const DEFAULT_AI_API_BASE_URL = "https://middleware-aws-ai.teexponent.com";
+const AI_API_BASE_URL = process.env.NEXT_PUBLIC_AI_API_URL || DEFAULT_AI_API_BASE_URL;
 
 const API_URL = Object.freeze({
     BASE_URL: API_BASE_URL,
@@ -65,6 +67,11 @@ const API_URL = Object.freeze({
     ORDER_LABEL_QUOTES: "/orders/label-quotes",
 })
 
+const AI_API_URL = Object.freeze({
+    BASE_URL: AI_API_BASE_URL,
+    CHAT: `${AI_API_BASE_URL}/api/v1/chat`,
+})
+
 const PROJECT_URL = Object.freeze({
     HOME: "/",
     AUTH: "/auth",
@@ -103,4 +110,4 @@ const PROJECT_URL = Object.freeze({
     FACEBOOK_ICON: "/assets/facebook.svg",
 })
 
-export { API_URL, PROJECT_URL }
+export { API_URL, AI_API_URL, PROJECT_URL }
