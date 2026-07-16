@@ -55,7 +55,7 @@ export default function OtpPage() {
                                 )}
                             </div>
                         </div>
-                    </div>                   
+                    </div>
                 </div>
 
                 {/* Button */}
@@ -63,9 +63,9 @@ export default function OtpPage() {
                     Verify Otp
                 </button>
 
-               
+
             </div>
-         
+
         </div>
     );
 }

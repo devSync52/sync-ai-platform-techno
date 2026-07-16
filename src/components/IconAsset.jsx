@@ -27,57 +27,57 @@ import warehouseIcon from "@/assets/icons/warehouse.svg";
 import { PROJECT_URL } from "@/utils/constants";
 
 const icons = {
-  alert: alertIcon,
-  arrowRight: arrowRightIcon,
-  bot: PROJECT_URL.LOGO,
-  chart: chartIcon,
-  check: checkIcon,
-  chevron: chevronIcon,
-  clock: clockIcon,
-  close: closeIcon,
-  dashboard: dashboardIcon,
-  file: fileIcon,
-  invoice: invoiceIcon,
-  link: linkIcon,
-  notification: notificationIcon,
-  package: packageIcon,
-  plusTag: plusTagIcon,
-  receipt: receiptIcon,
-  search: searchIcon,
-  settings: settingsIcon,
-  sidebar: sidebarIcon,
-  tag: tagIcon,
-  timer: timerIcon,
-  truck: truckIcon,
-  upload: uploadIcon,
-  users: usersIcon,
-  wallet: walletIcon,
-  warehouse: warehouseIcon,
+    alert: alertIcon,
+    arrowRight: arrowRightIcon,
+    bot: PROJECT_URL.LOGO,
+    chart: chartIcon,
+    check: checkIcon,
+    chevron: chevronIcon,
+    clock: clockIcon,
+    close: closeIcon,
+    dashboard: dashboardIcon,
+    file: fileIcon,
+    invoice: invoiceIcon,
+    link: linkIcon,
+    notification: notificationIcon,
+    package: packageIcon,
+    plusTag: plusTagIcon,
+    receipt: receiptIcon,
+    search: searchIcon,
+    settings: settingsIcon,
+    sidebar: sidebarIcon,
+    tag: tagIcon,
+    timer: timerIcon,
+    truck: truckIcon,
+    upload: uploadIcon,
+    users: usersIcon,
+    wallet: walletIcon,
+    warehouse: warehouseIcon,
 };
 
 export default function IconAsset({ name, className = "", alt = "" }) {
-  const icon = icons[name];
-  const src = typeof icon == "string" ? icon : icon?.src;
+    const icon = icons[name];
+    const src = typeof icon == "string" ? icon : icon?.src;
 
-  if (name == "bot") {
+    if (name == "bot") {
+        return (
+            <Image
+                src={icon} alt={alt} className={className}
+                aria-hidden={alt ? undefined : true}
+                width={32} height={32}
+            />
+        );
+    }
+
     return (
-      <Image
-        src={icon} alt={alt} className={className}
-        aria-hidden={alt ? undefined : true}
-        width={32} height={32}
-      />
+        <span
+            className={`inline-block shrink-0 bg-current ${className}`}
+            style={{
+                WebkitMask: `url(${src}) center / contain no-repeat`,
+                mask: `url(${src}) center / contain no-repeat`,
+            }}
+            aria-hidden={alt ? undefined : true} role={alt ? "img" : undefined}
+            aria-label={alt || undefined}
+        />
     );
-  }
-
-  return (
-    <span
-      className={`inline-block shrink-0 bg-current ${className}`}
-      style={{
-        WebkitMask: `url(${src}) center / contain no-repeat`,
-        mask: `url(${src}) center / contain no-repeat`,
-      }}
-      aria-hidden={alt ? undefined : true} role={alt ? "img" : undefined}
-      aria-label={alt || undefined}
-    />
-  );
 }
