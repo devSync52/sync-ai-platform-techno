@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { getCookies } from "@/lib/cookies";
 import { AI_API_URL } from "@/utils/constants";
-import { ArrowUp, Bot, Check, ChevronLeft, Clock3, Copy, History, Maximize2, Minimize2, MessageSquareText, Paperclip, Plus, Search, Sparkles, Trash2, X, } from "lucide-react";
+import { ArrowUp, Bot, Check, ChevronLeft, Clock3, Copy, History, Maximize2, Minimize2, MessageSquareText, Plus, Search, Sparkles, Trash2, X, } from "lucide-react";
 
 const starterSessions = [
   { id: "late-delivery-analysis", title: "Late delivery analysis", preview: "Review orders delayed this week", time: "2m", group: "Today" },
@@ -309,10 +309,7 @@ export default function SynCBotButton() {
                     className="max-h-28 w-full resize-none bg-transparent px-2.5 py-2 text-xs text-[#2d2337] outline-none placeholder:text-[#aaa0b3]"
                   />
                   <div className="flex items-center">
-                    <button className="rounded-lg p-2 text-[#998ca3] hover:bg-[#f5f1f8] hover:text-[#7620e9]" aria-label="Attach file">
-                      <Paperclip className="h-4 w-4" />
-                    </button>
-                    <span className="ml-1 hidden items-center gap-1 text-[9px] text-[#aaa0b3] sm:flex"><Clock3 className="h-3 w-3" /> SynC data updates live</span>
+                    <span className="ml-2 hidden items-center gap-1 text-[9px] text-[#aaa0b3] sm:flex"><Clock3 className="h-3 w-3" /> SynC data updates live</span>
                     <button onClick={() => sendMessage()} disabled={!query.trim() || sending} className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#7620e9] to-[#a42cf1] text-white shadow-[0_7px_16px_rgba(118,32,233,.25)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35">
                       <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
                     </button>
