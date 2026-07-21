@@ -90,7 +90,7 @@ export default function DashboardContent({ initialSlaDashboard = null, initialCo
             },
             {
                 ...staticMetrics[6],
-                value: `${initialCounts?.processedInvoices ?? 0}`,
+                value: `${initialCounts?.openDiscrepancies ?? 0}`,
             },
             {
                 ...staticMetrics[7],

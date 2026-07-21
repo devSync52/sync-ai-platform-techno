@@ -40,7 +40,7 @@ export const metrics = [
         icon: "package",
     },
     {
-        label: "Processed Invoices",
+        label: "Open Discrepancies",
         value: "0",
         color: "blue",
         icon: "receipt",
