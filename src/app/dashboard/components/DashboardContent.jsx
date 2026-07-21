@@ -45,32 +45,35 @@ export default function DashboardContent({ initialSlaDashboard = null, initialCo
     }, [dispatch]);
 
     const dashboardMetrics = useMemo(() => {
+        const totalShipments = initialCounts?.totalShipments ?? slaMetrics.total?.value ?? 0;
+        const percentageOfShipments = (count) => totalShipments > 0 ? Math.round((Number(count || 0) / totalShipments) * 100) : 0;
+
         const liveMetrics = [
             {
                 label: "Total Shipments",
-                value: `${slaMetrics.total?.value ?? 0}`,
+                value: `${totalShipments}`,
                 badge: "Total",
                 color: "blue",
                 icon: "truck",
             },
             {
                 label: "On-Time Deliveries",
-                value: `${slaMetrics.onTime?.value ?? 0}`,
-                badge: `${slaMetrics.onTime?.percentage ?? 0}%`,
+                value: `${initialCounts?.onTimeDeliveries ?? slaMetrics.onTime?.value ?? 0}`,
+                badge: `${percentageOfShipments(initialCounts?.onTimeDeliveries ?? slaMetrics.onTime?.value ?? 0)}%`,
                 color: "green",
                 icon: "check",
             },
             {
                 label: "Late Deliveries",
-                value: `${slaMetrics.late?.value ?? 0}`,
-                badge: `${slaMetrics.late?.percentage ?? 0}%`,
+                value: `${initialCounts?.lateDeliveries ?? slaMetrics.late?.value ?? 0}`,
+                badge: `${percentageOfShipments(initialCounts?.lateDeliveries ?? slaMetrics.late?.value ?? 0)}%`,
                 color: "red",
                 icon: "close",
             },
             {
                 label: "At-Risk Orders",
-                value: `${slaMetrics.atRisk?.value ?? 0}`,
-                badge: `${slaMetrics.atRisk?.percentage ?? 0}%`,
+                value: `${initialCounts?.atRiskOrders ?? slaMetrics.atRisk?.value ?? 0}`,
+                badge: `${percentageOfShipments(initialCounts?.atRiskOrders ?? slaMetrics.atRisk?.value ?? 0)}%`,
                 color: "amber",
                 icon: "clock",
             },
