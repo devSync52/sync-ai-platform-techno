@@ -127,8 +127,8 @@ export default function LoginPage() {
             </div>
         </div>
     ) : (
-        <div className="min-h-screen bg-[#0d0033] flex flex-col items-center justify-center p-4">
-            <div className="w-125 max-w-full bg-[#f3f3f3] rounded-2xl shadow-2xl py-10 px-8">
+        <div className="min-h-screen bg-[#0d0033] flex flex-col items-center justify-center p-3 lg:p-4">
+            <div className="w-125 max-w-full bg-[#f3f3f3] rounded-2xl shadow-2xl py-10 px-4 lg:px-8">
 
                 {/* Robot Icon */}
                 <div className="flex items-start justify-center pb-6">
@@ -185,7 +185,7 @@ export default function LoginPage() {
                     <div className="mb-5">
                         <p className="text-sm text-muted-foreground mt-2 text-center font-semibold">Or Continue With</p>
                     </div>
-                    <div className="flex justify-center gap-2">
+                    <div className="flex flex-wrap justify-center gap-2">
                         <Button variant="outline" className="py-5 px-4">
                             <Image
                                 src={PROJECT_URL.GOOGLE_ICON}

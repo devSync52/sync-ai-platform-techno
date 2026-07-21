@@ -159,7 +159,7 @@ export default function RegisterPage() {
         </div>
     ) : (
         <div className="min-h-screen bg-[#0d0033] flex flex-col items-center justify-center p-4">
-            <div className="w-150 max-w-full bg-[#f3f3f3] rounded-2xl shadow-2xl py-10 px-8">
+            <div className="w-150 max-w-full bg-[#f3f3f3] rounded-2xl shadow-2xl py-10 px-4 lg:px-8">
                 <div className="flex items-start justify-center pb-6">
                     <Image src={PROJECT_URL.LOGO} alt="robot" width={145} height={145} />
                 </div>
@@ -326,7 +326,7 @@ export default function RegisterPage() {
                     <div className="mb-5">
                         <p className="text-sm text-muted-foreground mt-2 text-center font-semibold">Or Continue With</p>
                     </div>
-                    <div className="flex justify-center gap-2">
+                    <div className="flex flex-wrap justify-center gap-2">
                         <Button variant="outline" className="py-5 px-4">
                             <Image src={PROJECT_URL.GOOGLE_ICON} alt="robot" width={20} height={20} />
                             Sign With Google

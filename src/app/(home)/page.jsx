@@ -3,8 +3,8 @@ import { PROJECT_URL } from "@/utils/constants";
 
 export default function HomePage() {
     return (
-        <main className="flex min-h-screen items-center justify-center bg-[#110923] px-6 py-10">
-            <section className="flex h-[620px] w-full max-w-[672px] flex-col items-center rounded-[22px] bg-white px-[60px] py-[70px]">
+        <main className="flex min-h-screen items-center justify-center bg-[#110923] px-3 lg:px-6 py-10">
+            <section className="flex h-[620px] w-full max-w-[672px] flex-col items-center rounded-[22px] bg-white px-[20px] lg:px-[60px] py-[70px]">
                 <SynCBotMascot />
 
                 <div className="flex flex-1 items-end self-stretch">
