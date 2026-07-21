@@ -141,7 +141,7 @@ export default function SlaRulesPage() {
     };
 
     return (
-        <div className="space-y-6 p-6 xl:p-8">
+        <div className="space-y-6 py-6 px-4 xl:px-6">
             <section className="overflow-hidden rounded-2xl border border-purple-100 bg-white shadow-[0_18px_45px_rgba(35,19,62,0.08)]">
                 <div className="grid gap-6 p-6 lg:grid-cols-[1fr_360px] lg:items-stretch">
                     <div className="flex items-start gap-4">
@@ -255,7 +255,7 @@ export default function SlaRulesPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm whitespace-nowrap lg:whitespace-wrap">
                         <thead className="bg-[#faf9fc] text-xs uppercase tracking-wide text-muted-foreground">
                             <tr className="border-b text-left">
                                 <th className="px-4 py-3">Rule</th>

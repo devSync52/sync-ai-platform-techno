@@ -102,7 +102,7 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
             <DialogContent className="max-w-[min(calc(100vw-2rem),760px)]! gap-0 overflow-hidden p-0">
                 <DialogHeader className="border-b bg-slate-50 px-6 py-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex items-start gap-4">
+                        <div className="flex flex-wrap items-start gap-4">
                             <CarrierBrand name={carrier?.name} showName={false} logoClassName="h-12 w-12 rounded-xl p-1.5" />
                             <div>
                                 <DialogTitle className="text-xl">Configure {carrier?.name || 'Carrier'}</DialogTitle>

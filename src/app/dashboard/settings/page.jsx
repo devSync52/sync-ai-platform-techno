@@ -227,7 +227,7 @@ export default function SettingsPage() {
     };
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 py-6 px-4 xl:px-6">
             <section className="overflow-hidden rounded-xl border border-violet-100 bg-white shadow-sm">
                 <div className="grid gap-6 bg-[radial-gradient(circle_at_top_left,#7c3aed_0,#2d1558_42%,#12071f_100%)] p-6 text-white lg:grid-cols-[minmax(0,1fr)_380px]">
                     <div className="space-y-5">
@@ -377,7 +377,7 @@ export default function SettingsPage() {
                             </form>
                         </Card>
 
-                        <Card className="bg-white p-6 shadow-sm">
+                        <Card className="bg-white p-3 xl:p-6 shadow-sm">
                             <div className="flex items-center gap-3">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 text-violet-700">
                                     <Building2 className="h-5 w-5" />

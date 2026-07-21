@@ -334,7 +334,7 @@ export default function LabelGeneratorPage() {
     };
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 py-6 px-4 xl:px-6">
             {lowBalance && (
                 <div className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex gap-3">
@@ -352,13 +352,13 @@ export default function LabelGeneratorPage() {
             )}
 
             <section className="overflow-hidden rounded-lg border border-[#2d2047] bg-[#140821] text-white shadow-xl shadow-purple-950/10">
-                <div className="grid gap-6 p-6 lg:grid-cols-[1fr_310px] lg:items-end">
+                <div className="grid gap-6 p-3 lg:p-6 lg:grid-cols-[1fr_310px] lg:items-end">
                     <div>
                         <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-purple-100">
                             <Tag className="size-4" />
                             Label workspace
                         </div>
-                        <h1 className="text-3xl font-bold tracking-tight text-white">Label Generator</h1>
+                        <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-white">Label Generator</h1>
                         <p className="mt-2 max-w-2xl text-sm leading-6 text-[#cdbfe2]">
                             Load a saved quote or build a shipment from saved addresses, then generate the label using wallet credits.
                         </p>
@@ -444,7 +444,7 @@ export default function LabelGeneratorPage() {
                 </aside>
 
                 <div className="space-y-6">
-                    <form className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm" onSubmit={handleSubmit(onQuote)}>
+                    <form className="rounded-lg border border-gray-200 bg-white p-3 lg:p-6 shadow-sm" onSubmit={handleSubmit(onQuote)}>
                         <div className="mb-6 flex items-center justify-between">
                             <div>
                                 <h2 className="text-xl font-semibold text-gray-950">Create Shipping Label</h2>

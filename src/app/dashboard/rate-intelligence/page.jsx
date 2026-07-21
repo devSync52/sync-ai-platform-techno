@@ -199,7 +199,7 @@ export default function RateIntelligencePage() {
     };
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 py-6 px-4 xl:px-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex items-start gap-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-primary ring-1 ring-purple-100">

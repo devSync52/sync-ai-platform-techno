@@ -156,7 +156,7 @@ export default function SlaKpiPage() {
     const error = slaError ? (message || "Unable to fetch SLA data.") : "";
 
     return (
-        <div className="min-h-0 flex-1 space-y-6 overflow-auto bg-[#faf9fc] p-6 xl:p-8">
+        <div className="min-h-0 flex-1 space-y-6 overflow-auto bg-[#faf9fc] py-6 px-4 xl:px-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-2">
                     <h1 className="text-3xl font-bold tracking-normal text-[#090514]">SLA & KPI Dashboard</h1>
@@ -287,7 +287,7 @@ export default function SlaKpiPage() {
 
                 {/* Total  */}
 
-                <div className="min-h-42.5 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
                             <span className="text-lg font-semibold text-[#090514]">Total</span>
@@ -304,7 +304,7 @@ export default function SlaKpiPage() {
 
                 {/* On-Time */}
 
-                <div className="min-h-42.5 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
                             <span className="text-lg font-semibold text-[#090514]">On-Time</span>
@@ -321,7 +321,7 @@ export default function SlaKpiPage() {
 
                 {/* Late */}
 
-                <div className="min-h-42.5 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
                             <span className="text-lg font-semibold text-[#090514]">Late</span>
@@ -338,7 +338,7 @@ export default function SlaKpiPage() {
 
                 {/* At-Risk */}
 
-                <div className="min-h-42.5 rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="rounded-xl border border-[#ece8f2] bg-white p-5 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex items-center gap-3 mb-5 justify-between">
                         <div>
                             <span className="text-lg font-semibold text-[#090514]">At-Risk</span>
@@ -357,7 +357,7 @@ export default function SlaKpiPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
                 {/* Left Card */}
-                <div className="min-h-50 rounded-xl border border-[#ece8f2] bg-white p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)] lg:col-span-2">
+                <div className="min-h-50 rounded-xl border border-[#ece8f2] bg-white p-3 lg:p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)] lg:col-span-2">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <h2 className="text-xl font-semibold text-[#090514]">Weekly Delivery Trend</h2>
@@ -386,7 +386,7 @@ export default function SlaKpiPage() {
                 </div>
 
                 {/* Right Card */}
-                <div className="flex min-h-50 flex-col justify-between rounded-xl bg-[#13002f] p-6 shadow-[0_18px_48px_rgba(19,0,47,0.18)]">
+                <div className="flex min-h-50 flex-col justify-between rounded-xl bg-[#13002f] p-3 lg:p-6 shadow-[0_18px_48px_rgba(19,0,47,0.18)]">
 
                     <div>
                         <div className="flex items-center gap-2 mb-6">
@@ -413,7 +413,7 @@ export default function SlaKpiPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
 
                 {/* Left Card */}
-                <div className="rounded-xl border border-[#ece8f2] bg-white p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="rounded-xl border border-[#ece8f2] bg-white p-3 lg:p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <h2 className="text-xl font-semibold text-gray-900 mb-8">
                         Performance by Client
                     </h2>
@@ -427,7 +427,7 @@ export default function SlaKpiPage() {
                 </div>
 
                 {/* Right Card */}
-                <div className="rounded-xl border border-[#ece8f2] bg-white p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="rounded-xl border border-[#ece8f2] bg-white p-3 lg:p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <h2 className="text-xl font-semibold text-gray-900 mb-8">
                         Performance by SLA Type
                     </h2>
@@ -442,7 +442,7 @@ export default function SlaKpiPage() {
                 </div>
             </div>
 
-            <Card className="rounded-xl border-[#ece8f2] bg-white p-4 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+            <Card className="rounded-xl border-[#ece8f2] bg-white p-3 lg:p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                 <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="text-xl font-semibold">At-Risk Orders</div>
                     <Button variant="outline" size="icon" type="button" disabled={slaLoading} onClick={fetchSlaDashboard}>

@@ -108,9 +108,9 @@ export default function DashboardContent({ initialSlaDashboard = null, initialCo
     ), [deliveryTrend]);
 
     return (
-        <section className="min-h-0 flex-1 overflow-y-auto px-8 pb-8 pt-7 xl:px-9">
+        <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-7 xl:px-9">
             <div className="mx-auto">
-                <header className="motion-fade-up mb-7 flex items-start justify-between gap-4">
+                <header className="motion-fade-up mb-7 flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-[24px] font-bold leading-7 tracking-normal text-[#090514]">
                             Welcome back, Soumallya

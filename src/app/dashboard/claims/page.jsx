@@ -140,7 +140,7 @@ export default function ClaimsPage() {
     };
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 py-6 px-4 xl:px-6">
             <section className="overflow-hidden rounded-2xl border border-purple-100 bg-white shadow-sm">
                 <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-center">
                     <div className="flex items-start gap-4">
@@ -252,7 +252,7 @@ export default function ClaimsPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm whitespace-nowrap">
                         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted-foreground">
                             <tr className="border-b text-left">
                                 <th className="px-4 py-3">ID</th>

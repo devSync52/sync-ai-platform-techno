@@ -137,14 +137,14 @@ export default function OrdersPage() {
     };
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 px-4 py-6 xl:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div className="mb-4 space-y-2">
                     <h1 className="text-2xl font-bold text-primary">Order Management</h1>
                     <p>Create shipment orders and generate courier quotes before booking.</p>
                 </div>
 
-                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                <div className="flex flex-row items-start gap-3 sm:flex-row sm:items-center">
                     <Link href={PROJECT_URL.DASHBOARD_ORDERS_CREATE} className={buttonVariants({ size: "lg", className: "min-w-36 whitespace-nowrap px-4" })}>
                         <PackagePlus />
                         Create Order
@@ -251,7 +251,7 @@ export default function OrdersPage() {
                                             </div>
                                         </div>
 
-                                        <div className="flex min-h-56 flex-col justify-center border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
+                                        <div className="flex flex-col justify-center border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
                                             <div className="max-w-lg">
                                                 <div className="flex items-center gap-2 text-lg font-bold text-slate-950">
                                                     <span>{destination.title}</span>

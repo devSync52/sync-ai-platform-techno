@@ -56,7 +56,7 @@ export default function InventoryPage() {
     };
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="px-4 py-6 xl:px-6 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-2 mb-4">
                     <h1 className="text-2xl font-bold text-primary">Inventory Management</h1>
@@ -102,7 +102,7 @@ export default function InventoryPage() {
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm whitespace-nowrap">
                         <thead className="text-muted-foreground">
                             <tr className="border-b text-left">
                                 <th className="py-2 pr-3">SKU</th>

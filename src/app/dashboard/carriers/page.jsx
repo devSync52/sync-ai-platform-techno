@@ -165,7 +165,7 @@ export default function CarrierPage() {
     };
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="px-4 py-6 xl:px-6 space-y-6">
             <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-primary">Carrier Integrations Hub</h1>

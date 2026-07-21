@@ -47,7 +47,7 @@ export default function AddressesPage() {
     };
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 py-6 px-4 xl:px-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-2">
                     <h1 className="text-2xl font-bold text-primary">Address Book</h1>
@@ -91,7 +91,7 @@ export default function AddressesPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm whitespace-nowrap">
                         <thead className="text-muted-foreground">
                             <tr className="border-b text-left">
                                 <th className="py-2 pr-3">Name</th>

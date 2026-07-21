@@ -74,7 +74,7 @@ export default function WarehousesPage() {
     };
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="py-6 px-4 xl:px-6 space-y-6">
 
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-2 mb-4">
@@ -82,7 +82,7 @@ export default function WarehousesPage() {
                     <p>Manage your fulfillment centers and distribution points</p>
                 </div>
                 <div>
-                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                    <div className="flex flex-row items-start gap-3 sm:flex-row sm:items-center">
                         <div>
                             <Button variant="outline" size="lg" type="button" onClick={handleExportWarehouses} disabled={exporting}>
                                 <Download />
@@ -147,7 +147,7 @@ export default function WarehousesPage() {
 
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm whitespace-nowrap">
                         <thead className="text-muted-foreground">
                             <tr className="border-b text-left">
                                 <th className="py-2 pr-3">Warehouse Name</th>

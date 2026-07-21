@@ -113,7 +113,7 @@ export default function Discrepancies() {
     };
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 py-6 px-4 xl:px-6">
             <section className="rounded-2xl border border-purple-100 bg-white p-6 shadow-sm">
                 <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
                     <div className="flex items-start gap-4">
@@ -149,7 +149,7 @@ export default function Discrepancies() {
                     <Filter value={filters.carrier} onChange={(v) => setFilter("carrier", v)} options={[["all", "All Carriers"], ["ups", "UPS"], ["fedex", "FedEx"], ["usps", "USPS"], ["veryk", "Veryk"]]} />
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm whitespace-nowrap">
                         <thead className="bg-gray-50 text-left text-xs uppercase text-muted-foreground"><tr>{["ID", "Carrier", "Type", "Tracking", "Variance", "Severity", "Status", "Created", "Actions"].map((item) => <th key={item} className="px-4 py-3">{item}</th>)}</tr></thead>
                         <tbody>
                             {loading ? <tr><td colSpan={9} className="p-10 text-center text-muted-foreground">Loading discrepancies…</td></tr>
