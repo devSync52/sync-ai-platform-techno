@@ -1,17 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
-import { getCookies } from "@/lib/cookies";
-import { AI_API_URL } from "@/utils/constants";
-import { ArrowUp, Bot, Check, ChevronLeft, Clock3, Copy, History, Maximize2, Minimize2, MessageSquareText, Plus, Search, Sparkles, Trash2, X, } from "lucide-react";
-
-const starterSessions = [
-    { id: "late-delivery-analysis", title: "Late delivery analysis", preview: "Review orders delayed this week", time: "2m", group: "Today" },
-    { id: "carrier-performance", title: "Carrier performance", preview: "Compare FedEx and UPS SLA", time: "1h", group: "Today" },
-    { id: "warehouse-stock-summary", title: "Warehouse stock summary", preview: "Low-stock inventory report", time: "Yesterday", group: "Yesterday" },
-    { id: "invoice-discrepancies", title: "Invoice discrepancies", preview: "Find unusual carrier charges", time: "Mon", group: "Previous 7 days" },
-];
+import { useDispatch, useSelector } from "react-redux";
+import { FetchChatHistoryAction, FetchChatSessionsAction, SendChatMessageAction, StartNewChatAction } from "@/services/actions/chat";
+import { ArrowUp, Bot, Check, ChevronLeft, Clock3, Copy, History, LoaderCircle, Maximize2, Minimize2, MessageSquareText, Plus, Search, Sparkles, X, } from "lucide-react";
 
 const suggestions = [
     { icon: "📦", label: "Track delayed orders", prompt: "Show me the orders that are currently delayed." },
@@ -30,16 +22,15 @@ function BotMark({ small = false }) {
 }
 
 export default function SynCBotButton() {
+    const dispatch = useDispatch();
+    const { sessions, messages, sessionsLoading, historyLoading, sending, sessionsError } = useSelector((state) => state.chat);
     const [open, setOpen] = useState(false);
     const [expanded, setExpanded] = useState(false);
     const [sessionsOpen, setSessionsOpen] = useState(true);
-    const [sessions, setSessions] = useState(starterSessions);
     const [activeSession, setActiveSession] = useState(null);
     const [query, setQuery] = useState("");
     const [sessionSearch, setSessionSearch] = useState("");
     const [copied, setCopied] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [sending, setSending] = useState(false);
     const bottomRef = useRef(null);
 
     const filteredSessions = useMemo(
@@ -57,9 +48,13 @@ export default function SynCBotButton() {
         return () => window.removeEventListener("keydown", closeOnEscape);
     }, []);
 
+    useEffect(() => {
+        if (open) dispatch(FetchChatSessionsAction()).catch(() => {});
+    }, [open, dispatch]);
+
     const newChat = () => {
         setActiveSession(null);
-        setMessages([]);
+        dispatch(StartNewChatAction());
         setQuery("");
     };
 
@@ -67,80 +62,20 @@ export default function SynCBotButton() {
         const text = value.trim();
         if (!text || sending) return;
         const threadId = activeSession || crypto.randomUUID();
-        const userMessage = { id: Date.now(), role: "user", text };
-        setMessages((current) => [...current, userMessage]);
         setQuery("");
-        setSending(true);
-
-        if (!activeSession) {
-            const session = {
-                id: threadId,
-                title: text.length > 34 ? `${text.slice(0, 34)}…` : text,
-                preview: text,
-                time: "Now",
-                group: "Today",
-            };
-            setSessions((current) => [session, ...current]);
-            setActiveSession(threadId);
-        }
-
+        if (!activeSession) setActiveSession(threadId);
         try {
-            const token = getCookies("auth-token");
-            const { data } = await axios.post(
-                AI_API_URL.CHAT,
-                { message: text, thread_id: threadId },
-                {
-                    headers: {
-                        "Content-Type": "application/json",
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                }
-            );
-
-            setMessages((current) => [
-                ...current,
-                {
-                    id: Date.now() + 1,
-                    role: "assistant",
-                    text: data.response,
-                },
-            ]);
-        } catch (error) {
-            const detail = error.response?.data?.detail;
-            const errorMessage = Array.isArray(detail)
-                ? detail.map((item) => item.msg).join(", ")
-                : detail || error.response?.data?.message || "SynC Bot could not process your request. Please try again.";
-
-            setMessages((current) => [
-                ...current,
-                {
-                    id: Date.now() + 1,
-                    role: "error",
-                    text: errorMessage,
-                },
-            ]);
-        } finally {
-            setSending(false);
+            await dispatch(SendChatMessageAction(text, threadId));
+            dispatch(FetchChatSessionsAction()).catch(() => {});
+        } catch {
+            // Redux stores and renders the API error.
         }
     };
 
     const selectSession = (session) => {
         setActiveSession(session.id);
-        setMessages([
-            { id: `${session.id}-u`, role: "user", text: session.preview },
-            {
-                id: `${session.id}-a`,
-                role: "assistant",
-                text: `Here is your saved session for “${session.title}”. Once connected to the SynC AI service, the complete response and supporting data will appear here.`,
-            },
-        ]);
         if (window.innerWidth < 768) setSessionsOpen(false);
-    };
-
-    const deleteSession = (event, id) => {
-        event.stopPropagation();
-        setSessions((current) => current.filter((session) => session.id !== id));
-        if (activeSession === id) newChat();
+        dispatch(FetchChatHistoryAction(session.id)).catch(() => {});
     };
 
     return (
@@ -183,7 +118,14 @@ export default function SynCBotButton() {
                             </div>
 
                             <div className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4">
-                                {["Today", "Yesterday", "Previous 7 days"].map((group) => {
+                                {sessionsLoading && (
+                                    <div className="flex items-center justify-center gap-2 py-8 text-xs text-[#8d809c]">
+                                        <LoaderCircle className="h-4 w-4 animate-spin" /> Loading sessions...
+                                    </div>
+                                )}
+                                {!sessionsLoading && sessionsError && <p className="px-3 py-6 text-center text-xs text-red-300">{sessionsError}</p>}
+                                {!sessionsLoading && !sessionsError && sessions.length === 0 && <p className="px-3 py-6 text-center text-xs text-[#8d809c]">No conversations yet.</p>}
+                                {["Today", "Yesterday", "Previous 7 days", "Previous"].map((group) => {
                                     const grouped = filteredSessions.filter((session) => session.group === group);
                                     if (!grouped.length) return null;
                                     return (
@@ -200,9 +142,6 @@ export default function SynCBotButton() {
                                                             </div>
                                                             <p className="mt-1 truncate text-[10px] text-[#8d809c]">{session.preview}</p>
                                                         </div>
-                                                        <span onClick={(e) => deleteSession(e, session.id)} className="hidden rounded p-1 text-[#887b98] hover:bg-white/10 hover:text-red-300 group-hover:block">
-                                                            <Trash2 className="h-3 w-3" />
-                                                        </span>
                                                     </div>
                                                 </button>
                                             ))}
@@ -240,7 +179,11 @@ export default function SynCBotButton() {
                             </header>
 
                             <main className="sidebar-scroll flex-1 overflow-y-auto px-4 sm:px-8">
-                                {messages.length === 0 ? (
+                                {historyLoading ? (
+                                    <div className="flex min-h-full items-center justify-center gap-2 text-xs text-[#8d809c]">
+                                        <LoaderCircle className="h-5 w-5 animate-spin text-[#842be8]" /> Loading conversation...
+                                    </div>
+                                ) : messages.length === 0 ? (
                                     <div className="mx-auto flex min-h-full max-w-[580px] flex-col items-center justify-center py-10 text-center">
                                         <BotMark />
                                         <div className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-[#e7dafb] bg-[#f5effd] px-3 py-1 text-[9px] font-bold uppercase tracking-[.12em] text-[#7d2ce6]">

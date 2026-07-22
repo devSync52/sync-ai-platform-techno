@@ -70,6 +70,8 @@ const API_URL = Object.freeze({
 const AI_API_URL = Object.freeze({
     BASE_URL: AI_API_BASE_URL,
     CHAT: `${AI_API_BASE_URL}/api/v1/chat`,
+    CHAT_SESSIONS: `${AI_API_BASE_URL}/api/v1/chat/sessions`,
+    CHAT_HISTORY: (threadId) => `${AI_API_BASE_URL}/api/v1/chat/history/${encodeURIComponent(threadId)}`,
 })
 
 const PROJECT_URL = Object.freeze({

@@ -13,6 +13,7 @@ import { PriceReducer } from "./reducers/prices"
 import { InventoryReducer } from "./reducers/inventory"
 import { WalletReducer } from "./reducers/wallet"
 import { SettingsReducer } from "./reducers/settings"
+import { ChatReducer } from "./reducers/chat"
 import { USER_LOGOUT_CONSTANTS } from "./constants/authorization";
 import { getCookies } from "@/lib/cookies";
 
@@ -30,7 +31,8 @@ const appReducer = combineReducers({
     settings: SettingsReducer,
     plans: PlanReducer,
     prices: PriceReducer,
-    inventory: InventoryReducer
+    inventory: InventoryReducer,
+    chat: ChatReducer
 })
 
 const rootReducer = (state, action) => {
