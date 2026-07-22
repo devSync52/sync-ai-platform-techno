@@ -45,6 +45,7 @@ const normalizeHistory = (data) => {
             id: message.id || message.message_id || `${role}-${index}`,
             role,
             text: typeof content === "string" ? content : JSON.stringify(content),
+            toolData: message.tool_data || message.toolData || null,
         };
     }).filter((message) => message.text);
 };
@@ -88,7 +89,15 @@ export const SendChatMessageAction = (message, threadId) => async (dispatch) => 
             ...authConfig(),
             headers: { ...authConfig().headers, "Content-Type": "application/json" },
         });
-        dispatch({ type: CHAT_CONSTANTS.SEND_MESSAGE_SUCCESS, payload: { id: Date.now() + 1, role: "assistant", text: response.data.response } });
+        dispatch({
+            type: CHAT_CONSTANTS.SEND_MESSAGE_SUCCESS,
+            payload: {
+                id: Date.now() + 1,
+                role: "assistant",
+                text: response.data.response,
+                toolData: response.data.tool_data || null,
+            }
+        });
         return response;
     } catch (error) {
         dispatch({ type: CHAT_CONSTANTS.SEND_MESSAGE_FAILURE, payload: errorMessage(error, "SynC Bot could not process your request. Please try again.") });
