@@ -272,14 +272,14 @@ export default function Sidebar({ compressed, setCompressed }) {
 
             </div>
 
-            <div className={compressed ? 'block lg:hidden' : 'block'}>
+            {/* <div className={compressed ? 'block lg:hidden' : 'block'}>
                 <div className="px-3 py-3">
                     <div className="flex h-9 items-center gap-2 rounded-lg bg-white/5.5 px-3 text-xs text-[#736481]">
                         <IconAsset name="search" className="h-4 w-4" />
                         Search navigation...
                     </div>
                 </div>
-            </div>
+            </div> */}
 
             <nav className={`h-[calc(100vh_-_252px)] min-h-0 space-y-3 overflow-y-auto px-2 sidebar-scroll ${compressed ? "lg:pt-4" : ""}`}>
                 {

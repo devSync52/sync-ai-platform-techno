@@ -386,8 +386,7 @@ export default function SlaKpiPage() {
                 </div>
 
                 {/* Right Card */}
-                <div className="flex min-h-50 flex-col justify-between rounded-xl bg-[#13002f] p-3 lg:p-6 shadow-[0_18px_48px_rgba(19,0,47,0.18)]">
-
+                {/* <div className="flex min-h-50 flex-col justify-between rounded-xl bg-[#13002f] p-3 lg:p-6 shadow-[0_18px_48px_rgba(19,0,47,0.18)]">
                     <div>
                         <div className="flex items-center gap-2 mb-6">
                             <Bot color="#dab2ff" />
@@ -407,7 +406,7 @@ export default function SlaKpiPage() {
                         <Plus />
                         Generate Summary
                     </button>
-                </div>
+                </div> */}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">

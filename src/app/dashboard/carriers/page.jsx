@@ -112,28 +112,28 @@ const carriers = [
         url: "https://api.veryk.com/v1/",
         development: "https://www.veryk.com/api-documentation"
     },
-    {
-        name: "Extensive",
-        slug: "EXTENSIVE",
-        subtitle: "Extensive warehouse and fulfillment operations",
-        icon: "EX",
-        logo: "EX",
-        logoClass: "bg-cyan-100 text-cyan-950",
-        color: "bg-cyan-100",
-        url: "https://api.extensiv.com/",
-        development: "https://developer.extensiv.com/"
-    },
-    {
-        name: "SellerCloud",
-        slug: "SELLERCLOUD",
-        subtitle: "SellerCloud commerce and order management",
-        icon: "SC",
-        logo: "SC",
-        logoClass: "bg-indigo-100 text-slate-950",
-        color: "bg-indigo-100",
-        url: "https://api.sellercloud.com/",
-        development: "https://developer.sellercloud.com/"
-    },
+    // {
+    //     name: "Extensive",
+    //     slug: "EXTENSIVE",
+    //     subtitle: "Extensive warehouse and fulfillment operations",
+    //     icon: "EX",
+    //     logo: "EX",
+    //     logoClass: "bg-cyan-100 text-cyan-950",
+    //     color: "bg-cyan-100",
+    //     url: "https://api.extensiv.com/",
+    //     development: "https://developer.extensiv.com/"
+    // },
+    // {
+    //     name: "SellerCloud",
+    //     slug: "SELLERCLOUD",
+    //     subtitle: "SellerCloud commerce and order management",
+    //     icon: "SC",
+    //     logo: "SC",
+    //     logoClass: "bg-indigo-100 text-slate-950",
+    //     color: "bg-indigo-100",
+    //     url: "https://api.sellercloud.com/",
+    //     development: "https://developer.sellercloud.com/"
+    // },
 ];
 
 export default function CarrierPage() {
