@@ -233,7 +233,7 @@ export default function SynCBotButton() {
                                         {messages.map((message) => (
                                             <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}>
                                                 {message.role !== "user" && <BotMark small />}
-                                                <div className={`max-w-[82%] ${message.role === "user" ? "rounded-2xl rounded-br-md bg-[#7d20e9] px-4 py-3 text-white shadow-[0_8px_20px_rgba(125,32,233,.18)]" : ""}`}>
+                                                <div className={`max-w-[82%] custom_msgbox ${message.role === "user" ? "rounded-2xl rounded-br-md bg-[#7d20e9] px-4 py-3 text-white shadow-[0_8px_20px_rgba(125,32,233,.18)]" : ""}`}>
                                                     <div className={`text-xs leading-5 ${message.role === "assistant" ? "rounded-2xl rounded-tl-md border border-[#ece7f1] bg-white px-4 py-3 text-[#51465b] shadow-sm" : ""} ${message.role === "error" ? "whitespace-pre-wrap rounded-2xl rounded-tl-md border border-red-200 bg-red-50 px-4 py-3 text-red-600" : ""}`}>
                                                         {message.role === "assistant" ? (
                                                             <ReactMarkdown

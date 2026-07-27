@@ -104,6 +104,35 @@ button{
   }
 }
 
+.custom_msgbox table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.custom_msgbox table th {
+  padding: 8px 16px;
+  background: #7d20e9;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  text-align: left;
+}
+.custom_msgbox table th:first-child{
+  border-radius: 8px 0 0 8px;
+}
+.custom_msgbox table th:last-child{
+  border-radius: 0px 8px 8px 0px;
+}
+.custom_msgbox table td {
+  padding: 8px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #4b5563;
+}
+
+.custom_msgbox table tbody tr:hover {
+  background: #f9fafb;
+}
+
 .motion-fade-up {
   animation: app-fade-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
