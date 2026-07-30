@@ -254,19 +254,22 @@ export default function Sidebar({ compressed, setCompressed }) {
     };
 
     return (
-        <aside className={`fixed lg:relative z-10 shrink-0 min-h-0 flex-col bg-[#110923] text-[#b9aecb] transition-all duration-300 md:flex ${compressed ? "w-64 lg:w-20 left-0" : "w-64 left-[-100%] lg:left-0"}`}>
-            <div className={`flex h-16 items-center gap-3 border-b border-white/10 px-5 ${compressed ? "justify-start lg:justify-center lg:px-2" : ""}`}>
+        <aside className={`fixed lg:relative z-20 h-screen shrink-0 flex-col overflow-hidden border-r border-white/[0.07] bg-[radial-gradient(circle_at_15%_0%,rgba(139,58,246,0.20),transparent_28%),linear-gradient(180deg,#140925_0%,#0d0619_58%,#10071d_100%)] text-[#c8bdd8] shadow-[18px_0_55px_rgba(26,8,48,0.14)] transition-all duration-300 md:flex ${compressed ? "left-0 w-68 lg:w-22" : "left-[-100%] w-68 lg:left-0"}`}>
+            <div className={`relative flex h-[76px] shrink-0 items-center gap-3 border-b border-white/[0.07] px-5 ${compressed ? "justify-start lg:justify-center lg:px-2" : ""}`}>
+                <span className="pointer-events-none absolute inset-x-8 bottom-0 h-px bg-gradient-to-r from-transparent via-[#9d54ff]/60 to-transparent" />
 
-                <button onClick={() => setCompressed(!compressed)} className="flex items-center justify-center rounded-lg transition-all duration-200 text-[#9b8cb8] hover:scale-105 hover:text-white hover:bg-[#1e1631] h-8 w-8" title={compressed ? "Expand" : "Compress"}>
+                <button onClick={() => setCompressed(!compressed)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.035] text-[#aa9abc] transition-all duration-200 hover:border-[#8e48eb]/50 hover:bg-[#2a1742] hover:text-white" title={compressed ? "Expand" : "Compress"}>
                     <IconAsset name="sidebar" className="h-4 w-4" />
                 </button>
 
 
                 <div className={compressed ? 'flex gap-3 lg:hidden' : 'flex gap-3'}>
-                    <IconAsset name="bot" className="h-8 w-8 rounded-lg" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_8px_24px_rgba(120,35,235,.2)]">
+                        <IconAsset name="bot" className="h-8 w-8 rounded-lg" />
+                    </div>
                     <div className="flex-1">
-                        <div className="text-sm font-semibold leading-4 text-white">SynC AI</div>
-                        <div className="text-[10px] leading-4 text-[#837596]">Courier Management</div>
+                        <div className="text-sm font-bold leading-5 tracking-[-.01em] text-white">SynC AI</div>
+                        <div className="text-[10px] font-medium leading-4 text-[#8e7ca3]">Courier Management</div>
                     </div>
                 </div>
 
@@ -281,24 +284,27 @@ export default function Sidebar({ compressed, setCompressed }) {
                 </div>
             </div> */}
 
-            <nav className={`h-[calc(100vh_-_252px)] min-h-0 space-y-3 overflow-y-auto px-2 sidebar-scroll ${compressed ? "lg:pt-4" : ""}`}>
+            <nav className={`sidebar-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-3 pb-5 pt-4 ${compressed ? "lg:pt-5" : ""}`}>
                 {
                     visibleNavGroups.map((group) => (
                         <div key={group.label}>
                             <div className={compressed ? 'block lg:hidden' : 'block'}>
-                                <div className="mb-2 flex items-center justify-between px-3 text-[10px] font-bold tracking-[0.16em] text-[#7d708e]">
+                                <div className="mb-2.5 flex items-center justify-between px-2 text-[9px] font-bold tracking-[0.2em] text-[#8e76a9]">
                                     <span>{group.label}</span>
-                                    <IconAsset name="chevron" className="h-3 w-3" />
+                                    <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent ml-3" />
                                 </div>
                             </div>
-                            <div className={compressed ? "space-y-1 lg:space-y-2" : "space-y-1"}>
+                            <div className={compressed ? "space-y-1 lg:space-y-2" : "space-y-1.5"}>
                                 {
                                     group.items.map((item) => {
                                         const active = isActive(item.href);
                                         return (
-                                            <Link key={item.label} href={item.href || "#"} title={compressed ? item.label : ""} className={`flex items-center gap-3 rounded-lg transition-all duration-200 border-l-3 group relative ${compressed ? "text-sm h-8.5 lg:h-9 lg:w-9 lg:justify-center px-3 py-2 lg:px-0 lg:py-1.5 lg:mx-auto" : "h-8.5 px-3 py-2 text-sm"} ${active ? `border-l-[#7b00f5] bg-[#2b1d51] text-white shadow-[0_10px_24px_rgba(103,0,231,0.18)]` : `border-l-transparent text-[#aea2c0] hover:translate-x-0.5 hover:bg-[#1e1631] hover:text-[#c9bfd9]`}`}>
+                                            <Link key={item.label} href={item.href || "#"} title={compressed ? item.label : ""} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl border transition-all duration-200 ${compressed ? "h-10 px-3 text-sm lg:mx-auto lg:h-10 lg:w-10 lg:justify-center lg:px-0" : "h-10 px-2.5 text-[13px]"} ${active ? `border-[#8d45eb]/35 bg-gradient-to-r from-[#452171] to-[#2d174b] font-semibold text-white shadow-[0_9px_25px_rgba(103,25,193,0.22)]` : `border-transparent text-[#b5a9c5] hover:border-white/[0.06] hover:bg-white/[0.055] hover:text-white`}`}>
+                                                {active && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-gradient-to-b from-[#c561ff] to-[#7c20ff] shadow-[0_0_12px_#9b3cff]" />}
 
-                                                <IconAsset name={item.icon} className={compressed ? "h-4 w-4 lg:h-5 lg:w-5" : "h-4 w-4"} />
+                                                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition ${active ? "bg-white/10 text-[#e1c9ff]" : "bg-white/[0.025] text-[#a899ba] group-hover:bg-white/[0.07] group-hover:text-[#d5b9fa]"}`}>
+                                                    <IconAsset name={item.icon} className="h-4 w-4" />
+                                                </span>
                                                 <div className={compressed ? 'block lg:hidden' : 'block'}>
                                                     <span>
                                                         {item.label}
@@ -325,10 +331,10 @@ export default function Sidebar({ compressed, setCompressed }) {
                 }
             </nav>
 
-            <div className={`space-y-4 p-3 ${compressed ? "items-center lg:flex flex-col" : ""}`}>
-                <div className="flex items-center justify-between rounded-lg border border-purple-500/30 bg-[#310958] px-3 py-2 text-xs text-purple-100">
+            <div className={`relative shrink-0 space-y-3 border-t border-white/[0.07] bg-[#0d0619]/90 p-3.5 backdrop-blur-xl ${compressed ? "items-center lg:flex lg:flex-col" : ""}`}>
+                <div className={`flex items-center justify-between rounded-xl border border-[#8c3be8]/35 bg-gradient-to-r from-[#3c1265] to-[#270e45] px-3 py-2.5 text-xs text-purple-100 shadow-[0_8px_24px_rgba(58,12,100,.24)] ${compressed ? "lg:h-10 lg:w-10 lg:justify-center lg:px-0" : ""}`}>
                     <div className="flex items-center gap-2">
-                        <IconAsset name="wallet" className="h-3.5 w-3.5" />
+                        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/10 text-[#ddc4ff]"><IconAsset name="wallet" className="h-3.5 w-3.5" /></span>
                         <span className={compressed ? 'initial lg:hidden' : 'initial'}>Credits</span>
                     </div>
                     <div className={compressed ? 'block lg:hidden' : 'block'}>
@@ -336,8 +342,8 @@ export default function Sidebar({ compressed, setCompressed }) {
                     </div>
                 </div>
                 <div ref={accountRef} className="relative w-full">
-                    <button onClick={() => setAccountOpen((open) => !open)} className={`flex items-center gap-3 rounded-xl border border-white/10 bg-[#12061f] px-3 py-2 text-left transition-all duration-200 mx-auto w-full lg:w-auto ${compressed ? "lg:justify-center lg:px-0 lg:py-0" : "w-full"}`} title="Account menu">
-                        <div className="flex h-8 w-9 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-600 text-xs font-bold text-white">
+                    <button onClick={() => setAccountOpen((open) => !open)} className={`mx-auto flex w-full items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.035] px-2.5 py-2 text-left transition-all duration-200 hover:border-[#7e3cce]/45 hover:bg-white/[0.065] ${compressed ? "lg:h-11 lg:w-11 lg:justify-center lg:px-0 lg:py-0" : ""}`} title="Account menu">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#8b3cf1] to-[#d224e9] text-xs font-bold text-white shadow-[0_6px_18px_rgba(180,34,229,.3)]">
                             {initials}
                         </div>
                         <div className={compressed ? 'block lg:hidden' : 'block'}>

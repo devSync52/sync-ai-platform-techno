@@ -15,8 +15,13 @@ export const FetchInventoryAction = (params = {}) => async (dispatch) => {
         const data = resolveInventoryData(response.data);
         const pagination = response.data?.pagination ?? null;
         const states = response.data?.states || {
-            active: response.data?.active ?? data.filter((item) => item?.status == 'active').length,
-            inactive: response.data?.inactive ?? data.filter((item) => item?.status && item.status != 'active').length
+            available: data.filter((item) => Number(item?.availableQuantity || 0) > 0).length,
+            unavailable: data.filter((item) => Number(item?.availableQuantity || 0) <= 0).length,
+            availableQuantity: {
+                _sum: {
+                    availableQuantity: data.reduce((total, item) => total + Number(item?.availableQuantity || 0), 0)
+                }
+            }
         };
 
         dispatch({

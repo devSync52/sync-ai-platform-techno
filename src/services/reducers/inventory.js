@@ -5,8 +5,13 @@ const INVENTORY_INIT = {
     deleting: false,
     data: [],
     states: {
-        active: 0,
-        inactive: 0
+        available: 0,
+        unavailable: 0,
+        availableQuantity: {
+            _sum: {
+                availableQuantity: 0
+            }
+        }
     },
     pagination: {
         page: 1,

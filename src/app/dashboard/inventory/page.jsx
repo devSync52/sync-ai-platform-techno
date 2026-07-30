@@ -6,7 +6,7 @@ import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import DashboardPagination from "@/components/DashboardPagination";
 import { DeleteInventoryAction, FetchInventoryAction } from "@/services/actions/inventory";
 import { Trash } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -28,14 +28,10 @@ export default function InventoryPage() {
         dispatch(FetchInventoryAction({ page, rowCount }));
     }, [dispatch, page]);
 
-    const inventoryTotals = useMemo(() => {
-        const items = inventory || [];
-
-        return {
-            available: items.reduce((total, item) => total + Number(getInventoryQuantity(item) || 0), 0),
-            providers: new Set(items.map((item) => item?.provider).filter(Boolean)).size
-        };
-    }, [inventory]);
+    const availableItems = Number(states?.available || 0);
+    const unavailableItems = Number(states?.unavailable || 0);
+    const totalItems = availableItems + unavailableItems;
+    const availableQuantity = states?.availableQuantity?._sum?.availableQuantity ?? 0;
 
     const handleDeleteInventory = () => {
         const inventoryId = deleteOperation.item?.id;
@@ -69,28 +65,28 @@ export default function InventoryPage() {
                     <div className="flex items-center gap-3 mb-5">
                         <span className="text-[18px] text-[#4B5A8A] font-medium">Total Items</span>
                     </div>
-                    <h2 className="text-4xl font-bold text-black leading-none">{pagination?.total ?? inventory?.length ?? 0}</h2>
+                    <h2 className="text-4xl font-bold text-black leading-none">{formatNumber(totalItems)}</h2>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-200 p-5">
                     <div className="flex items-center gap-3 mb-5">
-                        <span className="text-[18px] text-[#4B5A8A] font-medium">Active</span>
+                        <span className="text-[18px] text-[#4B5A8A] font-medium">Available</span>
                     </div>
-                    <h2 className="text-4xl font-bold text-green-500 leading-none">{states?.active ?? 0}</h2>
+                    <h2 className="text-4xl font-bold text-green-500 leading-none">{formatNumber(availableItems)}</h2>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                    <div className="flex items-center gap-3 mb-5">
+                        <span className="text-[18px] text-[#4B5A8A] font-medium">Unavailable</span>
+                    </div>
+                    <h2 className="text-4xl font-bold text-red-500 leading-none">{formatNumber(unavailableItems)}</h2>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-200 p-5">
                     <div className="flex items-center gap-3 mb-5">
                         <span className="text-[18px] text-[#4B5A8A] font-medium">Available Qty</span>
                     </div>
-                    <h2 className="text-4xl font-bold text-blue-500 leading-none">{formatNumber(inventoryTotals.available)}</h2>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-gray-200 p-5">
-                    <div className="flex items-center gap-3 mb-5">
-                        <span className="text-[18px] text-[#4B5A8A] font-medium">Providers</span>
-                    </div>
-                    <h2 className="text-4xl font-bold text-purple-500 leading-none">{inventoryTotals.providers}</h2>
+                    <h2 className="text-4xl font-bold text-blue-500 leading-none">{formatNumber(availableQuantity)}</h2>
                 </div>
             </div>
 
@@ -141,8 +137,8 @@ export default function InventoryPage() {
                                     <td className="py-2 pr-3">{formatNumber(item?.weight ?? item?.metadata?.Weight)} lb</td>
                                     <td className="py-2 pr-3">{formatDate(item?.createdAt || item?.metadata?.CreationDate)}</td>
                                     <td className="py-2 pr-3">
-                                        <span className={`capitalize inline-flex items-center rounded-md px-2 py-1 text-sm font-medium ${item?.status == "active" ? "bg-green-50 text-green-700 inset-ring inset-ring-green-600/10" : "bg-slate-100 text-slate-600 inset-ring inset-ring-slate-500/10"}`}>
-                                            {item?.status || "-"}
+                                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-sm font-medium ${Number(getInventoryQuantity(item)) > 0 ? "bg-green-50 text-green-700 inset-ring inset-ring-green-600/10" : "bg-red-50 text-red-700 inset-ring inset-ring-red-600/10"}`}>
+                                            {Number(getInventoryQuantity(item)) > 0 ? "Available" : "Not Available"}
                                         </span>
                                     </td>
                                     <td className="py-2 pr-3">
