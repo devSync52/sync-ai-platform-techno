@@ -12,7 +12,6 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import moment from "moment";
 import CarrierBrand from "@/components/carrier-brand";
 
-const atRiskLimit = SLA_AT_RISK_LIMIT;
 const initialDateRange = {
     fromDate: moment().subtract(1, "month").format("YYYY-MM-DD"),
     toDate: moment().format("YYYY-MM-DD"),
@@ -101,6 +100,7 @@ const getDaysLeftLabel = (estimatedDeliveryDate) => {
 export default function SlaKpiPage() {
     const dispatch = useDispatch();
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(SLA_AT_RISK_LIMIT);
     const [draftDateRange, setDraftDateRange] = useState(initialDateRange);
     const [appliedDateRange, setAppliedDateRange] = useState(initialDateRange);
 
@@ -113,8 +113,8 @@ export default function SlaKpiPage() {
             ...(appliedDateRange.toDate ? { toDate: appliedDateRange.toDate } : {}),
         };
 
-        dispatch(FetchSlaDashboardAction({ page, limit: atRiskLimit, ...dateParams })).catch(() => { });
-    }, [appliedDateRange.fromDate, appliedDateRange.toDate, dispatch, page]);
+        dispatch(FetchSlaDashboardAction({ page, limit: rowsPerPage, ...dateParams })).catch(() => { });
+    }, [appliedDateRange.fromDate, appliedDateRange.toDate, dispatch, page, rowsPerPage]);
 
     useEffect(() => {
         fetchSlaDashboard()
@@ -122,6 +122,11 @@ export default function SlaKpiPage() {
 
     const handlePageChange = (nextPage) => {
         setPage(nextPage);
+    };
+
+    const handleRowsPerPageChange = (nextLimit) => {
+        setPage(1);
+        setRowsPerPage(nextLimit);
     };
 
     const handleDateChange = (key, value) => {
@@ -354,10 +359,10 @@ export default function SlaKpiPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4">
 
                 {/* Left Card */}
-                <div className="min-h-50 rounded-xl border border-[#ece8f2] bg-white p-3 lg:p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)] lg:col-span-2">
+                <div className="min-h-50 w-full rounded-xl border border-[#ece8f2] bg-white p-3 lg:p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <h2 className="text-xl font-semibold text-[#090514]">Weekly Delivery Trend</h2>
@@ -532,7 +537,9 @@ export default function SlaKpiPage() {
                 </div>
                 <DashboardPagination
                     pagination={slaDashboard?.pagination} currentPage={page} loading={slaLoading}
-                    itemCount={slaDashboard?.pagination?.rowCount} onPageChange={handlePageChange}
+                    itemCount={slaDashboard?.atRiskOrders?.length || 0} onPageChange={handlePageChange}
+                    rowsPerPage={rowsPerPage} rowsPerPageOptions={[5, 10, 25, 50]}
+                    onRowsPerPageChange={handleRowsPerPageChange}
                 />
             </Card>
         </div>
