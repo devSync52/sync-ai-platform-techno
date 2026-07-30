@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import DashboardPagination from "@/components/DashboardPagination";
 import { FetchSlaDashboardAction, SLA_AT_RISK_LIMIT, defaultSlaMetrics, defaultSlaPagination } from "@/services/actions/orders";
 import { useDispatch, useSelector } from "react-redux";
-import { ArrowRight, Bot, CalendarDays, Car, CircleCheck, CircleX, Clock, MapPin, Plus, RefreshCw, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarDays, Car, CircleCheck, CircleX, Clock, MapPin, Plus, RefreshCw, TrendingUp, X } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import moment from "moment";
 import CarrierBrand from "@/components/carrier-brand";
@@ -49,17 +49,22 @@ const ProgressRow = ({ item }) => (
 
 function TrendTooltip({ active, payload, label }) {
     if (!active || !payload || !payload.length) return null;
+    const total = payload.reduce((sum, item) => sum + Number(item.value || 0), 0);
+    const colors = { onTime: "#25c77a", late: "#ff6678", atRisk: "#ffc44d" };
 
     return (
-        <div className="rounded-3xl border border-[#3f2d5f] bg-[#110923] p-4 text-sm text-white shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
-            <div className="mb-2 text-sm font-semibold text-white">{label}</div>
+        <div className="min-w-48 rounded-2xl border border-white/10 bg-[#160b28]/95 p-4 text-sm text-white shadow-[0_22px_55px_rgba(28,8,52,.32)] backdrop-blur-xl">
+            <div className="mb-3 flex items-center justify-between gap-5 border-b border-white/10 pb-2.5">
+                <span className="font-semibold text-white">{label}</span>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-[#ddc8fa]">{total} total</span>
+            </div>
             {payload.map((item) => (
-                <div key={item.dataKey} className="flex items-center justify-between gap-3 text-sm">
+                <div key={item.dataKey} className="mt-2 flex items-center justify-between gap-6 text-xs">
                     <span className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
+                        <span className="h-2.5 w-2.5 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: colors[item.dataKey] }} />
                         {item.name == "onTime" ? "On Time" : item.name == "late" ? "Late" : "At Risk"}
                     </span>
-                    <span className="font-semibold text-white">{item.value}</span>
+                    <span className="font-bold text-white">{item.value}</span>
                 </div>
             ))}
         </div>
@@ -145,6 +150,11 @@ export default function SlaKpiPage() {
     };
 
     const metrics = { ...defaultSlaMetrics, ...(slaDashboard.metrics || {}) };
+    const trendTotals = useMemo(() => (slaDashboard.deliveryTrend || []).reduce((totals, item) => ({
+        onTime: totals.onTime + Number(item.onTime || 0),
+        late: totals.late + Number(item.late || 0),
+        atRisk: totals.atRisk + Number(item.atRisk || 0),
+    }), { onTime: 0, late: 0, atRisk: 0 }), [slaDashboard.deliveryTrend]);
 
     const slaPerformance = useMemo(() => (slaDashboard.performance || []).map((item) => ({
         name: item.name || "-", subLabel: item.carrierName || "-",
@@ -362,29 +372,40 @@ export default function SlaKpiPage() {
             <div className="grid grid-cols-1 gap-4">
 
                 {/* Left Card */}
-                <div className="min-h-50 w-full rounded-xl border border-[#ece8f2] bg-white p-3 lg:p-6 shadow-[0_1px_3px_rgba(19,12,35,0.08)]">
+                <div className="relative min-h-50 w-full overflow-hidden rounded-2xl border border-[#e8e0f1] bg-[linear-gradient(145deg,#ffffff_0%,#fcf9ff_58%,#f7f0ff_100%)] p-4 shadow-[0_14px_40px_rgba(54,25,87,.08)] lg:p-6">
+                    <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-[#8b35e8]/8 blur-3xl" />
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <h2 className="text-xl font-semibold text-[#090514]">Weekly Delivery Trend</h2>
-                            <p className="mt-1 text-sm text-[#68607f]">On-time, late, and at-risk shipment volume by week.</p>
+                        <div className="flex items-start gap-3">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#7620e9] to-[#ad4cf3] text-white shadow-[0_9px_22px_rgba(118,32,233,.24)]">
+                                <TrendingUp className="h-5 w-5" />
+                            </span>
+                            <div>
+                                <h2 className="text-xl font-bold tracking-[-.02em] text-[#1b1027]">Weekly Delivery Trend</h2>
+                                <p className="mt-1 text-sm text-[#756982]">Shipment performance across the selected period.</p>
+                            </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />On Time</span>
-                            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" />Late</span>
-                            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />At Risk</span>
+                        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50/80 px-3 py-1.5 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />On Time <b>{trendTotals.onTime}</b></span>
+                            <span className="inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50/80 px-3 py-1.5 text-rose-700"><span className="h-2 w-2 rounded-full bg-rose-500" />Late <b>{trendTotals.late}</b></span>
+                            <span className="inline-flex items-center gap-2 rounded-full border border-amber-100 bg-amber-50/80 px-3 py-1.5 text-amber-700"><span className="h-2 w-2 rounded-full bg-amber-500" />At Risk <b>{trendTotals.atRisk}</b></span>
                         </div>
                     </div>
 
-                    <div className="mt-6 h-85">
+                    <div className="relative mt-6 h-85 rounded-2xl border border-white bg-white/70 px-2 pt-5 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:px-4">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={slaDashboard.deliveryTrend} margin={{ top: 12, right: 18, left: -16, bottom: 22 }} barCategoryGap="18%">
-                                <CartesianGrid stroke="#ece8f2" strokeDasharray="3 4" vertical={false} />
-                                <XAxis dataKey="week" axisLine={false} height={54} interval={0} minTickGap={0} tick={{ fill: "#7d708e", fontSize: 10 }} tickLine={false} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#7d708e", fontSize: 12 }} />
-                                <Tooltip content={<TrendTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-                                <Bar dataKey="onTime" stackId="a" fill="#079a35" radius={[0, 0, 0, 0]} />
-                                <Bar dataKey="late" stackId="a" fill="#ff3b4f" radius={[0, 0, 0, 0]} />
-                                <Bar dataKey="atRisk" stackId="a" fill="#f6a500" radius={[8, 8, 0, 0]} />
+                            <BarChart data={slaDashboard.deliveryTrend} margin={{ top: 8, right: 12, left: -10, bottom: 18 }} barCategoryGap="28%" barGap={5}>
+                                <defs>
+                                    <linearGradient id="onTimeGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#25c77a" /><stop offset="100%" stopColor="#079a53" /></linearGradient>
+                                    <linearGradient id="lateGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ff6678" /><stop offset="100%" stopColor="#e42f4c" /></linearGradient>
+                                    <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ffc44d" /><stop offset="100%" stopColor="#ee9200" /></linearGradient>
+                                </defs>
+                                <CartesianGrid stroke="#e9e2ef" strokeDasharray="5 6" vertical={false} />
+                                <XAxis dataKey="week" axisLine={false} height={52} interval={0} minTickGap={0} tick={{ fill: "#766b82", fontSize: 10, fontWeight: 600 }} tickLine={false} />
+                                <YAxis axisLine={false} tickLine={false} width={38} tick={{ fill: "#9a8fa5", fontSize: 11 }} />
+                                <Tooltip content={<TrendTooltip />} cursor={{ fill: "rgba(118,32,233,0.045)", radius: 12 }} />
+                                <Bar dataKey="onTime" fill="url(#onTimeGradient)" radius={[8, 8, 3, 3]} maxBarSize={24} />
+                                <Bar dataKey="late" fill="url(#lateGradient)" radius={[8, 8, 3, 3]} maxBarSize={24} />
+                                <Bar dataKey="atRisk" fill="url(#riskGradient)" radius={[8, 8, 3, 3]} maxBarSize={24} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

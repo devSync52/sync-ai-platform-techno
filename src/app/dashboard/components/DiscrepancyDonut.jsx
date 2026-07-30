@@ -3,12 +3,16 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { discrepancyData } from "./data";
 
+const formatDiscrepancyType = (value = "") => value
+    .replaceAll("-", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+
 function DiscrepancyTooltip({ active, payload }) {
     if (!active || !payload || !payload.length) return null;
     const { name, value } = payload[0];
     return (
         <div className="rounded-2xl border border-[#e8e2ef] bg-white px-3 py-2 text-sm text-[#171321] shadow-[0_16px_36px_rgba(15,13,42,0.08)]">
-            {name} : {value}
+            {formatDiscrepancyType(name)}: {value}
         </div>
     );
 }
@@ -43,7 +47,7 @@ export default function DiscrepancyDonut({ data = [] }) {
                     <div key={entry.name} className="flex items-center justify-between text-[11px]">
                         <div className="flex items-center gap-2 text-[#635c78]">
                             <span className="h-2 w-2 rounded-full" style={{ background: entry.color }} />
-                            {entry.name}
+                            {formatDiscrepancyType(entry.name)}
                         </div>
                         <span className="font-medium text-[#171321]">{entry.value}%</span>
                     </div>
