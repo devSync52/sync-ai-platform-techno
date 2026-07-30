@@ -23,30 +23,34 @@ function BotMark({ small = false }) {
     );
 }
 
-const flattenToolData = (value, path = "", rows = []) => {
-    if (value !== null && typeof value === "object") {
-        Object.entries(value).forEach(([key, child]) => flattenToolData(child, path ? `${path}.${key}` : key, rows));
-    } else {
-        rows.push([path, value ?? ""]);
-    }
-    return rows;
-};
-
 const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
 
-const exportToolData = (toolData) => {
-    const rows = [["tool_name", "field", "value"]];
-    toolData.forEach((tool, index) => {
-        const toolName = tool.tool_name || tool.toolName || `tool_${index + 1}`;
-        flattenToolData(tool.data ?? tool).forEach(([field, value]) => rows.push([toolName, field, value]));
-    });
+const hasMarkdownTable = (markdown = "") =>
+    /(?:^|\n)\s*\|?.+\|.+\n\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*(?:\n|$)/m.test(markdown);
+
+const downloadCsv = (rows, filename) => {
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `sync-bot-tool-data-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+};
+
+const exportMarkdownTables = (messageElement) => {
+    const tables = Array.from(messageElement?.querySelectorAll("table") || []);
+    const rows = [];
+
+    tables.forEach((table, tableIndex) => {
+        if (tableIndex > 0) rows.push([]);
+        table.querySelectorAll("tr").forEach((row) => {
+            rows.push(Array.from(row.querySelectorAll("th, td"), (cell) => cell.textContent.trim()));
+        });
+    });
+
+    if (!rows.length) return;
+    downloadCsv(rows, `sync-bot-table-${new Date().toISOString().slice(0, 10)}.csv`);
 };
 
 export default function SynCBotButton() {
@@ -231,34 +235,35 @@ export default function SynCBotButton() {
                                 ) : (
                                     <div className="mx-auto max-w-155 space-y-6 py-7">
                                         {messages.map((message) => (
-                                            <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}>
+                                            <div key={message.id} className={`flex gap-3 ${message.role == "user" ? "justify-end" : ""}`}>
                                                 {message.role !== "user" && <BotMark small />}
-                                                <div className={`max-w-[82%] custom_msgbox ${message.role === "user" ? "rounded-2xl rounded-br-md bg-[#7d20e9] px-4 py-3 text-white shadow-[0_8px_20px_rgba(125,32,233,.18)]" : ""}`}>
-                                                    <div className={`text-xs leading-5 ${message.role === "assistant" ? "rounded-2xl rounded-tl-md border border-[#ece7f1] bg-white px-4 py-3 text-[#51465b] shadow-sm" : ""} ${message.role === "error" ? "whitespace-pre-wrap rounded-2xl rounded-tl-md border border-red-200 bg-red-50 px-4 py-3 text-red-600" : ""}`}>
-                                                        {message.role === "assistant" ? (
-                                                            <ReactMarkdown
-                                                                remarkPlugins={[remarkGfm]}
-                                                                components={{
-                                                                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                                                                    ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
-                                                                    ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
-                                                                    strong: ({ children }) => <strong className="font-bold text-[#2f2440]">{children}</strong>,
-                                                                    code: ({ children }) => <code className="rounded bg-[#f3edf8] px-1 py-0.5 text-[11px] text-[#7021c8]">{children}</code>,
-                                                                    a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-[#7620e9] underline">{children}</a>,
-                                                                }}
-                                                            >
+                                                <div className={`max-w-[82%] custom_msgbox ${message.role == "user" ? "rounded-2xl rounded-br-md bg-[#7d20e9] px-4 py-3 text-white shadow-[0_8px_20px_rgba(125,32,233,.18)]" : ""}`}>
+                                                    <div className={`text-xs leading-5 ${message.role == "assistant" ? "rounded-2xl rounded-tl-md border border-[#ece7f1] bg-white px-4 py-3 text-[#51465b] shadow-sm" : ""} ${message.role == "error" ? "whitespace-pre-wrap rounded-2xl rounded-tl-md border border-red-200 bg-red-50 px-4 py-3 text-red-600" : ""}`}>
+                                                        {message.role == "assistant" ? (
+                                                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                                                                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                                                ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+                                                                ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+                                                                strong: ({ children }) => <strong className="font-bold text-[#2f2440]">{children}</strong>,
+                                                                code: ({ children }) => <code className="rounded bg-[#f3edf8] px-1 py-0.5 text-[11px] text-[#7021c8]">{children}</code>,
+                                                                a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-[#7620e9] underline">{children}</a>,
+                                                                table: ({ children }) => <div className="my-3 overflow-x-auto rounded-lg border border-[#e5ddeb]"><table className="w-full border-collapse text-left text-[11px]">{children}</table></div>,
+                                                                thead: ({ children }) => <thead className="bg-[#f3edf8] text-[#2f2440]">{children}</thead>,
+                                                                th: ({ children }) => <th className="border-b border-[#ded3e7] px-3 py-2 font-bold">{children}</th>,
+                                                                td: ({ children }) => <td className="border-b border-[#eee8f2] px-3 py-2 last:border-r-0">{children}</td>,
+                                                            }}>
                                                                 {message.text}
                                                             </ReactMarkdown>
                                                         ) : message.text}
                                                     </div>
-                                                    {message.role === "assistant" && (
+                                                    {message.role == "assistant" && (
                                                         <div className="mt-2 flex items-center gap-3">
                                                             <button onClick={() => { navigator.clipboard?.writeText(message.text); setCopied(message.id); }} className="flex items-center gap-1 text-[9px] text-[#9a8da5] hover:text-[#6f1bd4]">
-                                                                {copied === message.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                                                                {copied === message.id ? "Copied" : "Copy"}
+                                                                {copied == message.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                                                {copied == message.id ? "Copied" : "Copy"}
                                                             </button>
-                                                            {Array.isArray(message.toolData) && message.toolData.length > 0 && (
-                                                                <button onClick={() => exportToolData(message.toolData)} className="flex items-center gap-1 rounded-md bg-[#f3edf9] px-2 py-1 text-[9px] font-semibold text-[#7620e9] transition hover:bg-[#e9dcf7]">
+                                                            {hasMarkdownTable(message.text) && (
+                                                                <button onClick={(event) => exportMarkdownTables(event.currentTarget.closest(".custom_msgbox"))} className="flex items-center gap-1 rounded-md bg-[#f3edf9] px-2 py-1 text-[9px] font-semibold text-[#7620e9] transition hover:bg-[#e9dcf7]">
                                                                     <Download className="h-3 w-3" /> Export CSV
                                                                 </button>
                                                             )}
