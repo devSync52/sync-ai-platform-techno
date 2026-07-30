@@ -20,13 +20,13 @@ export default function WarehousesPage() {
     const [deleteOperation, setDeleteOperation] = useState({ show: false, warehouse: null });
     const [exporting, setExporting] = useState(false);
     const [page, setPage] = useState(1);
-    const rowCount = 10;
+    const [rowCount, setRowCount] = useState(10);
     const dispatch = useDispatch();
     const { data: warehouses, loading, deleting, pagination, active: activeWarehouses } = useSelector((state) => state.warehouses);
 
     useEffect(() => {
         dispatch(FetchWarehousesAction({ page, rowCount }));
-    }, [dispatch, page]);
+    }, [dispatch, page, rowCount]);
 
     const statesCovered = useMemo(() => new Set((warehouses || []).map((warehouse) => warehouse.province?.name || warehouse.provinceName || warehouse.province).filter(Boolean)).size, [warehouses]);
 
@@ -209,6 +209,8 @@ export default function WarehousesPage() {
                     currentPage={page}
                     loading={loading}
                     onPageChange={setPage}
+                    rowsPerPage={rowCount}
+                    onRowsPerPageChange={(value) => { setPage(1); setRowCount(value); }}
                 />
             </Card>
 

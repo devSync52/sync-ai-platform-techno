@@ -11,14 +11,13 @@ import DashboardPagination from "@/components/DashboardPagination";
 import { DeleteAddressAction, FetchAddressesAction } from "@/services/actions/addresses";
 import AddressOperation from "./component/operation";
 
-const rowCount = 10;
-
 const getAddressId = (address) => address?.id || address?._id || address?.addressId;
 const getRegionName = (address) => address?.region?.name || address?.regionName || address?.region_id || address?.region || "-";
 const getProvinceName = (address) => address?.province?.name || address?.provinceName || address?.province || "-";
 
 export default function AddressesPage() {
     const [page, setPage] = useState(1);
+    const [rowCount, setRowCount] = useState(10);
     const [operation, setOperation] = useState({ show: false, details: null });
     const [deleteOperation, setDeleteOperation] = useState({ show: false, address: null });
     const dispatch = useDispatch();
@@ -26,7 +25,7 @@ export default function AddressesPage() {
 
     useEffect(() => {
         dispatch(FetchAddressesAction({ limit: rowCount, page }));
-    }, [dispatch, page]);
+    }, [dispatch, page, rowCount]);
 
     const handleDeleteAddress = () => {
         const addressId = getAddressId(deleteOperation.address);
@@ -154,6 +153,8 @@ export default function AddressesPage() {
                     currentPage={page}
                     loading={loading}
                     onPageChange={setPage}
+                    rowsPerPage={rowCount}
+                    onRowsPerPageChange={(value) => { setPage(1); setRowCount(value); }}
                 />
             </Card>
 

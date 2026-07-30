@@ -18,13 +18,13 @@ export default function ClientsPage() {
     const [viewOperation, setViewOperation] = useState({ show: false, details: null });
     const [deleteOperation, setDeleteOperation] = useState({ show: false, client: null });
     const [page, setPage] = useState(1);
-    const rowCount = 10;
+    const [rowCount, setRowCount] = useState(10);
     const dispatch = useDispatch();
     const { data: clients, loading, deleting, updatingStatus, pagination, states } = useSelector((state) => state.clients);
 
     useEffect(() => {
         dispatch(FetchClientsAction({ page, rowCount }));
-    }, [dispatch, page]);
+    }, [dispatch, page, rowCount]);
 
     const getClientId = (client) => client?.clientId || client?.id;
     const getClientName = (client) => [client?.profile?.firstName, client?.profile?.lastName].filter(Boolean).join(' ') || '-';
@@ -193,6 +193,8 @@ export default function ClientsPage() {
                     currentPage={page}
                     loading={loading}
                     onPageChange={setPage}
+                    rowsPerPage={rowCount}
+                    onRowsPerPageChange={(value) => { setPage(1); setRowCount(value); }}
                 />
             </Card>
 

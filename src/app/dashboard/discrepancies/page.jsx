@@ -26,6 +26,7 @@ export default function Discrepancies() {
     const [filters, setFilters] = useState(initialFilters);
     const [pagination, setPagination] = useState(initialPagination);
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(pageLimit);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [operationOpen, setOperationOpen] = useState(false);
@@ -40,7 +41,7 @@ export default function Discrepancies() {
             const params = {
                 ...Object.fromEntries(Object.entries(effectiveFilters).filter(([, value]) => value && value !== "all")),
                 page,
-                limit: pageLimit,
+                limit: rowsPerPage,
             };
             const { data } = await axiosInstance.get(API_URL.DISCREPANCIES, { params });
             setRows((data.data || []).map(normalize));
@@ -51,7 +52,7 @@ export default function Discrepancies() {
         } finally {
             setLoading(false);
         }
-    }, [carrier, debouncedSearch, page, severity, status, type]);
+    }, [carrier, debouncedSearch, page, rowsPerPage, severity, status, type]);
 
     useEffect(() => {
         queueMicrotask(fetchRows);
@@ -171,8 +172,11 @@ export default function Discrepancies() {
                     className="mx-4 mb-4"
                     pagination={pagination}
                     itemCount={rows.length}
+                    currentPage={page}
                     loading={loading}
                     onPageChange={setPage}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(value) => { setPage(1); setRowsPerPage(value); }}
                 />
             </Card>
             <DiscrepancyOperationPopup open={operationOpen} onOpenChange={setOperationOpen} onSubmit={createDiscrepancy} saving={saving} />

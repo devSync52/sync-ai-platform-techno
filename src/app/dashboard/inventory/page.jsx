@@ -20,13 +20,13 @@ const getInventoryQuantity = (item) => item?.availableQuantity ?? item?.metadata
 export default function InventoryPage() {
     const [deleteOperation, setDeleteOperation] = useState({ show: false, item: null });
     const [page, setPage] = useState(1);
-    const rowCount = 10;
+    const [rowCount, setRowCount] = useState(10);
     const dispatch = useDispatch();
     const { data: inventory, loading, deleting, pagination, states } = useSelector((state) => state.inventory);
 
     useEffect(() => {
         dispatch(FetchInventoryAction({ page, rowCount }));
-    }, [dispatch, page]);
+    }, [dispatch, page, rowCount]);
 
     const availableItems = Number(states?.available || 0);
     const unavailableItems = Number(states?.unavailable || 0);
@@ -157,6 +157,8 @@ export default function InventoryPage() {
                     currentPage={page}
                     loading={loading}
                     onPageChange={setPage}
+                    rowsPerPage={rowCount}
+                    onRowsPerPageChange={(value) => { setPage(1); setRowCount(value); }}
                 />
             </Card>
 

@@ -33,6 +33,7 @@ export default function ClaimsPage() {
     const [stats, setStats] = useState(emptyStats);
     const [pagination, setPagination] = useState(initialPagination);
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(pageLimit);
     const [filters, setFilters] = useState({ search: "", status: "all", carrier: "all" });
     const [loading, setLoading] = useState(true);
     const [updatingId, setUpdatingId] = useState("");
@@ -46,7 +47,7 @@ export default function ClaimsPage() {
             const params = {
                 ...Object.fromEntries(Object.entries(effectiveFilters).filter(([, value]) => value && value !== "all")),
                 page,
-                limit: pageLimit,
+                limit: rowsPerPage,
             };
             const { data } = await axiosInstance.get(API_URL.CLAIMS, { params });
             setClaims((data.data || []).map(normalizeClaim));
@@ -57,7 +58,7 @@ export default function ClaimsPage() {
         } finally {
             setLoading(false);
         }
-    }, [carrier, debouncedSearch, page, status]);
+    }, [carrier, debouncedSearch, page, rowsPerPage, status]);
 
     useEffect(() => {
         queueMicrotask(fetchClaims);
@@ -309,8 +310,11 @@ export default function ClaimsPage() {
                     className="mx-4 mb-4"
                     pagination={pagination}
                     itemCount={claims.length}
+                    currentPage={page}
                     loading={loading}
                     onPageChange={setPage}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(value) => { setPage(1); setRowsPerPage(value); }}
                 />
             </Card>
         </div>

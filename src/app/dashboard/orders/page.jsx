@@ -13,8 +13,6 @@ import moment from "moment-timezone";
 import { PROJECT_URL } from "@/utils/constants";
 import CarrierBrand from "@/components/carrier-brand";
 
-const rowCount = 10;
-
 const formatNumber = (value) => {
     const number = Number(value);
     if (!Number.isFinite(number)) return "-";
@@ -95,13 +93,14 @@ const stateColors = [
 
 export default function OrdersPage() {
     const [page, setPage] = useState(1);
+    const [rowCount, setRowCount] = useState(10);
     const [deleteOperation, setDeleteOperation] = useState({ show: false, order: null });
     const dispatch = useDispatch();
     const { data: orders, loading, deleting, pagination, states } = useSelector((state) => state.orders);
 
     useEffect(() => {
         dispatch(FetchOrdersAction({ page, rowCount }));
-    }, [dispatch, page]);
+    }, [dispatch, page, rowCount]);
 
     const stateCards = useMemo(() => Object.entries(states || {}).map(([label, value], index) => ({
         label,
@@ -337,6 +336,8 @@ export default function OrdersPage() {
                     currentPage={page}
                     loading={loading}
                     onPageChange={setPage}
+                    rowsPerPage={rowCount}
+                    onRowsPerPageChange={(value) => { setPage(1); setRowCount(value); }}
                 />
             </section>
 
