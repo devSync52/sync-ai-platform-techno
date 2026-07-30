@@ -112,7 +112,7 @@ export default function SynCBotButton() {
 
     return (
         <>
-            <button onClick={() => setOpen(true)} className={`fixed bottom-4 right-4 z-40 inline-flex h-14 items-center gap-3 rounded-full bg-gradient-to-r from-[#6f0be8] via-[#8d17f5] to-[#a42cf4] px-2.5 text-sm font-semibold text-white shadow-[0_18px_45px_rgba(102,0,220,.32)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_54px_rgba(102,0,220,.4)] sm:bottom-6 sm:right-6 sm:pr-5 ${open ? "pointer-events-none scale-90 opacity-0" : ""}`} type="button" aria-label="Ask SynC Bot">
+            <button onClick={() => setOpen(true)} className={`fixed bottom-4 right-4 z-40 inline-flex h-14 items-center gap-3 rounded-full bg-linear-to-r from-[#6f0be8] via-[#8d17f5] to-[#a42cf4] px-2.5 text-sm font-semibold text-white shadow-[0_18px_45px_rgba(102,0,220,.32)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_54px_rgba(102,0,220,.4)] sm:bottom-6 sm:right-6 sm:pr-5 ${open ? "pointer-events-none scale-90 opacity-0" : ""}`} type="button" aria-label="Ask SynC Bot">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15">
                     <Sparkles className="h-4.5 w-4.5" />
                 </span>
@@ -121,12 +121,9 @@ export default function SynCBotButton() {
 
             {open && (
                 <div className="fixed inset-0 z-50 flex items-end justify-end bg-[#10051d]/25 backdrop-blur-[2px]" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
-                    <section className={`motion-scale-in flex h-full w-full overflow-hidden bg-[#faf9fc] shadow-[-24px_0_80px_rgba(27,11,50,.18)] transition-[height,max-width,margin] duration-300 md:mr-4 md:rounded-[28px] md:border md:border-white ${expanded
-                        ? "md:my-4 md:h-[calc(100%-32px)] md:max-w-[1100px]"
-                        : "md:mb-6 md:h-[min(680px,calc(100%-80px))] md:max-w-[920px]"
-                        }`}>
-                        <aside className={`${sessionsOpen ? "flex" : "hidden"} absolute inset-0 z-20 w-full flex-col bg-[#170d27] text-white md:relative md:flex md:w-[286px] md:shrink-0`}>
-                            <div className="flex h-[76px] items-center justify-between border-b border-white/8 px-5">
+                    <section className={`motion-scale-in flex h-full w-full overflow-hidden bg-[#faf9fc] shadow-[-24px_0_80px_rgba(27,11,50,.18)] transition-[height,max-width,margin] duration-300 md:mr-4 md:rounded-[28px] md:border md:border-white ${expanded ? "md:my-4 md:h-[calc(100%-32px)] md:max-w-275" : "md:mb-6 md:h-[min(680px,calc(100%-80px))] md:max-w-230"}`}>
+                        <aside className={`${sessionsOpen ? "flex" : "hidden"} absolute inset-0 z-20 w-full flex-col bg-[#170d27] text-white md:relative md:flex md:w-71.5 md:shrink-0`}>
+                            <div className="flex h-19 items-center justify-between border-b border-white/8 px-5">
                                 <div className="flex items-center gap-3">
                                     <BotMark small />
                                     <div>
@@ -140,7 +137,7 @@ export default function SynCBotButton() {
                             </div>
 
                             <div className="px-4 pt-4">
-                                <button onClick={newChat} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#7620e9] to-[#a02df2] text-sm font-bold shadow-[0_10px_28px_rgba(114,25,230,.3)] transition hover:brightness-110">
+                                <button onClick={newChat} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#7620e9] to-[#a02df2] text-sm font-bold shadow-[0_10px_28px_rgba(114,25,230,.3)] transition hover:brightness-110">
                                     <Plus className="h-4 w-4" /> New conversation
                                 </button>
                                 <div className="mt-4 flex h-10 items-center gap-2 rounded-xl border border-white/8 bg-white/[.045] px-3 text-[#8f819f]">
@@ -185,7 +182,7 @@ export default function SynCBotButton() {
                         </aside>
 
                         <div className="flex min-w-0 flex-1 flex-col">
-                            <header className="flex h-[76px] shrink-0 items-center border-b border-[#ece8f1] bg-white/80 px-4 backdrop-blur-xl sm:px-6">
+                            <header className="flex h-19 shrink-0 items-center border-b border-[#ece8f1] bg-white/80 px-4 backdrop-blur-xl sm:px-6">
                                 <button onClick={() => setSessionsOpen(true)} className="mr-3 rounded-xl p-2 text-[#766b83] hover:bg-[#f1ecf7] md:hidden" aria-label="Open sessions">
                                     <History className="h-5 w-5" />
                                 </button>
@@ -216,7 +213,7 @@ export default function SynCBotButton() {
                                         <LoaderCircle className="h-5 w-5 animate-spin text-[#842be8]" /> Loading conversation...
                                     </div>
                                 ) : messages.length === 0 ? (
-                                    <div className="mx-auto flex min-h-full max-w-[580px] flex-col items-center justify-center py-10 text-center">
+                                    <div className="mx-auto flex min-h-full max-w-145 flex-col items-center justify-center py-10 text-center">
                                         <BotMark />
                                         <div className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-[#e7dafb] bg-[#f5effd] px-3 py-1 text-[9px] font-bold uppercase tracking-[.12em] text-[#7d2ce6]">
                                             <Sparkles className="h-3 w-3" /> Powered by SynC AI
