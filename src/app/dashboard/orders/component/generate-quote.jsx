@@ -237,7 +237,8 @@ function QuoteResults({ carriers, loadingPriceBands, priceBands }) {
     );
 }
 
-export default function GenerateQuoteForm({ quoteId }) {
+export default function GenerateQuoteForm({ quoteId, submitMode = "quote" }) {
+    const [provider, setProvider] = useState("Veryk");
     const [addresses, setAddresses] = useState([]);
     const [inventories, setInventories] = useState([]);
     const [selectedInventoryId, setSelectedInventoryId] = useState("");
@@ -316,15 +317,16 @@ export default function GenerateQuoteForm({ quoteId }) {
                 return inventoryId ? { ...packagePayload, inventoryId } : packagePayload;
             })
         };
-        const payload = quoteId ? { ...data, packageList, quoteId } : { ...data, packageList };
+        const payload = quoteId ? { ...data, packageList, quoteId, provider } : { ...data, packageList, provider };
+        const endpoint = submitMode === "order" ? API_URL.ORDERS : API_URL.ORDER_QUOTE;
 
-        axiosInstance.post(API_URL.ORDER_QUOTE, payload).then(async (response) => {
+        axiosInstance.post(endpoint, payload).then(async (response) => {
             if (response.data.success) {
                 const carriers = response.data?.data?.response || [];
-                await fetchPriceBands().catch(() => null);
+                if (carriers.length) await fetchPriceBands().catch(() => null);
                 setQuoteCarriers(carriers);
-                setQuoteGenerated(true);
-                toast.success(response.data?.message || "Quote generated successfully", { id: "generate-quote" });
+                setQuoteGenerated(submitMode === "quote");
+                toast.success(response.data?.message || (submitMode === "order" ? "Order created successfully" : "Quote generated successfully"), { id: "generate-quote" });
             } else {
                 setQuoteCarriers([]);
                 setQuoteGenerated(false);
@@ -371,6 +373,13 @@ export default function GenerateQuoteForm({ quoteId }) {
         <>
             <form className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm" onSubmit={handleSubmit(onSubmit)}>
                 <div className="space-y-5">
+                    <label className="grid gap-2 text-sm font-medium text-slate-700 sm:max-w-sm">
+                        Provider
+                        <Select disabled={loadingQuote || formLocked} value={provider} onValueChange={setProvider}>
+                            <SelectTrigger className="w-full"><span>{provider === "SYNC" ? "SynC OMS" : "VeryK"}</span></SelectTrigger>
+                            <SelectContent><SelectItem value="Veryk">VeryK</SelectItem><SelectItem value="SYNC">SynC OMS</SelectItem></SelectContent>
+                        </Select>
+                    </label>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <label className="grid gap-2 text-sm font-medium text-slate-700">
                             Initiation Address
@@ -514,7 +523,7 @@ export default function GenerateQuoteForm({ quoteId }) {
                         </Button>
                     )}
                     <Button type="submit" className="min-w-40 whitespace-nowrap px-4" disabled={loadingAddresses || loadingQuote || isSubmitting || formLocked}>
-                        {loadingQuote ? "Loading Quote..." : isSubmitting ? "Generating..." : "Generate Quote"}
+                        {loadingQuote ? "Loading..." : isSubmitting ? "Submitting..." : submitMode === "order" ? `Create Order with ${provider === "SYNC" ? "SynC" : "VeryK"}` : "Generate Quote"}
                     </Button>
                 </div>
             </form>
