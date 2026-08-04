@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import axiosInstance from "@/config/axios";
 import { API_URL } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,9 @@ import DashboardPagination from "@/components/DashboardPagination";
 import DiscrepancyClaimPopup from "./components/DiscrepancyClaimPopup";
 import DiscrepancyOperationPopup from "./components/DiscrepancyOperationPopup";
 import useDebounce from "@/hooks/useDebounce";
+import { buildPriceBreakdown, normalizeCharges } from "@/lib/discrepancy-price-breakdown.mjs";
 import toast from "react-hot-toast";
-import { AlertTriangle, CircleDot, Download, FileSearch, Plus, RefreshCw, Search, ShieldAlert, TrendingDown } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, CircleDot, Download, FileSearch, Plus, ReceiptText, RefreshCw, Search, ShieldAlert, TrendingDown } from "lucide-react";
 
 const emptyStats = { total: 0, totalVariance: 0, open: 0, highSeverity: 0 };
 const initialFilters = { search: "", type: "all", severity: "all", status: "active", carrier: "all" };
@@ -31,6 +32,7 @@ export default function Discrepancies() {
     const [saving, setSaving] = useState(false);
     const [operationOpen, setOperationOpen] = useState(false);
     const [claimPopup, setClaimPopup] = useState({ open: false, discrepancy: null });
+    const [expandedId, setExpandedId] = useState(null);
     const debouncedSearch = useDebounce(filters.search, 300);
     const { type, severity, status, carrier } = filters;
 
@@ -100,8 +102,8 @@ export default function Discrepancies() {
 
     const exportCsv = () => {
         if (!rows.length) return toast.error("There are no filtered discrepancies to export");
-        const headings = ["ID", "Carrier", "Type", "Tracking", "Invoice ID", "Expected", "Billed", "Variance", "Severity", "Status", "Created"];
-        const values = rows.map((row) => [row.displayId, label(row.carrier), label(row.type), row.trackingNumber, row.invoiceId || "", row.expectedAmount, row.billedAmount, row.variance, label(row.severity), label(row.status), new Date(row.createdAt).toISOString()]);
+        const headings = ["ID", "Carrier", "Type", "Tracking", "Invoice ID", "Expected", "Billed", "Variance", "Variance %", "Direction", "Severity", "Status", "Explanation", "Created"];
+        const values = rows.map((row) => [row.displayId, label(row.carrier), label(row.type), row.trackingNumber, row.invoiceId || "", row.expectedAmount, row.billedAmount, row.variance, row.variancePercentage.toFixed(1), row.direction, label(row.severity), label(row.status), row.explanation || "", new Date(row.createdAt).toISOString()]);
         const csv = [headings, ...values].map((line) => line.map(csvCell).join(",")).join("\n");
         const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
         const anchor = document.createElement("a"); anchor.href = url; anchor.download = `discrepancies-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click();
@@ -155,8 +157,10 @@ export default function Discrepancies() {
                         <tbody>
                             {loading ? <tr><td colSpan={9} className="p-10 text-center text-muted-foreground">Loading discrepancies…</td></tr>
                                 : !rows.length ? <tr><td colSpan={9} className="p-10 text-center text-muted-foreground">No discrepancies match these filters.</td></tr>
-                                    : rows.map((row) => <tr key={row.id} className="border-b hover:bg-purple-50/40">
-                                        <td className="px-4 py-4 font-semibold">{row.displayId}</td>
+                                    : rows.map((row) => <Fragment key={row.id}><tr className={`border-b hover:bg-purple-50/40 ${expandedId === row.id ? "bg-purple-50/40" : ""}`}>
+                                        <td className="px-4 py-4"><button type="button" className="flex items-center gap-2 font-semibold hover:text-primary" onClick={() => setExpandedId((current) => current === row.id ? null : row.id)} aria-expanded={expandedId === row.id}>
+                                            {expandedId === row.id ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}{row.displayId}
+                                        </button></td>
                                         <td className="px-4 py-4"><CarrierBrand name={label(row.carrier)} /></td>
                                         <td className="px-4 py-4">{label(row.type)}</td><td className="px-4 py-4 font-mono">{row.trackingNumber}</td>
                                         <td className="px-4 py-4 font-semibold text-red-600">{money(row.variance)}</td>
@@ -164,7 +168,9 @@ export default function Discrepancies() {
                                         <td className="px-4 py-4"><Filter value={row.status} onChange={(v) => updateStatus(row, v)} disabled={row.status === "claimed"} options={[["open", "Open"], ["in-review", "In Review"], ["claimed", "Claimed"], ["resolved", "Resolved"]]} /></td>
                                         <td className="px-4 py-4 text-muted-foreground">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(row.createdAt))}</td>
                                         <td className="px-4 py-4"><Button variant="outline" size="sm" disabled={Boolean(row.claim) || ["claimed", "resolved"].includes(row.status)} onClick={() => setClaimPopup({ open: true, discrepancy: row })}><Plus />{row.claim ? "Claimed" : "Claim"}</Button></td>
-                                    </tr>)}
+                                    </tr>
+                                    {expandedId === row.id && <tr className="border-b bg-slate-50/80"><td colSpan={9} className="p-4 md:p-6"><DiscrepancyDetails row={row} /></td></tr>}
+                                    </Fragment>)}
                         </tbody>
                     </table>
                 </div>
@@ -187,7 +193,50 @@ export default function Discrepancies() {
 
 function Filter({ value, onChange, options, disabled }) { return <Select value={value} onValueChange={onChange} disabled={disabled}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{options.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select>; }
 function Badge({ value }) { const style = value === "high" ? "bg-red-50 text-red-700" : value === "medium" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"; return <span className={`rounded-md px-2.5 py-1 font-medium ${style}`}>{label(value)}</span>; }
-function normalize(row) { return { ...row, displayId: `#DSC-${row.id.slice(0, 8).toUpperCase()}`, expectedAmount: Number(row.expectedAmount), billedAmount: Number(row.billedAmount), variance: Math.abs(Number(row.billedAmount) - Number(row.expectedAmount)) }; }
+function DiscrepancyDetails({ row }) {
+    const DirectionIcon = row.direction === "Overbilled" ? ArrowUpRight : ArrowDownRight;
+    const directionStyle = row.direction === "Overbilled" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700";
+    return <div className="space-y-4">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div><div className="flex items-center gap-2 text-base font-semibold text-slate-950"><ReceiptText className="size-5 text-primary" />Billing mismatch details</div><p className="mt-1 text-sm text-muted-foreground">Invoice {row.invoiceId || "not provided"} · Tracking {row.trackingNumber}</p></div>
+            <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ${directionStyle}`}><DirectionIcon className="size-4" />{row.direction} by {money(row.variance)} ({row.variancePercentage.toFixed(1)}%)</span>
+        </div>
+        <div className="grid overflow-hidden rounded-xl border bg-white sm:grid-cols-3">
+            <AmountSummary label="Original quote" value={row.expectedAmount} />
+            <AmountSummary label="Final billed amount" value={row.billedAmount} emphasis />
+            <AmountSummary label="Mismatch" value={row.variance} danger={row.direction === "Overbilled"} />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+            <PriceBreakdown title="Original quoted price" total={row.expectedAmount} rows={row.priceBreakdown} side="quoted" />
+            <PriceBreakdown title="Final billed price" total={row.billedAmount} rows={row.priceBreakdown} side="billed" />
+        </div>
+        <div className="rounded-xl border border-purple-100 bg-purple-50/60 p-4">
+            <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-primary">What caused this mismatch?</div>
+            <p className="whitespace-normal text-sm leading-6 text-slate-700">{row.explanation || "No explanation was supplied. Compare the original quote with the carrier invoice for added or changed charges."}</p>
+        </div>
+    </div>;
+}
+function AmountSummary({ label: text, value, emphasis, danger }) { return <div className="border-b p-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0"><div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{text}</div><div className={`mt-1 text-2xl font-bold ${danger ? "text-red-600" : emphasis ? "text-slate-950" : "text-slate-700"}`}>{money(value)}</div></div>; }
+function PriceBreakdown({ title, total, rows, side }) {
+    return <div className="overflow-hidden rounded-xl border bg-white">
+        <div className="flex items-center justify-between border-b bg-slate-50 px-4 py-3"><div className="font-semibold text-slate-950">{title}</div><div className="text-lg font-bold">{money(total)}</div></div>
+        <div className="divide-y">
+            {rows.map((row) => {
+                const charge = row[side];
+                const difference = row.billedAmount - row.quotedAmount;
+                const changed = Math.abs(difference) >= 0.01;
+                const state = side === "billed" && !row.quoted ? "Added" : side === "quoted" && !row.billed ? "Missing" : changed ? "Changed" : null;
+                return <div key={`${side}-${row.key}`} className={`flex items-center justify-between gap-3 px-4 py-3 ${state === "Added" ? "bg-red-50/50" : state === "Missing" ? "bg-amber-50/50" : ""}`}>
+                    <div className="min-w-0"><div className="whitespace-normal font-medium text-slate-800">{charge?.description || charge?.code || row.label}</div><div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">{charge?.code && <span>{charge.code}</span>}{state && <span className={`rounded px-1.5 py-0.5 font-semibold ${state === "Added" ? "bg-red-100 text-red-700" : state === "Missing" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{state}</span>}</div></div>
+                    <div className="shrink-0 text-right"><div className="font-semibold">{charge ? money(charge.amount) : "—"}</div>{changed && charge && <div className={`text-xs ${difference > 0 ? "text-red-600" : "text-green-700"}`}>{difference > 0 ? "+" : "−"}{money(Math.abs(difference))}</div>}</div>
+                </div>;
+            })}
+            {!rows.length && <div className="px-4 py-6 text-center text-sm text-muted-foreground">A line-item breakdown was not provided.</div>}
+        </div>
+        <div className="flex items-center justify-between border-t bg-slate-50 px-4 py-3 font-bold"><span>Total</span><span>{money(total)}</span></div>
+    </div>;
+}
+function normalize(row) { const expectedAmount = Number(row.expectedAmount); const billedAmount = Number(row.billedAmount); const signedVariance = billedAmount - expectedAmount; const quotedCharges = normalizeCharges(row.order?.prices); const metadata = row.order?.metadeta || {}; const billedCharges = normalizeCharges(metadata?.price?.charges || metadata?.charges || metadata?.prices || metadata?.quote?.charges); return { ...row, displayId: `#DSC-${row.id.slice(0, 8).toUpperCase()}`, expectedAmount, billedAmount, variance: Math.abs(signedVariance), variancePercentage: expectedAmount > 0 ? Math.abs(signedVariance) / expectedAmount * 100 : 0, direction: signedVariance >= 0 ? "Overbilled" : "Underbilled", priceBreakdown: buildPriceBreakdown(quotedCharges, billedCharges) }; }
 function label(value = "") { return value.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" "); }
 function money(value) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0); }
 function csvCell(value) { return `"${String(value ?? "").replaceAll('"', '""')}"`; }
