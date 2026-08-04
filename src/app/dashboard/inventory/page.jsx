@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import DashboardPagination from "@/components/DashboardPagination";
 import { DeleteInventoryAction, FetchInventoryAction } from "@/services/actions/inventory";
-import { Trash } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
+import InventoryOperation from "./InventoryOperation";
 
 const formatNumber = (value) => Number.isFinite(Number(value)) ? Number(value).toLocaleString() : "0";
 const formatMoney = (value) => Number.isFinite(Number(value)) ? `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "$0.00";
@@ -19,6 +20,7 @@ const getInventoryQuantity = (item) => item?.availableQuantity ?? item?.metadata
 
 export default function InventoryPage() {
     const [deleteOperation, setDeleteOperation] = useState({ show: false, item: null });
+    const [createOpen, setCreateOpen] = useState(false);
     const [page, setPage] = useState(1);
     const [rowCount, setRowCount] = useState(10);
     const dispatch = useDispatch();
@@ -58,6 +60,7 @@ export default function InventoryPage() {
                     <h1 className="text-2xl font-bold text-primary">Inventory Management</h1>
                     <p>Review stocked products and remove inventory records</p>
                 </div>
+                <Button onClick={() => setCreateOpen(true)}><Plus />Add Inventory</Button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -142,9 +145,11 @@ export default function InventoryPage() {
                                         </span>
                                     </td>
                                     <td className="py-2 pr-3">
-                                        <Button variant="outline" size="icon" onClick={() => setDeleteOperation({ show: true, item })}>
-                                            <Trash />
-                                        </Button>
+                                        {!item?._syncSource && (
+                                            <Button variant="outline" size="icon" onClick={() => setDeleteOperation({ show: true, item })}>
+                                                <Trash />
+                                            </Button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -170,6 +175,7 @@ export default function InventoryPage() {
                 loading={deleting}
                 onConfirm={handleDeleteInventory}
             />
+            <InventoryOperation open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => dispatch(FetchInventoryAction({ page, rowCount }))} />
         </div>
     );
 }

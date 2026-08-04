@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
-import { AlertTriangle, Plus, RotateCcw, Star, Trash } from "lucide-react";
+import { AlertTriangle, Building2, Loader2, MapPin, Package, Plus, RotateCcw, Sparkles, Star, Trash, Truck } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -240,6 +240,11 @@ export default function GenerateQuoteForm({ quoteId }) {
     const [priceBands, setPriceBands] = useState([]);
     const [loadingPriceBands, setLoadingPriceBands] = useState(false);
     const [quoteGenerated, setQuoteGenerated] = useState(false);
+    const [quoteProvider, setQuoteProvider] = useState("Veryk");
+    const [syncOrderId, setSyncOrderId] = useState("");
+    const [syncWarehouseId, setSyncWarehouseId] = useState("");
+    const [syncWarehouses, setSyncWarehouses] = useState([]);
+    const [syncLoading, setSyncLoading] = useState(false);
 
     const { register, handleSubmit, control, reset, formState: { errors, isSubmitting }, } = useForm({
         resolver: yupResolver(schema),
@@ -267,6 +272,30 @@ export default function GenerateQuoteForm({ quoteId }) {
             setLoadingQuote(false);
         });
     }, [quoteId, reset]);
+
+    useEffect(() => {
+        if (quoteProvider !== "SYNC") return;
+        axiosInstance.get(API_URL.SYNC_OMS_WAREHOUSES).then((response) => setSyncWarehouses(Array.isArray(response.data?.data) ? response.data.data : [])).catch(() => setSyncWarehouses([]));
+    }, [quoteProvider]);
+
+    const generateSyncQuote = async () => {
+        if (!syncOrderId || !syncWarehouseId) return toast.error("Select a SynC order and warehouse", { id: "generate-quote" });
+        setSyncLoading(true);
+        try {
+            const response = await axiosInstance.post(API_URL.SYNC_ACTION("oms-shipping-preview"), { orderId: syncOrderId, warehouseIds: [syncWarehouseId] });
+            const candidates = response.data?.data?.candidates || [];
+            const carriers = candidates.map((candidate, index) => ({
+                carrier_id: candidate.carrier || `sync-${index}`,
+                carrier_code: candidate.carrier,
+                name: candidate.carrier || "SynC carrier",
+                currency: { code: candidate.currency || "USD" },
+                services: [{ id: candidate.rateReference || index, token: candidate.rateReference, code: candidate.service, name: candidate.service, charge: candidate.amount, eta: candidate.eta }]
+            }));
+            setQuoteCarriers(carriers); setQuoteGenerated(true); setPriceBands([]);
+            toast.success(candidates.length ? "SynC routing quote generated" : "SynC returned no quote candidates", { id: "generate-quote" });
+        } catch (error) { setQuoteCarriers([]); setQuoteGenerated(false); toast.error(error?.response?.data?.message || "Unable to generate SynC quote", { id: "generate-quote" }); }
+        finally { setSyncLoading(false); }
+    };
 
     const fetchPriceBands = () => {
         setLoadingPriceBands(true);
@@ -344,9 +373,16 @@ export default function GenerateQuoteForm({ quoteId }) {
 
     return (
         <>
-            <form className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm" onSubmit={handleSubmit(onSubmit)}>
-                <div className="space-y-5">
-                    <div className="grid gap-4 sm:grid-cols-2">
+            <form className="space-y-6" onSubmit={quoteProvider === "SYNC" ? (event) => { event.preventDefault(); generateSyncQuote(); } : handleSubmit(onSubmit)}>
+                <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm lg:p-6">
+                    <div className="grid gap-5 md:grid-cols-[1fr_320px] md:items-end"><div className="flex items-start gap-3"><div className="rounded-xl bg-violet-50 p-2 text-violet-700"><Truck className="size-5" /></div><div><h2 className="font-semibold text-slate-950">Quote provider</h2><p className="mt-1 text-sm text-slate-500">Use VeryK for carrier rates or SynC OMS for routing decisions.</p></div></div><label className="grid gap-2 text-sm font-semibold text-violet-950"><Select value={quoteProvider} onValueChange={(value) => { setQuoteProvider(value); setQuoteGenerated(false); setQuoteCarriers([]); }}><SelectTrigger className="w-full bg-white"><span className="inline-flex items-center gap-2">{quoteProvider === "SYNC" ? <Sparkles className="size-4 text-violet-600" /> : <Truck className="size-4 text-amber-600" />}{quoteProvider === "SYNC" ? "SynC OMS routing quote" : "VeryK carrier quote"}</span></SelectTrigger><SelectContent><SelectItem value="Veryk">VeryK</SelectItem><SelectItem value="SYNC">SynC OMS</SelectItem></SelectContent></Select></label></div>
+                </section>
+                <div className="space-y-6">
+                    {quoteProvider === "SYNC" ? <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:p-6"><div className="mb-5 flex items-center gap-3"><div className="rounded-xl bg-blue-50 p-2 text-blue-700"><Building2 className="size-5" /></div><div><h2 className="font-semibold">SynC routing context</h2><p className="text-sm text-gray-500">Select the OMS order and candidate fulfillment warehouse.</p></div></div><div className="grid gap-4 sm:grid-cols-2">
+                        <label className="grid gap-2 text-sm font-medium text-slate-700">SynC OMS order ID<Input value={syncOrderId} onChange={(event) => setSyncOrderId(event.target.value)} placeholder="ord_..." /></label>
+                        <label className="grid gap-2 text-sm font-medium text-slate-700">Candidate warehouse<Select value={syncWarehouseId} onValueChange={setSyncWarehouseId}><SelectTrigger><span>{syncWarehouses.find((item) => String(item.id ?? item.ID) === syncWarehouseId)?.name || "Select SynC warehouse"}</span></SelectTrigger><SelectContent>{syncWarehouses.map((item) => { const id = String(item.id ?? item.ID); return <SelectItem key={id} value={id}>{item.name || item.Name}{item.code || item.Code ? ` (${item.code || item.Code})` : ""}</SelectItem>; })}</SelectContent></Select></label>
+                    </div></section> : <>
+                    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:p-6"><div className="mb-5 flex items-center gap-3"><div className="rounded-xl bg-emerald-50 p-2 text-emerald-700"><MapPin className="size-5" /></div><div><h2 className="font-semibold">Shipment route</h2><p className="text-sm text-gray-500">Choose saved origin and destination addresses.</p></div></div><div className="grid gap-4 sm:grid-cols-2">
                         <label className="grid gap-2 text-sm font-medium text-slate-700">
                             Initiation Address
                             <Controller control={control} name="initiation" render={({ field }) => (
@@ -376,9 +412,9 @@ export default function GenerateQuoteForm({ quoteId }) {
                                 />
                             )} />
                         </label>
-                    </div>
+                    </div></section>
 
-                    <div className="grid gap-4 sm:grid-cols-[220px_1fr]">
+                    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:p-6"><div className="mb-5 flex items-center gap-3"><div className="rounded-xl bg-amber-50 p-2 text-amber-700"><Package className="size-5" /></div><div><h2 className="font-semibold">Package configuration</h2><p className="text-sm text-gray-500">Set the packaging type before adding shipment items.</p></div></div><div className="grid gap-4 sm:grid-cols-[220px_1fr]">
                         <label className="grid gap-2 text-sm font-medium text-slate-700">
                             Package Type
                             <Controller control={control} name="packageList.type" render={({ field }) => (
@@ -394,9 +430,10 @@ export default function GenerateQuoteForm({ quoteId }) {
                             )} />
                             {errors.packageList?.type && <span className="text-xs text-destructive">{errors.packageList.type.message}</span>}
                         </label>
-                    </div>
+                    </div></section>
+                    </>}
 
-                    <div className="space-y-4">
+                    {quoteProvider === "Veryk" && <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:p-6">
                         <div className="flex items-center justify-between gap-3">
                             <h2 className="text-lg font-medium">Packages</h2>
                             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
@@ -466,18 +503,18 @@ export default function GenerateQuoteForm({ quoteId }) {
                         ))}
 
                         {errors.packageList?.packages?.message && <span className="text-xs text-destructive">{errors.packageList.packages.message}</span>}
-                    </div>
+                    </section>}
                 </div>
 
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:justify-end">
                     {formLocked && (
                         <Button type="button" variant="outline" className="min-w-40 whitespace-nowrap px-4" onClick={handleResetQuote}>
                             <RotateCcw />
                             Reset Quote
                         </Button>
                     )}
-                    <Button type="submit" className="min-w-40 whitespace-nowrap px-4" disabled={loadingQuote || isSubmitting || formLocked}>
-                        {loadingQuote ? "Loading Quote..." : isSubmitting ? "Generating..." : "Generate Quote"}
+                    <Button type="submit" size="lg" className="min-w-48 whitespace-nowrap px-4" disabled={loadingQuote || isSubmitting || syncLoading || formLocked || (quoteProvider === "SYNC" && (!syncOrderId || !syncWarehouseId))}>
+                        {(isSubmitting || syncLoading) && <Loader2 className="size-4 animate-spin" />}{loadingQuote ? "Loading Quote..." : isSubmitting || syncLoading ? "Generating..." : `Generate ${quoteProvider === "SYNC" ? "SynC" : "VeryK"} Quote`}
                     </Button>
                 </div>
             </form>

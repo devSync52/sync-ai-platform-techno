@@ -26,7 +26,7 @@ const defaultValues = {
 
 export default function ConfigurationComponent({ open, handleClose, carrier, details }) {
     const [showSecret, setShowSecret] = useState(false);
-    const providerSlug = carrier?.slug || '', isSellerCloud = providerSlug == 'SELLERCLOUD', isExtensive = providerSlug == 'EXTENSIVE';
+    const providerSlug = carrier?.slug || '', isSellerCloud = providerSlug == 'SELLERCLOUD', isExtensive = providerSlug == 'EXTENSIVE', isSync = providerSlug == 'SYNC';
     const needsCarrierAccount = providerSlug == 'FedEx' || providerSlug == 'UPS';
 
     const dispatch = useDispatch();
@@ -35,10 +35,10 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
         ...(isSellerCloud ? { companyName: yup.string().required('Company name is required') } : {}),
         ...(needsCarrierAccount ? { companyName: yup.string().required('Carrier account number is required') } : {}),
         ...(isExtensive ? { username: yup.string().email('Enter a valid email').required('Email ID is required') } : {}),
-        appKey: yup.string().required(providerSlug == 'Veryk' ? 'API ID is required' : 'API Key is required'),
-        appSecret: yup.string().required('API Secret is required'),
+        appKey: yup.string().required(isSync ? 'OMS API key is required' : providerSlug == 'Veryk' ? 'API ID is required' : 'API Key is required'),
+        appSecret: yup.string().required(isSync ? 'WMS API key is required' : 'API Secret is required'),
         isActive: yup.boolean(),
-    }), [isExtensive, isSellerCloud, needsCarrierAccount, providerSlug]);
+    }), [isExtensive, isSellerCloud, isSync, needsCarrierAccount, providerSlug]);
 
     const { register, handleSubmit, control, formState: { errors }, reset } = useForm({
         resolver: yupResolver(schema), defaultValues
@@ -146,21 +146,21 @@ export default function ConfigurationComponent({ open, handleClose, carrier, det
                         }
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="grid gap-2 text-sm font-medium text-slate-700">
-                                {providerSlug == "Veryk" ? "API ID" : "API Key"}
+                                {isSync ? "OMS API Key" : providerSlug == "Veryk" ? "API ID" : "API Key"}
                                 <Input
                                     {...register('appKey')}
-                                    placeholder={isSellerCloud ? "Enter username..." : providerSlug == "Veryk" ? "Enter API ID..." : "Enter API key..."}
+                                    placeholder={isSync ? "Enter OMS API key..." : isSellerCloud ? "Enter username..." : providerSlug == "Veryk" ? "Enter API ID..." : "Enter API key..."}
                                 />
                                 {errors.appKey && <span className="text-xs text-destructive">{errors.appKey.message}</span>}
                             </label>
 
                             <label className="grid gap-2 text-sm font-medium text-slate-700">
-                                API Secret
+                                {isSync ? "WMS API Key" : "API Secret"}
                                 <div className="relative">
                                     <Input
                                         type={showSecret ? "text" : "password"} {...register('appSecret')}
                                         className="pr-10"
-                                        placeholder={isSellerCloud ? "Enter password..." : "Enter API secret..."}
+                                        placeholder={isSync ? "Enter WMS API key..." : isSellerCloud ? "Enter password..." : "Enter API secret..."}
                                     />
                                     <button
                                         type="button"

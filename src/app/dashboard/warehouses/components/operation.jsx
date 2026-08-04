@@ -16,6 +16,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { API_URL } from '@/utils/constants';
 
 const schema = yup.object({
+    provider: yup.string().oneOf(['Veryk', 'SYNC']).required('Provider is required'),
     name: yup.string().required('Warehouse is required'),
     region: yup.string().required('Region is required'),
     province: yup.string().required('Province is required'),
@@ -35,7 +36,7 @@ export default function WareHouseOperation({ open, handleClose, details }) {
     const { regions, loading: loadingRegions } = useSelector((state) => state.general);
     const dispatch = useDispatch();
 
-    const { register, handleSubmit, control, formState: { errors }, reset, setValue } = useForm({ resolver: yupResolver(schema) });
+    const { register, handleSubmit, control, formState: { errors }, reset, setValue } = useForm({ resolver: yupResolver(schema), defaultValues: { provider: 'Veryk' } });
 
     const selectedRegion = useWatch({ control, name: 'region' });
 
@@ -50,6 +51,7 @@ export default function WareHouseOperation({ open, handleClose, details }) {
     useEffect(() => {
         if (details) {
             reset({
+                provider: details.provider || 'Veryk',
                 name: details.name || '',
                 region: details.region?.id || details.regionId || details.region || '',
                 province: details.province?.id || details.provinceId || details.province || '',
@@ -63,7 +65,7 @@ export default function WareHouseOperation({ open, handleClose, details }) {
                 },
             });
         } else {
-            reset();
+            reset({ provider: 'Veryk' });
         }
     }, [details, reset, open]);
 
@@ -98,6 +100,19 @@ export default function WareHouseOperation({ open, handleClose, details }) {
 
                 <form className="max-h-[calc(100vh-9rem)] overflow-y-auto px-6 py-5" onSubmit={handleSubmit(onSubmit)}>
                     <div className="space-y-4">
+                        {!details && <label className="grid gap-2 text-sm font-medium text-slate-700">
+                            Create warehouse with
+                            <Controller control={control} name="provider" render={({ field }) => (
+                                <Select value={field.value || 'Veryk'} onValueChange={field.onChange}>
+                                    <SelectTrigger className="w-full"><span>{field.value === 'SYNC' ? 'SynC OMS/WMS API' : 'VeryK (email notification)'}</span></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Veryk">VeryK — save locally and email</SelectItem>
+                                        <SelectItem value="SYNC">SynC — create through OMS API</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )} />
+                            {errors.provider && <span className="text-xs text-destructive">{errors.provider.message}</span>}
+                        </label>}
                         <label className="grid gap-2 text-sm font-medium text-slate-700">
                             Warehouse Name
                             <Input

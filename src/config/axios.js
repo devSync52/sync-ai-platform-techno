@@ -19,7 +19,8 @@ axiosInstance.interceptors.request.use(config => {
 axiosInstance.interceptors.response.use(response => {
     return response;
 }, ((error) => {
-    if (error.response && error.response.status == 401) {
+    const isApplicationUnauthorized = error.response?.status == 401 && error.response?.data?.code != 'SYNC_UPSTREAM_ERROR' && !error.response?.data?.upstreamStatus;
+    if (isApplicationUnauthorized) {
         removeCookies('auth-token')
         window.location.reload();
     }

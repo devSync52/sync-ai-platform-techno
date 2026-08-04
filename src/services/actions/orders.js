@@ -1,6 +1,7 @@
 import axiosInstance from '@/config/axios';
 import { ORDER_CONSTANTS } from '../constants/orders';
 import { API_URL } from '@/utils/constants';
+import { combinePagination, fulfilledValue, getActionData, mergeSynCData, throwIfAllFailed } from './sync-utils';
 
 export const SLA_AT_RISK_LIMIT = 5;
 
@@ -50,11 +51,19 @@ export const FetchOrdersAction = (params = {}) => async (dispatch) => {
     dispatch({ type: ORDER_CONSTANTS.FETCH_ORDERS_REQUEST });
 
     try {
-        const response = await axiosInstance.get(API_URL.ORDERS, { params });
-        const responseData = response.data?.data;
-        const data = Array.isArray(responseData) ? responseData : responseData?.data || responseData?.orders || response.data?.orders || [];
-        const pagination = response.data?.pagination || responseData?.pagination || response.data?.meta || null;
-        const states = response.data?.states || responseData?.states || {};
+        const results = await Promise.allSettled([
+            axiosInstance.get(API_URL.ORDERS, { params }),
+            axiosInstance.get(API_URL.SYNC_OMS_ORDERS, {
+                params: { ...params, take: params.rowCount || params.limit || 10, skip: ((params.page || 1) - 1) * (params.rowCount || params.limit || 10) }
+            })
+        ]);
+        throwIfAllFailed(results);
+        const localResponse = fulfilledValue(results[0]);
+        const syncResponse = fulfilledValue(results[1]);
+        const data = mergeSynCData(getActionData(localResponse), getActionData(syncResponse));
+        const pagination = combinePagination(localResponse, syncResponse, data, params);
+        const states = localResponse?.data?.states || {};
+        const response = localResponse || syncResponse;
 
         dispatch({
             type: ORDER_CONSTANTS.FETCH_ORDERS_SUCCESS,
@@ -62,7 +71,7 @@ export const FetchOrdersAction = (params = {}) => async (dispatch) => {
                 data,
                 pagination,
                 states,
-                message: response.data?.message || null
+                message: syncResponse?.data?.message || response?.data?.message || null
             }
         });
 

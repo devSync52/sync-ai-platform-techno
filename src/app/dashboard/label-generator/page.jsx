@@ -7,7 +7,7 @@ import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { useDispatch, useSelector } from "react-redux";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
-import { AlertTriangle, CreditCard, Loader2, Plus, RefreshCwIcon, RotateCcw, Tag, Trash, Wallet } from "lucide-react";
+import { AlertTriangle, Box, CheckCircle2, CircleDollarSign, CreditCard, Loader2, Plus, RefreshCwIcon, RotateCcw, Ship, Tag, Trash, Wallet } from "lucide-react";
 import { toast } from "react-hot-toast";
 import axiosInstance from "@/config/axios";
 import { API_URL, PROJECT_URL } from "@/utils/constants";
@@ -151,6 +151,13 @@ export default function LabelGeneratorPage() {
     const [priceBands, setPriceBands] = useState([]);
     const [quoting, setQuoting] = useState(false);
     const [generatingKey, setGeneratingKey] = useState("");
+    const [labelProvider, setLabelProvider] = useState("Veryk");
+    const [syncShipmentId, setSyncShipmentId] = useState("");
+    const [syncGenerating, setSyncGenerating] = useState(false);
+    const [syncShipments, setSyncShipments] = useState([]);
+    const [syncShipmentsLoading, setSyncShipmentsLoading] = useState(false);
+    const [syncShipmentLoading, setSyncShipmentLoading] = useState(false);
+    const [syncShipment, setSyncShipment] = useState(null);
     const { summary: wallet = { balance: 0 }, loading: walletLoading } = useSelector((state) => state.wallet || {});
     const {
         labelQuotes = [],
@@ -170,6 +177,42 @@ export default function LabelGeneratorPage() {
 
     const walletBalance = Number(wallet.balance || 0);
     const lowBalance = walletBalance < 10;
+
+    const generateSyncLabel = async () => {
+        if (!syncShipmentId.trim() || !syncShipment) return toast.error("Select and review a SynC shipment first", { id: "sync-label" });
+        setSyncGenerating(true);
+        try {
+            const response = await axiosInstance.post(API_URL.SYNC_ACTION("oms-shipment-request-registration", syncShipmentId.trim()), {});
+            toast.success(response.data?.message || "SynC label registration requested", { id: "sync-label" });
+        } catch (error) {
+            toast.error(error?.response?.data?.message || "Unable to generate SynC label", { id: "sync-label" });
+        } finally { setSyncGenerating(false); }
+    };
+
+    const fetchSyncShipments = useCallback(async () => {
+        setSyncShipmentsLoading(true);
+        try {
+            const response = await axiosInstance.get(API_URL.SYNC_OMS_SHIPMENTS, { params: { take: 50, skip: 0 } });
+            setSyncShipments(Array.isArray(response.data?.data) ? response.data.data : []);
+        } catch (error) {
+            setSyncShipments([]);
+            toast.error(error?.response?.data?.message || "Unable to load SynC shipments", { id: "sync-shipments" });
+        } finally { setSyncShipmentsLoading(false); }
+    }, []);
+
+    const selectSyncShipment = async (shipment) => {
+        const id = String(shipment?.id ?? shipment?.ID ?? shipment?.transportShipmentId ?? "");
+        if (!id) return;
+        setSyncShipmentId(id); setSyncShipmentLoading(true); setSyncShipment(null);
+        try {
+            const response = await axiosInstance.get(API_URL.SYNC_OMS_SHIPMENT(id));
+            setSyncShipment(response.data?.data || shipment);
+        } catch (error) {
+            toast.error(error?.response?.data?.message || "Unable to load shipment details", { id: "sync-shipment-detail" });
+        } finally { setSyncShipmentLoading(false); }
+    };
+
+    useEffect(() => { if (labelProvider === "SYNC") fetchSyncShipments(); }, [fetchSyncShipments, labelProvider]);
 
     const fetchWallet = useCallback(async () => {
         try {
@@ -381,7 +424,38 @@ export default function LabelGeneratorPage() {
                 </div>
             </section>
 
-            <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+            <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="grid gap-4 md:grid-cols-[300px_1fr] md:items-end">
+                    <label className="grid gap-2 text-sm font-medium text-gray-700">Label provider
+                        <Select value={labelProvider} onValueChange={setLabelProvider}><SelectTrigger><span>{labelProvider === "SYNC" ? "SynC OMS" : "VeryK"}</span></SelectTrigger><SelectContent><SelectItem value="Veryk">VeryK</SelectItem><SelectItem value="SYNC">SynC OMS</SelectItem></SelectContent></Select>
+                    </label>
+                    <p className="text-sm text-gray-500">{labelProvider === "SYNC" ? "Select an OMS transport shipment, review its details, then request label registration." : "Build or load a VeryK quote, review carrier rates, then purchase the label."}</p>
+                </div>
+            </section>
+
+            {labelProvider === "SYNC" && <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+                <aside className="rounded-lg border border-gray-200 bg-white shadow-sm xl:self-start">
+                    <div className="flex items-center justify-between border-b px-5 py-4"><div><h2 className="font-semibold text-gray-950">Transport shipments</h2><p className="text-sm text-gray-500">Ready for review and registration.</p></div><Button type="button" variant="outline" size="icon" onClick={fetchSyncShipments} disabled={syncShipmentsLoading}><RefreshCwIcon className={`size-4 ${syncShipmentsLoading ? "animate-spin" : ""}`} /></Button></div>
+                    {syncShipmentsLoading ? <div className="flex h-32 items-center justify-center text-sm text-gray-500"><Loader2 className="mr-2 size-4 animate-spin" />Loading shipments</div> : !syncShipments.length ? <div className="px-5 py-8 text-sm text-gray-500">No SynC transport shipments are available.</div> : <div className="max-h-[620px] divide-y overflow-y-auto">{syncShipments.map((shipment) => { const id = String(shipment.id ?? shipment.ID ?? shipment.transportShipmentId); const carrier = shipment.carrier || shipment.carrierName || shipment.providerType || "Carrier pending"; return <button key={id} type="button" onClick={() => selectSyncShipment(shipment)} className={`block w-full px-5 py-4 text-left transition hover:bg-purple-50/60 ${syncShipmentId === id ? "bg-purple-50" : "bg-white"}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-gray-950">{shipment.orderNumber || shipment.externalReference || id}</p><p className="mt-1 text-sm text-gray-500">{carrier}</p></div><span className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-bold text-gray-600">{shipment.status || "PENDING"}</span></div><p className="mt-2 truncate font-mono text-xs text-gray-400">{id}</p></button>; })}</div>}
+                </aside>
+
+                <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div className="border-b px-5 py-4"><h2 className="font-semibold text-gray-950">Review shipment details</h2><p className="text-sm text-gray-500">Confirm routing, packages, and charges before generating the label.</p></div>
+                    {syncShipmentLoading ? <div className="flex h-64 items-center justify-center text-sm text-gray-500"><Loader2 className="mr-2 size-5 animate-spin" />Loading shipment details</div> : !syncShipment ? <div className="flex h-64 flex-col items-center justify-center px-6 text-center text-gray-500"><Ship className="mb-3 size-10 text-gray-300" /><p className="font-medium text-gray-700">Select a transport shipment</p><p className="mt-1 text-sm">Its carrier, service, packages, tracking, and quote will appear here.</p></div> : <div className="space-y-6 p-5 lg:p-6">
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="rounded-xl border bg-slate-50 p-4"><Ship className="mb-3 size-5 text-violet-600" /><p className="text-xs font-bold uppercase tracking-wide text-gray-400">Carrier</p><p className="mt-1 font-semibold">{syncShipment.carrier || syncShipment.carrierName || syncShipment.providerType || "-"}</p></div>
+                            <div className="rounded-xl border bg-slate-50 p-4"><CheckCircle2 className="mb-3 size-5 text-emerald-600" /><p className="text-xs font-bold uppercase tracking-wide text-gray-400">Service</p><p className="mt-1 font-semibold">{syncShipment.service || syncShipment.serviceLevel || syncShipment.shippingServiceLevel || "-"}</p></div>
+                            <div className="rounded-xl border bg-slate-50 p-4"><Box className="mb-3 size-5 text-amber-600" /><p className="text-xs font-bold uppercase tracking-wide text-gray-400">Packages</p><p className="mt-1 font-semibold">{syncShipment.packages?.length || syncShipment.packageCount || 1}</p></div>
+                            <div className="rounded-xl border bg-slate-50 p-4"><CircleDollarSign className="mb-3 size-5 text-blue-600" /><p className="text-xs font-bold uppercase tracking-wide text-gray-400">Quoted amount</p><p className="mt-1 font-semibold">{formatMoney(syncShipment.quotedAmount || syncShipment.amount || 0, syncShipment.currency || "USD")}</p></div>
+                        </div>
+                        <div className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2"><div><p className="text-xs font-bold uppercase tracking-wide text-gray-400">Shipment ID</p><p className="mt-1 break-all font-mono text-sm">{syncShipmentId}</p></div><div><p className="text-xs font-bold uppercase tracking-wide text-gray-400">Tracking</p><p className="mt-1 font-medium">{syncShipment.tracking || syncShipment.trackingNumber || "Generated after registration"}</p></div><div><p className="text-xs font-bold uppercase tracking-wide text-gray-400">Status</p><p className="mt-1 font-medium">{syncShipment.status || "-"}</p></div><div><p className="text-xs font-bold uppercase tracking-wide text-gray-400">Warehouse</p><p className="mt-1 font-medium">{syncShipment.warehouseName || syncShipment.warehouseId || "-"}</p></div></div>
+                        {Array.isArray(syncShipment.packages) && syncShipment.packages.length > 0 && <div><h3 className="mb-3 font-semibold">Packages</h3><div className="space-y-2">{syncShipment.packages.map((pkg, index) => <div key={pkg.id || index} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm"><span className="font-medium">Package {index + 1}</span><span>{pkg.weight || pkg.weightLb || "-"} lb</span><span className="text-gray-500">{pkg.length || "-"} × {pkg.width || "-"} × {pkg.height || "-"}</span></div>)}</div></div>}
+                        <div className="flex justify-end border-t pt-5"><Button size="lg" type="button" onClick={generateSyncLabel} disabled={syncGenerating}>{syncGenerating ? <Loader2 className="size-4 animate-spin" /> : <Tag className="size-4" />}{syncGenerating ? "Requesting registration..." : "Generate label with SynC"}</Button></div>
+                    </div>}
+                </section>
+            </div>}
+
+            {labelProvider === "Veryk" && <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
                 <aside className="rounded-lg border border-gray-200 bg-white shadow-sm xl:self-start">
                     <div className="flex items-center justify-between border-b px-5 py-4">
                         <div>
@@ -658,7 +732,7 @@ export default function LabelGeneratorPage() {
                     )}
 
                 </div>
-            </div>
+            </div>}
         </div>
     );
 }

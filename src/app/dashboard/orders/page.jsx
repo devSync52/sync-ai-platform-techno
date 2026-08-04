@@ -303,7 +303,7 @@ export default function OrdersPage() {
                                                     <div>{moment(order?.createdAt).format("YYYY-MM-DD HH:mm:ss")}</div>
                                                 </div>
                                                 {
-                                                    order?.status?.code == "draft" && (
+                                                    order?.status?.code == "draft" && !order?._syncSource && (
                                                         <div className="flex items-center justify-end gap-2">
                                                             <Link href={PROJECT_URL.DASHBOARD_ORDER_GENERATE_BY_ID(order?.id)} className={buttonVariants({ variant: "outline", size: "icon" })} title="Edit quotation" aria-label="Edit quotation">
                                                                 <Pencil />

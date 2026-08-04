@@ -188,14 +188,14 @@ export default function WarehousesPage() {
                                         </td>
                                         <td className="py-2 pr-3">{warehouse?.provider || '-'}</td>
                                         <td className="py-2 pr-3">
-                                            <div className="flex items-center gap-2">
+                                            {!warehouse?._syncSource && <div className="flex items-center gap-2">
                                                 <Button variant="outline" size="icon" onClick={() => setViewOperation({ show: true, details: warehouse })}>
                                                     <SquarePen />
                                                 </Button>
                                                 <Button variant="outline" size="icon" onClick={() => setDeleteOperation({ show: true, warehouse })}>
                                                     <Trash />
                                                 </Button>
-                                            </div>
+                                            </div>}
                                         </td>
                                     </tr>
                                 ))

@@ -14,6 +14,17 @@ import CarrierBrand from "@/components/carrier-brand";
 
 const carriers = [
     {
+        name: "SynC OMS & WMS",
+        slug: "SYNC",
+        subtitle: "SynC order, fulfillment, shipping, and warehouse management",
+        icon: "SC",
+        logo: "SC",
+        logoClass: "bg-violet-100 text-violet-950",
+        color: "bg-violet-100",
+        url: "https://oms.syncaiplatform.com/docs/api",
+        development: "https://wms.syncaiplatform.com/docs/api",
+    },
+    {
         name: "USPS",
         slug: "USPS",
         subtitle: "United States Postal Service",
