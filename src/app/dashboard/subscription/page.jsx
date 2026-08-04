@@ -161,27 +161,25 @@ export default function SubscriptionPage() {
                             </p>
                         </div>
 
-                        {
-                            hasSubscription && (
-                                <div className="rounded-lg border border-white/10 bg-white/8 p-5">
-                                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#a995c9]">Current spend</p>
-                                    <div className="mt-4 flex items-end gap-2">
-                                        <span className="text-4xl font-bold">{formatMoney(price.amount, price.currency)}</span>
-                                        <span className="mb-1 text-sm font-medium text-[#cdbfe2]">/ {price.interval || "month"}</span>
-                                    </div>
-                                    <div className="mt-5 flex flex-wrap gap-3">
-                                        <Button className="gap-2 bg-white text-[#1b0c2b] hover:bg-purple-50" onClick={() => router.push(PROJECT_URL.DASHBOARD_SUBSCRIPTION_UPGRADE)}>
-                                            Change plan
-                                            <ArrowRight className="size-4" />
-                                        </Button>
-                                        <Button variant="outline" className="gap-2 border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={() => router.push(PROJECT_URL.DASHBOARD)}>
-                                            <LayoutDashboard className="size-4" />
-                                            Dashboard
-                                        </Button>
-                                    </div>
+                        {hasSubscription && (
+                            <div className="rounded-lg border border-white/10 bg-white/8 p-5">
+                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#a995c9]">Current spend</p>
+                                <div className="mt-4 flex items-end gap-2">
+                                    <span className="text-4xl font-bold">{formatMoney(price.amount, price.currency)}</span>
+                                    <span className="mb-1 text-sm font-medium text-[#cdbfe2]">/ {price.interval || "month"}</span>
                                 </div>
-                            )
-                        }
+                                <div className="mt-5 flex flex-wrap gap-3">
+                                    <Button className="gap-2 bg-white text-[#1b0c2b] hover:bg-purple-50" onClick={() => router.push(PROJECT_URL.DASHBOARD_SUBSCRIPTION_UPGRADE)}>
+                                        Change plan
+                                        <ArrowRight className="size-4" />
+                                    </Button>
+                                    <Button variant="outline" className="gap-2 border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={() => router.push(PROJECT_URL.DASHBOARD)}>
+                                        <LayoutDashboard className="size-4" />
+                                        Dashboard
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
