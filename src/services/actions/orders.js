@@ -1,7 +1,6 @@
 import axiosInstance from '@/config/axios';
 import { ORDER_CONSTANTS } from '../constants/orders';
 import { API_URL } from '@/utils/constants';
-import { combinePagination, fulfilledValue, getActionData, mergeSynCData, throwIfAllFailed } from './sync-utils';
 
 export const SLA_AT_RISK_LIMIT = 5;
 
@@ -51,27 +50,15 @@ export const FetchOrdersAction = (params = {}) => async (dispatch) => {
     dispatch({ type: ORDER_CONSTANTS.FETCH_ORDERS_REQUEST });
 
     try {
-        const results = await Promise.allSettled([
-            axiosInstance.get(API_URL.ORDERS, { params }),
-            axiosInstance.get(API_URL.SYNC_OMS_ORDERS, {
-                params: { ...params, take: params.rowCount || params.limit || 10, skip: ((params.page || 1) - 1) * (params.rowCount || params.limit || 10) }
-            })
-        ]);
-        throwIfAllFailed(results);
-        const localResponse = fulfilledValue(results[0]);
-        const syncResponse = fulfilledValue(results[1]);
-        const data = mergeSynCData(getActionData(localResponse), getActionData(syncResponse));
-        const pagination = combinePagination(localResponse, syncResponse, data, params);
-        const states = localResponse?.data?.states || {};
-        const response = localResponse || syncResponse;
+        const response = await axiosInstance.get(API_URL.ORDERS, { params });
 
         dispatch({
             type: ORDER_CONSTANTS.FETCH_ORDERS_SUCCESS,
             payload: {
-                data,
-                pagination,
-                states,
-                message: syncResponse?.data?.message || response?.data?.message || null
+                data: Array.isArray(response.data?.data) ? response.data.data : [],
+                pagination: response.data?.pagination || null,
+                states: response.data?.states || {},
+                message: response.data?.message || null
             }
         });
 
